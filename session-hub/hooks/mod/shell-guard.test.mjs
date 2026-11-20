@@ -127,3 +127,45 @@ test('a command with no write target passes even when the root is missing', asyn
   const noRoot = readRole({ role: 'child', master: 'hub' });
   assert.deepEqual(await judgeShell({ role: noRoot, command: 'git status', cwd: '/w', realpath: identity }), { allow: true });
 });
+
+// Review findings
+
+test('a here-document body is not read as commands', () => {
+  const body = "cat > /w/repo/notes.md <<'EOF'\nIt's fine\nRun: echo x > /etc/hosts\nEOF\necho done";
+  assert.deepEqual(shellWriteTargets(body), ['/w/repo/notes.md']);
+  assert.deepEqual(shellWriteTargets('cat <<-END > /w/repo/a\n\tx " y\n\tEND\ntouch /w/b'), ['/w/repo/a', '/w/b']);
+});
+
+test('>& followed by a file name writes that file; >&2 and >&- do not', () => {
+  assert.deepEqual(shellWriteTargets('echo x >&/etc/a'), ['/etc/a']);
+  assert.deepEqual(shellWriteTargets('echo x >& /etc/a'), ['/etc/a']);
+  assert.deepEqual(shellWriteTargets('echo x >&2; echo y 2>&-'), []);
+});
+
+test('a backslash-newline continuation joins the line', () => {
+  assert.deepEqual(shellWriteTargets('echo x >\\\n/etc/a'), ['/etc/a']);
+});
+
+test('wrapper options with values are skipped', () => {
+  assert.deepEqual(shellWriteTargets('sudo -u root rm /etc/a'), ['/etc/a']);
+  assert.deepEqual(shellWriteTargets('env -u X rm /etc/a'), ['/etc/a']);
+  assert.deepEqual(shellWriteTargets('nice -n 5 rm /etc/a'), ['/etc/a']);
+});
+
+test('target-directory forms and install -d give their targets', () => {
+  assert.deepEqual(shellWriteTargets('cp -t /etc a b'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('mv --target-directory=/etc a'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('install -d /etc/x /etc/y'), ['/etc/x', '/etc/y']);
+});
+
+test('option values that are only read are not targets', () => {
+  assert.deepEqual(shellWriteTargets('touch -r /etc/passwd /w/repo/f'), ['/w/repo/f']);
+  assert.deepEqual(shellWriteTargets('mkdir -m 755 /w/repo/d'), ['/w/repo/d']);
+  assert.deepEqual(shellWriteTargets('truncate -s 0 /w/repo/f'), ['/w/repo/f']);
+});
+
+test('a temporary-folder path is judged after its links are resolved', async () => {
+  const realpath = async (path) => path.replace('/tmp/l', '/other/repo');
+  const verdict = await judgeShell({ role: child, command: 'echo x > /tmp/l/file', cwd: '/w/repo', realpath });
+  assert.equal(verdict.allow, false);
+});

@@ -45,7 +45,9 @@ export function judgeSend({ role, to, agentId, agents }) {
   const raw = String(to ?? '').trim();
   if (raw === '') return refuse('the message has no recipient.');
   const name = recipientName(raw);
-  if (name === role.master) return DELIVER;
+  // A ref picks one session among those of a name, and refs change across restarts (S7): deliver to the bare name,
+  // so that a stale or foreign ref cannot pick another session.
+  if (name === role.master) return raw === name ? DELIVER : Object.freeze({ deliver: true, to: name });
   if (agentId !== undefined && raw === 'main') return DELIVER;
   if (isOwnAgent(raw, agents)) return DELIVER;
   const master = `"${role.master}"`;

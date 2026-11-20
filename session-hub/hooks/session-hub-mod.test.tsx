@@ -20,7 +20,7 @@ const RUN = {
 
 const COMPOSE = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as const
 
-function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails = false) {
+function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails = false, sent: string[] = []) {
   on('env.get', (_, e) => {
     if (envFails) throw new Error('env unavailable')
     return { value: env[e.name] }
@@ -28,7 +28,8 @@ function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails =
   on('session.cwd', () => ({ value: cwd }))
   on('agent.list', () => ({ value: [] }))
   on('fs.stat', () => ({ deny: 'ENOENT' }))
-  on('session.send', () => ({ isDelivered: true }))
+  on('fs.list', () => ({ value: [] }))
+  on('session.send', (_, e) => (sent.push(e.to), { isDelivered: true }))
   on('session.receive', (_, e) => ({ text: e.text }))
   on('prompt.submit', (_, e) => ({ text: e.text, context: e.context }))
   on('command.register', () => ({ value: { command: 'session-hub' } }))
@@ -39,6 +40,13 @@ test('a child may message its master, with or without the ref', async ($, on) =>
   engine(on, CHILD_ENV)
   expect(await $.session.send({ to: 'hub', text: '[T-42 product] done: ok', origin: { kind: 'model' } })).toEqual({ isDelivered: true })
   expect(await $.session.send({ to: 'hub [8f2c1a]', text: 'x', origin: { kind: 'model' } })).toEqual({ isDelivered: true })
+})
+
+test('a send to the master with a ref goes to the bare name', async ($, on) => {
+  const seen: string[] = []
+  engine(on, CHILD_ENV, '/w/repo', false, seen)
+  await $.session.send({ to: 'hub [ffffff]', text: 'x', origin: { kind: 'model' } })
+  expect(seen).toEqual(['hub'])
 })
 
 test('a child may not message a sibling; the reason points to the master', async ($, on) => {

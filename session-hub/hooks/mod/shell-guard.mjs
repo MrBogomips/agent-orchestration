@@ -5,7 +5,7 @@
 // Best effort, by design: it reads redirections and the targets of common file-writing commands (tee, touch, mkdir,
 // rm, rmdir, truncate, unlink, cp, mv, ln, install, sed -i). It does not judge targets it cannot know without
 // running the shell (a variable, a command substitution, a glob, a relative path after a `cd`), nor writes made by
-// any other program. Writes under /dev and the system temporary folders are allowed.
+// any other program. Writes under /dev and the system temporary folders are allowed, judged on the resolved path.
 //
 // It fails closed when it cannot evaluate a command it found targets in: no write root, an unknown role, a
 // command it cannot parse, a path it cannot resolve.
@@ -15,9 +15,29 @@ import { tokenize } from './shell-words.mjs';
 const PREFIX = '[session-hub]';
 const ALLOW = Object.freeze({ allow: true });
 const ALLOWED_ROOTS = Object.freeze(['/dev', '/tmp', '/private/tmp', '/var/folders', '/private/var/folders']);
-const WRAPPERS = Object.freeze(['sudo', 'command', 'nohup', 'time', 'nice', 'builtin', 'exec']);
+// Wrappers before the real command, with their options that take a value.
+const WRAPPERS = Object.freeze({
+  sudo: ['-u', '-g', '-h', '-p', '-C', '-U', '-r', '-t', '-D'],
+  env: ['-u', '-C', '-S'],
+  nice: ['-n'],
+  command: [],
+  nohup: [],
+  time: [],
+  builtin: [],
+  exec: [],
+});
 const ALL_ARGS = Object.freeze(['tee', 'touch', 'mkdir', 'rm', 'rmdir', 'truncate', 'unlink']);
 const LAST_ARG = Object.freeze(['cp', 'mv', 'ln', 'install']);
+// Options whose value is read, not written, per command.
+const VALUE_OPTIONS = Object.freeze({
+  touch: ['-r', '-d', '-t'],
+  mkdir: ['-m'],
+  truncate: ['-s', '-r'],
+  install: ['-m', '-o', '-g', '-t'],
+  cp: ['-t'],
+  mv: ['-t'],
+  ln: ['-t'],
+});
 const DIRECTORY_CHANGES = Object.freeze(['cd', 'pushd', 'popd']);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
@@ -52,26 +72,28 @@ function simpleCommands(tokens) {
   return commands.filter((command) => command.words.length > 0 || command.redirects.length > 0);
 }
 
+const isOption = (word) => word.value.startsWith('-') && word.value !== '-';
+
 const basename = (word) => word.value.slice(word.value.lastIndexOf('/') + 1);
 
-// Drops leading assignments and wrappers (`LC_ALL=C sudo env X=1 rm …`), so the first word is the command.
+// Drops leading assignments and wrappers (`LC_ALL=C sudo -u root env X=1 rm …`), so the first word is the command.
 function stripPrefix(words) {
   let i = 0;
   while (i < words.length) {
     const name = basename(words[i]);
-    if (ASSIGNMENT.test(words[i].value) || WRAPPERS.includes(name)) {
+    if (ASSIGNMENT.test(words[i].value)) {
       i += 1;
-    } else if (name === 'env') {
+    } else if (Object.hasOwn(WRAPPERS, name)) {
       i += 1;
-      while (i < words.length && (words[i].value.startsWith('-') || ASSIGNMENT.test(words[i].value))) i += 1;
+      while (i < words.length && (isOption(words[i]) || (name === 'env' && ASSIGNMENT.test(words[i].value)))) {
+        i += WRAPPERS[name].includes(words[i].value) ? 2 : 1;
+      }
     } else {
       break;
     }
   }
   return words.slice(i);
 }
-
-const isOption = (word) => word.value.startsWith('-') && word.value !== '-';
 
 function sedTargets(args) {
   const inPlace = args.some((word) => /^-i/.test(word.value) || word.value.startsWith('--in-place'));
@@ -92,15 +114,36 @@ function sedTargets(args) {
   return hasScript ? operands : operands.slice(1);
 }
 
+// Splits a command's arguments into operands and the target directory a `-t` or `--target-directory=` names.
+function operandsOf(command, args) {
+  const takesValue = VALUE_OPTIONS[command] ?? [];
+  const operands = [];
+  let targetDirectory;
+  for (let i = 0; i < args.length; i += 1) {
+    const value = args[i].value;
+    if (value.startsWith('--target-directory=')) {
+      targetDirectory = { ...args[i], value: value.slice('--target-directory='.length) };
+    } else if (takesValue.includes(value)) {
+      if (value === '-t' && LAST_ARG.includes(command) && args[i + 1]) targetDirectory = args[i + 1];
+      i += 1;
+    } else if (!isOption(args[i])) {
+      operands.push(args[i]);
+    }
+  }
+  return { operands, targetDirectory };
+}
+
 function commandTargets(words) {
   const [name, ...args] = stripPrefix(words);
   if (!name) return [];
   const command = basename(name);
-  const operands = args.filter((word) => !isOption(word));
-  if (ALL_ARGS.includes(command)) return operands;
-  if (LAST_ARG.includes(command)) return operands.length >= 2 ? [operands[operands.length - 1]] : [];
   if (command === 'sed') return sedTargets(args);
-  return [];
+  const { operands, targetDirectory } = operandsOf(command, args);
+  if (ALL_ARGS.includes(command)) return operands;
+  if (!LAST_ARG.includes(command)) return [];
+  if (targetDirectory) return [targetDirectory];
+  if (command === 'install' && args.some((word) => word.value === '-d')) return operands;
+  return operands.length >= 2 ? [operands[operands.length - 1]] : [];
 }
 
 function analyse(command) {
@@ -171,7 +214,7 @@ export async function judgeShell({ role, command, cwd, home, realpath }) {
     const root = await realpath(writeRoot(role));
     for (const path of paths) {
       const real = await realpath(path);
-      if (isUnder(real, root) || isAllowedPlace(path) || isAllowedPlace(real)) continue;
+      if (isUnder(real, root) || isAllowedPlace(real)) continue;
       return block(`it writes ${path}, outside this child's write root ${root}. ${advice}`);
     }
     return ALLOW;

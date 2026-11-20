@@ -24,7 +24,7 @@ test('with guards off, a child may send anywhere', () => {
 
 test('a child may message its master, by name or name and ref', () => {
   assert.deepEqual(judgeSend({ role: child, to: 'hub' }), { deliver: true });
-  assert.deepEqual(judgeSend({ role: child, to: 'hub [8f2c1a]' }), { deliver: true });
+  assert.deepEqual(judgeSend({ role: child, to: 'hub [8f2c1a]' }), { deliver: true, to: 'hub' });
 });
 
 test('a child may not message a sibling; the reason points to the master', () => {
@@ -75,4 +75,9 @@ test('an invalid role refuses every send (fails closed)', () => {
 test('an empty or missing recipient is refused', () => {
   assert.equal(judgeSend({ role: child, to: '' }).deliver, false);
   assert.equal(judgeSend({ role: child, to: undefined }).deliver, false);
+});
+
+test('a name with a ref is delivered to the bare name, so a foreign ref cannot pick another session', () => {
+  assert.deepEqual(judgeSend({ role: child, to: 'hub [ffffff]' }), { deliver: true, to: 'hub' });
+  assert.deepEqual(judgeSend({ role: child, to: 'hub' }), { deliver: true });
 });

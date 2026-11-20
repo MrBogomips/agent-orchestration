@@ -52,16 +52,18 @@ async function loadRole($: $): Promise<Role> {
 }
 
 // Where a path lands, symbolic links resolved in the part that exists; a part not there yet is kept as written.
+// A name that is listed in its folder but does not stat is a dangling link: where it lands is unknown, so it throws.
 async function realpath($: $, path: string): Promise<string> {
   const stat = await $.fs.stat(path, { resolve: true }).catch(() => undefined)
   if (stat?.realPath) return stat.realPath
+  if (stat) throw new Error(`cannot resolve ${path}`)
   const cut = path.lastIndexOf('/')
-  if (cut <= 0) {
-    if (stat) throw new Error(`cannot resolve ${path}`)
-    return path
-  }
+  if (cut <= 0) return path
   const parent = await realpath($, path.slice(0, cut))
-  return `${parent === '/' ? '' : parent}${path.slice(cut)}`
+  const name = path.slice(cut + 1)
+  const entries = await $.fs.list(parent).catch(() => [])
+  if (entries.some((entry) => entry.name === name)) throw new Error(`${path} is a link that leads nowhere`)
+  return `${parent === '/' ? '' : parent}/${name}`
 }
 
 // The children record, read through the registry script: never written by the mod.
@@ -154,12 +156,17 @@ export const register: Register = (on) => {
     if (!role.guarding) return next(e)
     const agents = await $.agent.list().catch(() => [])
     const verdict = judgeSend({ role, to: e.to, agentId: e.agentId, agents })
-    return verdict.deliver ? next(e) : { isDelivered: false, reason: verdict.reason }
-  }).catch(($, e, next) =>
-    next.called
-      ? next(e)
-      : { isDelivered: false, reason: '[session-hub] Not sent: the send guard failed, and a guard that cannot evaluate does not let a message pass. Tell the user.' },
-  )
+    if (!verdict.deliver) return { isDelivered: false, reason: verdict.reason }
+    return verdict.to ? next({ ...e, to: verdict.to }) : next(e)
+  }).catch(async ($, e, next) => {
+    if (next.called) return next(e)
+    const role = await loadRole($).catch(() => undefined)
+    if (role?.guarding === false) return next(e)
+    return {
+      isDelivered: false as const,
+      reason: '[session-hub] The send guard failed, and a guard that cannot evaluate does not let a message pass. Tell the user.',
+    }
+  })
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const role = await loadRole($)

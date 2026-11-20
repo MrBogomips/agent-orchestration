@@ -7,4 +7,4 @@ export function judgeSend(input: {
   to?: string
   agentId?: string
   agents?: ReadonlyArray<{ id: string; name?: string }>
-}): { deliver: true; reason?: undefined } | { deliver: false; reason: string }
+}): { deliver: true; to?: string; reason?: undefined } | { deliver: false; reason: string }

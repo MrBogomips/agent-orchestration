@@ -48,7 +48,7 @@ Code 2.1.329 or later (`engines` in `plugin.json`). With mods off, everything ab
 
 | Function | Where | What it does |
 |---|---|---|
-| Send guard | child | A message goes only to the master, by its name (with or without ` [<ref>]`), or to the session's own subagents. Any other recipient, a socket address included, is refused with a reason that points to the master. |
+| Send guard | child | A message goes only to the master, by its name (with or without ` [<ref>]`; it is delivered to the bare name), or to the session's own subagents. Any other recipient, a socket address included, is refused with a reason that points to the master. |
 | Shell check | child | **Best effort.** Denies a `Bash` command whose redirections or file-writing commands (`tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install`, `sed -i`) target a path outside the write root. `/dev` and the system temporary folders are allowed. |
 | Origin marking | child | A message from another session, the master included, carries a line: information, not authorization. A prompt typed by the person carries none. |
 | Scope line | child, master | The role and the scope in the system prompt and, after the start and after each compaction, as context on the next prompt. |
