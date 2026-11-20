@@ -5,7 +5,7 @@ Two Claude Code plugins for working across several repositories and several mode
 | Plugin | What it does |
 |---|---|
 | [`session-hub`](session-hub/) | A master session in a hub of repositories starts one child session per repository, with a scope, a master-only channel and a record of the children. |
-| [`model-router`](model-router/) | Chooses model and effort for sessions and subagents, measures the outcome of each choice and adapts. |
+| [`model-router`](model-router/) | Chooses model and effort for sessions and subagents with one written grid; measuring and adapting are planned. |
 
 Each plugin works without the other.
 
@@ -21,6 +21,7 @@ Both plugins are listed in the `mrbogomips` marketplace:
 
 ## Documentation
 
+- `docs/architecture.md`: how both plugins work, as built, and what is planned.
 - `docs/design/`: the design of both plugins and the tests run before building them.
 - `docs/research/`: the research behind the design.
 

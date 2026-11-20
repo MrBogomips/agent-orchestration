@@ -32,7 +32,8 @@ project record where it departs from the grid.
 Install the plugin from the `mrbogomips` marketplace:
 
 ```
-/plugin install model-router --marketplace MrBogomips/claude-plugins
+/plugin marketplace add MrBogomips/claude-plugins
+/plugin install model-router@mrbogomips
 ```
 
 It works in any project, with or without `session-hub`;
