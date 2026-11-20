@@ -17,9 +17,11 @@ Picks the model and the effort level for sessions and for subagents. Works in an
 
 ## The grid
 
-One grid for sessions and subagents. It lives in `choose-model` and nowhere else. The mod reads its thresholds
-and tier names from `userConfig`, and its judge prompt restates the same tiers; a test must fail when the two
-drift apart.
+One grid for sessions and subagents. Its single machine-readable source is `model-router/grid.json` (tiers,
+price order, effort questions, task classes, judge mapping). `choose-model` states it in prose for the agent, and
+`setup` lists its values; a test fails when either drifts from `grid.json`. The mod reads tiers and classes from
+`grid.json`, and only the models behind the tiers and the numeric thresholds from `userConfig`; its judge prompt
+is generated from `grid.json`.
 
 ### Model
 
