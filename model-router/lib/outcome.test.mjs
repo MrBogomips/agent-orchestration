@@ -129,3 +129,19 @@ test('signals from another session do not count', () => {
   const events = [spawn('a1', 0), write('a1', 1, '/repo/x.ts'), report('a1', 2), { ...write(undefined, 5, '/repo/x.ts'), session: 's2' }];
   assert.equal(computeOutcomes(events, { ...OPTS, now: now(60) }).outcomes[0].outcome, 'success');
 });
+
+test('a resumed session keeps its id: tasks after an earlier end use the next end, not the first', () => {
+  const end = (min) => ({ type: 'session-end', ts: at(min), session: 's1' });
+  const events = [
+    end(0),
+    spawn('a', 10), write('a', 11, '/repo/src/auth.ts'), report('a', 12),
+    write(undefined, 13, '/repo/src/auth.ts'),
+    spawn('b', 14, { description: 'List the routes', class: 'read-search' }),
+  ];
+  const { outcomes, openTasks } = computeOutcomes(events, { ...OPTS, now: now(15) });
+  assert.equal(outcomes.length, 0);
+  assert.deepEqual([...openTasks].sort(), ['s1/a', 's1/b']);
+  const later = computeOutcomes([...events, end(20)], { ...OPTS, now: now(21) }).outcomes;
+  assert.equal(later.find((o) => o.agentId === 'a').outcome, 'rework');
+  assert.equal(later.find((o) => o.agentId === 'b').outcome, 'cancelled');
+});

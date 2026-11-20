@@ -97,6 +97,7 @@ async function configDirOf($: any, ctx: Ctx): Promise<string> {
   if (ctx.configDir) return ctx.configDir
   const set = await $.env.get('CLAUDE_CONFIG_DIR')
   const home = await $.env.get('HOME')
+  if (!set && !home) throw new Error('neither CLAUDE_CONFIG_DIR nor HOME is set')
   const dir: string = set || `${home}/.claude`
   ctx.configDir = dir
   return dir

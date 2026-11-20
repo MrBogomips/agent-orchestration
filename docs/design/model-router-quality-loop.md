@@ -244,7 +244,8 @@ Choices left to the builder, and where the build departs from the text above.
   `resume`), `report` and `session-end` records. **Outcomes are fixed by compaction**, not by the mod: compaction
   reads the raw records, decides each task whose window closed, appends its `outcome` record to `events.jsonl`
   and folds it into the aggregates. The mod stays thin, and the outcome logic is plain code under test
-  (`lib/outcome.mjs`).
+  (`lib/outcome.mjs`). A resumed session keeps its id and ends more than once: a task closes at the first end
+  after its own start.
 - **Window bookkeeping.** `quality/state.json` holds the byte offset of the first record of any task still open
   (a subagent's report can reach the log before its spawn record) and the keys of tasks closed after it. A task
   with no report closes as `cancelled` when its session ends or after 24 hours. A continued subagent

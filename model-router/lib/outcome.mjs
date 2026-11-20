@@ -57,6 +57,11 @@ function classify(task, records, end, threshold) {
   return why.length > 0 ? { outcome: 'rework', why } : { outcome: 'success', why: [] };
 }
 
+/** The first end of the session at or after `start`: a resumed session keeps its id and ends again later. */
+function endAfter(ends, start) {
+  return ends.find((t) => t >= start) ?? null;
+}
+
 function windowEnd(task, sessionEnd, windowMs, now) {
   if (task.report) {
     const end = time(task.report) + windowMs;
@@ -107,12 +112,11 @@ export function computeOutcomes(events, { now, windowMin, similarityThreshold, d
   const outcomes = [];
   const openTasks = new Set();
   for (const [session, records] of bySession(events)) {
-    const ended = records.find((r) => r.type === 'session-end');
-    const sessionEnd = ended ? time(ended) : null;
+    const ends = records.filter((r) => r.type === 'session-end').map(time).sort((a, b) => a - b);
     for (const task of tasksOf(records).values()) {
       const key = taskKey(session, task.spawn.agentId);
       if (done.has(key)) continue;
-      const { end, closed } = windowEnd(task, sessionEnd, windowMs, now);
+      const { end, closed } = windowEnd(task, endAfter(ends, time(task.spawn)), windowMs, now);
       if (!closed) {
         openTasks.add(key);
         continue;
