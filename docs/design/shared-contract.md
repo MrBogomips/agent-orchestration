@@ -28,13 +28,13 @@ The model and effort grid lives in `model-router:choose-model`.
 | Value | Mechanism | Status |
 |---|---|---|
 | Model | `--model <alias>` on the launch command, replacing the value carried over from the master's own launch | works in pane and background environments; desktop app **unverified** |
-| Effort | `--effort <level>` on the launch command (listed by `claude --help` on 2.1.329); else `CLAUDE_CODE_EFFORT_LEVEL` or `--settings '{"effortLevel":"<level>"}'` | flag exists; behaviour per environment **unverified** (`spikes.md`, S1) |
+| Effort | `--effort <level>` on the launch command | verified in `-p`, `--bg`, tmux and Herdr panes (S1); desktop app **unverified** |
 
 The handoff's *Session* part also states the model and the effort with the reason. That line is information for
 the user and for the child; nothing parses it in release 0.1.
 
-If neither effort mechanism works, the fallback is a mod in the child that reapplies the effort on each step.
-That would move a piece of `model-router` 0.2 forward; decide after S1.
+`--effort` works (S1), so no child-side mod is needed for effort. A classic hook can read the effective effort from
+its input (`effort.level`).
 
 ## Environment variables for a child
 
@@ -49,8 +49,9 @@ so these names are fixed.
 | `SESSION_HUB_HANDOFF` | absolute path of the handoff file |
 | `SESSION_HUB_REGISTRY` | absolute path of the children record (read-only for a child) |
 
-Whether these reach the child in each environment is **unverified** (S4). The desktop app starts sessions
-through a tool that takes no environment; there the role may have to come from the handoff file.
+They reach the child's classic hooks in `--bg`, tmux and Herdr panes (S4; in Herdr through `tab create` / `pane split
+--env`). The desktop app starts sessions through a tool that takes no environment and was not tested: there the
+role has to come from the handoff file, and the scope guard is inactive, which `spawn` must say in its report.
 
 ## Naming
 

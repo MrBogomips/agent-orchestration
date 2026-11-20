@@ -119,8 +119,8 @@ These are the weak points found in the request. Each one shaped the design.
 3. **Scope is prose today, and two rules contradict it.**
    - The old child prompt says the user's direct instructions take precedence over the master's. The settled
      decision reverses this for scope.
-   - A child started in a subfolder of the hub probably loads the hub's own instruction file from the parent
-     folder (**unverified**), including rules written for the master. The old skill assumes the opposite.
+   - A child started in a subfolder of the hub loads the hub's own instruction file from the parent
+     folder (verified, `spikes.md` S5), including rules written for the master. The old skill assumes the opposite.
    - Real enforcement needs a hook that blocks writes outside the child's repository.
 4. **The master as the only channel has a cost.** Every relay adds to the master's context, on the most expensive
    model. If the master compacts or closes, it forgets its children unless there is a record. Messages between

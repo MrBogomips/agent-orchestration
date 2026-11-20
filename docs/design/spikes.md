@@ -22,3 +22,18 @@ files it affects. None of them was run during the design.
 ## Order
 
 S1, S4 and S5 block `session-hub` 0.1. S3 blocks the `model-router` mod; S11 and S12 block its quality loop (`model-router-quality-loop.md`), S13 only a rule in `choose-model`. The others block only the mods.
+
+## Results
+
+| ID | Date | Claude Code | Environment | Outcome |
+|---|---|---|---|---|
+| S1 | 2026-11-20 | 2.1.329 | `-p`, `--bg`, tmux pane (`send-keys`), Herdr pane (`agent start`) | `--effort <level>` on the launch command works in all four. The session header shows "with low effort", and every classic hook input carries `"effort":{"level":"low"}`, which gives the hook a reliable way to read the effort. The desktop app's start tool was not available to test. |
+| S4 | 2026-11-20 | 2.1.329 | `-p`, `--bg`, tmux pane (variables typed before `claude`), Herdr pane (`tab create --env`) | `SESSION_HUB_*` variables set on the launch reach a PreToolUse hook in all four. The mod side (`$.env.get`) is left to S2. The desktop app was not tested. |
+| S5 | 2026-11-20 | 2.1.329 | `-p` in a throwaway hub with two nested git repositories | **Yes.** A session started in a repository nested in the hub loads the hub's `CLAUDE.md` (a link to `AGENTS.md`) from the parent folder, as well as its own. The same holds in a worktree under `<repo>/.claude/worktrees/`. A worktree in a sibling folder **outside** the hub loads only the repository's file. |
+
+Side findings:
+
+- `--bg` in a repository nested in a trusted folder fails with `Workspace not trusted`: trust is not inherited
+  across a nested git repository. The user has to open each child repository once and accept the prompt.
+- A hub under the system temporary folder loaded no project instruction file at all, not even the repository's
+  own. Run scenario hubs under the home folder.

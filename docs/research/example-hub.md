@@ -49,7 +49,7 @@ sibling folder such as `product-worktrees/`.
    design child may read the product's public interfaces. The `Scope` key must express this per repository.
 5. **The master also reads child repositories directly** for cheap checks. `dispatch` must allow this and say
    when it stops being cheap.
-6. **Hub rules reach children twice.** Through the parent-folder instruction file (if that loading is confirmed)
+6. **Hub rules reach children twice.** Through the parent-folder instruction file (confirmed, `spikes.md` S5)
    and through `Propagate`. The hub's file needs a way to say "this part is for the master" and "this part is
    for a child".
 7. **Model defaults by repository and kind of work.** For example: a design session on a hard problem at the top
