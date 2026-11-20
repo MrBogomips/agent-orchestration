@@ -10,7 +10,7 @@ Picks the model and the effort level for sessions and for subagents. Works in an
 | `model-router:setup` | skill | Writes a *Model routing* section in the project's instruction file with project defaults and exceptions, after the user confirms. |
 | `model-router` | mod | At a subagent's start, acts only when no model was given. Logs every decision. |
 | `/model-router` | command (mod) | Shows the latest decisions; turns the router on or off for the session. |
-| Decision log | file | `~/.claude/model-router/decisions.jsonl` (under the active config folder). |
+| Decision log | file | `decision` records in `~/.claude/model-router/events.jsonl` (under the active config folder); see `model-router-quality-loop.md`. |
 | Options | `userConfig` | Tier models, thresholds, judge timeout, on/off switches. |
 | `model-router:report` | skill | Compacts the quality data and opens a local report page. See `model-router-quality-loop.md`. |
 | Quality data | files | Event log and aggregates per user and per project, under `~/.claude/model-router/`. See `model-router-quality-loop.md`. |
@@ -129,7 +129,7 @@ loaded looks the same as one with nothing to do.
 
 ### Decision log
 
-One JSON line per decision. Append through a shell `cat >>` call, because the mod's file API has no append and a
+One JSON line per decision, as a `type: "decision"` record of the quality loop's `events.jsonl`. Append through a shell `cat >>` call, because the mod's file API has no append and a
 read-then-write can drop another writer's line.
 
 ```json
