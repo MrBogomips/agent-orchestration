@@ -64,7 +64,7 @@ Each child has a scope with three parts, written in its handoff:
 
 | Part | Meaning |
 |---|---|
-| Write root | The repository, or its worktree, where the child may create and change files. |
+| Write root | The repository, or its worktree, where the child may create and change files. A worktree under the repository is created by the child and the repository stays the write root; a worktree in a sibling folder is created by the master before the start (its only act inside a repository) and becomes the write root. |
 | Task | What the child is asked to do. Work beyond it is out of scope even inside the write root. |
 | External references | Files outside the write root that the child may read, listed one by one. Reading them is allowed; analysing or changing their area is not. |
 
@@ -146,6 +146,7 @@ New keys:
 | `Scope` | Per repository: what a child may read outside its write root by default | nothing |
 | `Registry` | Path of the children record | a file under the session's config folder, outside the hub |
 | `Guards` | `on` or `off` for the scope guard and the mod's send guard | `on` |
+| `Master only` | Parts of the hub's instruction file, and duties (a tracker, a backlog), that apply to the master only; the handoff tells a child to ignore them | nothing |
 
 `session-hub:setup` writes the section. It proposes values from what it finds (child folders with `.git`, the
 repositories' own worktree policies) and writes only after an explicit yes.
@@ -219,7 +220,7 @@ Constraints:
 
 ## Open points
 
-- Whether to keep a manual environment (print the commands, start nothing) now that the non-Claude path is gone.
+- The manual environment (print the commands, start nothing) is kept in 0.1.
 - The launcher wrapper: some users start sessions through a wrapper that sets up an identity before `claude`
   runs. The old skill rebuilds only the config folder and home variables, not the wrapper. Decide whether a
   `Launch` key should let a hub name its own launch command.
