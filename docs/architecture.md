@@ -744,7 +744,7 @@ sequenceDiagram
     U->>F: read events.jsonl and aggregates once
     U-->>M: JSON: every window, both levels
     M->>M: $.state usage, view; the pane draws the tab's rows
-    P->>M: 1-4, Left/Right, d/w/m/a, p (redraw only)
+    P->>M: 1-4, Tab, d/w/m/a, p (redraw only)
     P->>M: r (usage.mjs again), o (report.mjs)
   else no pane (headless, -p, under 60 columns)
     M->>U: the same read
@@ -767,7 +767,7 @@ the report skill still work then. Every answer is for the person (`isTextDisplay
 | `/model-router report` | | Writes and opens the report page; answers its path. | The `model-router:report` skill does the same. |
 | `/model-router help` | | The arguments and the keys. Any unknown argument prints the same. | |
 
-Keys in the usage view: `1`–`4` or Left/Right/Tab onto a tab switch tab; `d`, `w`, `m`, `a` set the window to 24
+Keys in the usage view: `1`–`4` or Tab onto a tab switch tab; `d`, `w`, `m`, `a` set the window to 24
 hours, 7 days, 30 days or all; `p` switches between the user and the project level; `o` writes and opens the
 report; `r` refreshes (runs compaction); Esc closes.
 

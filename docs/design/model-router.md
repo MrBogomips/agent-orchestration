@@ -204,7 +204,7 @@ hotkeys drive them:
 
 | Key | Does |
 |---|---|
-| `1`–`4`, or Left/Right/Tab onto a tab | Switch tab (a `ui.focus` hook switches as the ring lands on a tab) |
+| `1`–`4`, or Tab onto a tab | Switch tab (a `ui.focus` hook switches as the ring lands on a tab) |
 | `d` `w` `m` `a` | Window: last 24 hours, 7 days, 30 days, all |
 | `p` | Level: the user's data or this project's |
 | `o` | Write and open the HTML report (`scripts/report.mjs`); a toast gives its path |

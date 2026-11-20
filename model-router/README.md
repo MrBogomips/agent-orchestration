@@ -83,7 +83,7 @@ A dialog pane in the style of `/usage`, with four tabs:
 
 | Key | Does |
 |---|---|
-| `1`–`4`, or Left/Right/Tab onto a tab | Switches tab |
+| `1`–`4`, or Tab onto a tab | Switches tab |
 | `d`, `w`, `m`, `a` | Window: last 24 hours, 7 days, 30 days, or all time |
 | `p` | Switches between your data across projects (user) and this project's |
 | `o` | Writes and opens the report page; a toast gives its path |

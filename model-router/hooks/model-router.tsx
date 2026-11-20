@@ -316,7 +316,7 @@ export const register: Register = (on, options) => {
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
   }).catch(($, e, next) => ({ text: `Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
 
-  // The ring landing on a tab (Left, Right, Tab) switches to it, so the arrows move between tabs.
+  // The ring landing on a tab (Tab, or an arrow where the engine routes it to the pane) switches to it.
   // A ring move carries the element as `element`; this plugin's own $.ui.focus call names it `key`.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
     const element: unknown = (e as { element?: unknown }).element ?? (e as { key?: unknown }).key
