@@ -149,10 +149,11 @@ The skills work with mods turned off; the router, the command and the measuremen
 At a subagent start through the `Agent` tool, a `tool.call` hook decides the case and asks the judge, and sets the
 effort on the call itself; the `agent.spawn` hook that follows (same `tool_use_id`) sets the model against the
 parent's model and logs the decision. An explicit model, a fork, a resume, routing turned off, a session-wide
-subagent model, and an agent whose definition fixes a model (or that the mod cannot read: a plugin's agent) are
-kept. The judge is one call to the fast tier (8 s limit) with a prompt generated from `grid.json`; the task is
+subagent model, and an agent whose definition fixes a model or that the mod cannot read (a plugin's agent, a
+built-in type other than `general-purpose` and `Explore`) are kept. The judge is one call to the fast tier (8 s limit) with a prompt generated from `grid.json`; the task is
 wrapped as data with closing tags escaped. A downgrade needs confidence 0.6, an upgrade 0.3; risk above 0.7 (or a
-`!` in the class tag) forces the deep tier and at least `high` effort.
+`!` in the class tag) forces the deep tier and at least `high` effort. The judge's tiers stop at `opus`, so the
+router never picks `fable`, and in 0.2 it does not hold `review-debug` and `design-open` to the grid's floor.
 
 ### The quality loop (measuring only in 0.2)
 
@@ -653,10 +654,11 @@ No plugin keeps state inside a hub or a repository. State lives under the active
 | `<config dir>/session-hub/children-<hub id>.json.lock` | session-hub | `registry.mjs`, during a write | the lock | 0.1 |
 | a path named by the hub's *Registry* key | session-hub | the master, through `registry.mjs` | the children record, when the hub moves it; never inside the hub | 0.1 |
 | `<scratchpad or mktemp -d>/<name>-handoff.md` | session-hub | `spawn` | one handoff per child; none for a desktop app child, whose handoff is passed inline | 0.1 |
-| `<config dir>/model-router/quality/recommendations.json` | model-router | nothing in 0.1 (read only, if present) | per-class model and effort hints | written from 0.3 |
+| `<config dir>/model-router/quality/recommendations.json` | model-router | nothing in 0.1 or 0.2 (read only, if present) | per-class model and effort hints | written from 0.3 |
 | `<config dir>/model-router/events.jsonl` | model-router | the router mod and compaction, append only | routing decisions, spawns, signals, reports, session ends; outcomes (compaction) | 0.2 |
 | `<config dir>/model-router/quality/user.json`, `quality/projects/<project id>.json` | model-router | compaction, written whole (temporary name, then rename) | quality aggregates per user and per project | 0.2 |
 | `<config dir>/model-router/quality/state.json`, `quality/.lock` | model-router | compaction | the offset of the earliest open task, and the lock (stale after 2 minutes) | 0.2 |
+| `<config dir>/model-router/options.json` | model-router | the mod, at each session start | the options compaction and the report use (window, similarity, half-life) | 0.2 |
 | `<config dir>/model-router/report.html` | model-router | `scripts/report.mjs` | the local quality report | 0.2 |
 
 The plugins also write two kinds of files in a hub or a project, both configuration and both only after the
@@ -677,9 +679,11 @@ without recording.
 
 **`model-router` fails open.** An error never stops work. In the skills, a missing or unreadable
 `recommendations.json`, or one with no entry for the class, means the grid alone decides, silently. The router mod
-keeps this rule: every hook has a `.catch` that hands the event on unchanged, and a judge error, a timeout or an
-unreadable answer leaves the start unchanged (logged as `error`). A compaction that fails leaves the event log
-untouched; the next run retries.
+keeps this rule: the routing and recording hooks each have a `.catch` that hands the event on unchanged,
+`session.start` catches its own work, and a judge error, a timeout or an unreadable answer leaves the start
+unchanged (logged as `error`, unless a `!` tag forces the deep tier). Compaction only appends to the event log; a
+run that dies is safe to repeat, because a task with an `outcome` record is not decided again and each aggregate
+file remembers the tasks it folded.
 
 ## Compatibility
 
@@ -689,7 +693,7 @@ untouched; the next run retries.
 | Cross-session messaging (needed by `session-hub`) | Claude Code 2.1.224 or later |
 | Mods | exist from Claude Code 2.1.287; the `model-router` mod declares `engines["claude-code"]: ">=2.1.329"`, the version it was tested on |
 | `node` | on `PATH`, for the scope guard, the record script and the `model-router` scripts; no dependencies |
-| Operating system | macOS and Linux only: the hook wrapper in `hooks.json` is a POSIX `sh` command |
+| Operating system | macOS and Linux only: the `session-hub` hook wrapper in `hooks.json` is a POSIX `sh` command; the `model-router` mod runs `sh`, `mkdir`, `cat`, `mv` and `tail`, and its report opens the page with `open` (macOS) or `xdg-open` (Linux) |
 
 What was verified on 2.1.329:
 

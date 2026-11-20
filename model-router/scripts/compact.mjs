@@ -33,6 +33,7 @@ export function paths(configDir) {
     events: join(root, 'events.jsonl'),
     state: join(quality, 'state.json'),
     lock: join(quality, '.lock'),
+    options: join(root, 'options.json'),
     user: join(quality, 'user.json'),
     projects: join(quality, 'projects'),
     project: (id) => join(quality, 'projects', `${id}.json`),
@@ -85,11 +86,15 @@ export function writeWhole(file, text) {
   renameSync(tmp, file);
 }
 
-function takeLock(file, now) {
+/**
+ * Takes the lock file with `token`. A lock older than two minutes is stale: it is moved aside by a rename, which
+ * only one run can win, and checked to be the stale one before a new lock is created.
+ */
+export function takeLock(file, now, token = `${process.pid}-${now}`) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const fd = openSync(file, 'wx');
-      writeFileSync(fd, JSON.stringify({ pid: process.pid, time: now }));
+      writeFileSync(fd, JSON.stringify({ pid: process.pid, time: now, token }));
       closeSync(fd);
       return true;
     } catch (err) {
@@ -97,14 +102,31 @@ function takeLock(file, now) {
       const held = readJson(file, null);
       const since = typeof held?.time === 'number' ? held.time : statSync(file).mtimeMs;
       if (now - since < LOCK_STALE_MS) return false;
+      const aside = `${file}.stale.${token}`;
       try {
-        unlinkSync(file);
+        renameSync(file, aside);
       } catch {
-        // another run took it over first
+        return false; // another run moved it first
       }
+      const moved = readJson(aside, null);
+      if (moved?.token !== held?.token || moved?.time !== held?.time) {
+        renameSync(aside, file); // it was a fresh lock, not the stale one: put it back
+        return false;
+      }
+      unlinkSync(aside);
     }
   }
   return false;
+}
+
+/** Removes the lock only when it is still the one taken with `token`. */
+export function releaseLock(file, token) {
+  if (readJson(file, null)?.token !== token) return;
+  try {
+    unlinkSync(file);
+  } catch {
+    // already gone
+  }
 }
 
 function readNewLines(file, offset) {
@@ -114,11 +136,12 @@ function readNewLines(file, offset) {
   return { ...parseLines(buffer.subarray(from), from), from };
 }
 
+/** The next offset: the first line of any record of a task still open, so none of its records is skipped. */
 function nextState(records, starts, end, openTasks, closedKeys) {
   const keyOf = (r) => `${r.session}/${r.agentId}`;
   let offset = end;
   records.forEach((r, i) => {
-    if (r.type === 'spawn' && openTasks.has(keyOf(r))) offset = Math.min(offset, starts[i]);
+    if (r.agentId && r.type !== 'outcome' && openTasks.has(keyOf(r))) offset = Math.min(offset, starts[i]);
   });
   const done = records
     .filter((r, i) => r.type === 'spawn' && starts[i] >= offset && closedKeys.has(keyOf(r)))
@@ -126,21 +149,40 @@ function nextState(records, starts, end, openTasks, closedKeys) {
   return { version: 1, offset, done: [...new Set(done)] };
 }
 
+const FOLDED_KEEP_MS = 90 * 86400000;
+
+/** Applies an outcome to a level once: the level remembers the tasks it folded (for 90 days). */
+function foldInto(level, o, settings) {
+  const folded = level.folded ?? {};
+  if (folded[o.task]) return level;
+  return { ...applyOutcome(level, o, settings), folded: { ...folded, [o.task]: new Date(settings.now).toISOString() } };
+}
+
+function pruned(level, now) {
+  const folded = Object.fromEntries(Object.entries(level.folded ?? {}).filter(([, ts]) => now - Date.parse(ts) < FOLDED_KEEP_MS));
+  return { ...level, folded };
+}
+
 function fold(p, outcomes, { now, options, grid }) {
   const learned = outcomes.filter((o) => o.learn);
-  if (learned.length === 0) return;
+  if (learned.length === 0) return 0;
   const settings = { now, halfLifeDays: options.halfLifeDays, grid };
   let user = readJson(p.user, emptyLevel('user'));
   const projects = new Map();
   for (const o of learned) {
-    user = applyOutcome(user, o, settings);
+    user = foldInto(user, o, settings);
     if (!o.project?.id || !/^[0-9a-f]{16}$/.test(o.project.id)) continue;
     const current = projects.get(o.project.id) ?? readJson(p.project(o.project.id), emptyLevel('project', o.project));
-    projects.set(o.project.id, applyOutcome({ ...current, project: o.project }, o, settings));
+    projects.set(o.project.id, foldInto({ ...current, project: o.project }, o, settings));
   }
-  writeWhole(p.user, JSON.stringify(user, null, 1));
-  for (const [id, level] of projects) writeWhole(p.project(id), JSON.stringify(level, null, 1));
+  writeWhole(p.user, JSON.stringify(pruned(user, now), null, 1));
+  for (const [id, level] of projects) writeWhole(p.project(id), JSON.stringify(pruned(level, now), null, 1));
   return learned.length;
+}
+
+/** The options: defaults, then what the mod saved in options.json, then the caller's. */
+export function effectiveOptions(configDir, options = {}) {
+  return { ...DEFAULT_OPTIONS, ...(readJson(paths(configDir).options, {}) ?? {}), ...options };
 }
 
 /**
@@ -148,29 +190,28 @@ function fold(p, outcomes, { now, options, grid }) {
  * the lock.
  */
 export function compact({ configDir = defaultConfigDir(), now = Date.now(), options = {}, grid = loadGrid() } = {}) {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const opts = effectiveOptions(configDir, options);
   const p = paths(configDir);
   if (!existsSync(p.events)) return { outcomes: 0, learned: 0, open: 0 };
   mkdirSync(p.quality, { recursive: true });
-  if (!takeLock(p.lock, now)) return { skipped: 'locked' };
+  const token = `${process.pid}-${now}-${Math.random().toString(36).slice(2)}`;
+  if (!takeLock(p.lock, now, token)) return { skipped: 'locked' };
   try {
     const state = readJson(p.state, { version: 1, offset: 0, done: [] });
     const { records, starts, end, from } = readNewLines(p.events, state.offset ?? 0);
-    const done = new Set(from === state.offset ? state.done ?? [] : []);
+    // A run that died after appending its outcomes left them in the log: they count as done.
+    const logged = records.filter((r) => r.type === 'outcome').map((r) => r.task);
+    const done = new Set([...(from === state.offset ? state.done ?? [] : []), ...logged]);
     const { outcomes, openTasks } = computeOutcomes(records, {
       now, windowMin: opts.reworkWindowMin, similarityThreshold: opts.similarityThreshold, done,
     });
-    const learned = fold(p, outcomes, { now, options: opts, grid }) ?? 0;
+    const learned = fold(p, outcomes, { now, options: opts, grid });
     if (outcomes.length > 0) appendFileSync(p.events, outcomes.map((o) => JSON.stringify(o)).join('\n') + '\n');
     const closed = new Set([...done, ...outcomes.map((o) => o.task)]);
     writeWhole(p.state, JSON.stringify(nextState(records, starts, end, openTasks, closed)));
     return { outcomes: outcomes.length, learned, open: openTasks.size };
   } finally {
-    try {
-      unlinkSync(p.lock);
-    } catch {
-      // already gone
-    }
+    releaseLock(p.lock, token);
   }
 }
 

@@ -53,7 +53,7 @@ All come from mod events and `$` calls; none calls a model.
 | How the run ended | `agent.report`: `status` = `completed` / `failed` / `stopped` | strong |
 | Tool error rate | tool results with `isError`, keyed by `agentId` | medium |
 | Files the subagent wrote | `tool.call` on `Edit`, `Write`, `NotebookEdit` with `agentId` and `file_path` (verified, S12) | needed for rework |
-| Rework | inside the rework window after the report: the parent or the user writes one of the same files; a spawn of the same class whose description is similar (redo or escalation); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
+| Rework | inside the rework window after the report: the main session or any other agent (siblings included) writes one of the same files; a spawn of the same class whose description is similar (redo or escalation); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
 | Re-search | inside the window, for a read-only subagent: the parent starts another read-only subagent of the same class on a similar description, or reads the files the subagent named | weak; shown as such in the report |
 
 *Similar description*: same class and a token-set overlap (Jaccard) of at least 0.5 on the lowercased words of
@@ -66,8 +66,10 @@ report, or the end of the session if sooner):
 
 - `success`: `completed` and no rework signal.
 - `rework`: `completed` and at least one rework signal.
-- `failure`: `failed` or `stopped` by the engine or the parent. A stop by the person counts as failure only when
-  followed by a rework signal; otherwise it is `cancelled` and not learned.
+- `failure`: `failed`, or stopped by the parent's own stop call and followed by a rework signal ("Builder
+  questions settled", item 5).
+- `cancelled`, not learned: any other stop, or no report at all (closed at the end of the session or after
+  24 hours).
 
 ## Metrics
 
@@ -243,14 +245,22 @@ Choices left to the builder, and where the build departs from the text above.
   reads the raw records, decides each task whose window closed, appends its `outcome` record to `events.jsonl`
   and folds it into the aggregates. The mod stays thin, and the outcome logic is plain code under test
   (`lib/outcome.mjs`).
-- **Window bookkeeping.** `quality/state.json` holds the byte offset of the earliest task still open and the keys
-  of tasks closed after it. A task with no report closes as `cancelled` when its session ends or after 24 hours.
-  A continued subagent (`SendMessage`) stays one task: its latest report gives the cost and starts the window.
+- **Window bookkeeping.** `quality/state.json` holds the byte offset of the first record of any task still open
+  (a subagent's report can reach the log before its spawn record) and the keys of tasks closed after it. A task
+  with no report closes as `cancelled` when its session ends or after 24 hours. A continued subagent
+  (`SendMessage`) stays one task: its latest report gives the cost and starts the window.
 - **Compaction** is `scripts/compact.mjs` (Node, no dependencies), started by the mod at `session.start` through
   `$.process.run` without waiting, and by `model-router:report`. It writes the aggregates and `state.json` whole
-  (temporary name, then rename) under `quality/.lock`.
+  (temporary name, then rename) under `quality/.lock`. A stale lock is moved aside by a rename, which only one run
+  wins, and a run removes only its own lock.
+- **A run that dies is safe to repeat.** A task that already has an `outcome` record in the log is not decided
+  again, and each aggregate file keeps the keys of the tasks it folded (for 90 days), so a repeated fold counts
+  nothing twice. The event log itself is only appended to.
+- **Options.** The mod saves the options compaction needs in `<config dir>/model-router/options.json` at each
+  session start; compaction and the report read it when no `--options` is given.
 - **Cells** store aged evidence counts (`n`, `success`, `rework`, `failure`) and the means; `alpha` and `beta` are
-  the grid prior plus those counts, so aging never wears the prior away.
+  the grid prior plus those counts, so aging never wears the prior away. When the model behind an alias changes,
+  the same cell keeps its key, halves its counts and records the new model (instead of a new cell).
 - **Grid choice per class.** Each class in `grid.json` names its `default` (tier, effort): the prior's favoured
   cell, the floor of the protected classes, and the report's fallback recommendation.
 - **The report** (`scripts/report.mjs`, page rendered by `lib/report-html.mjs`) shows a recommendation per class
@@ -264,6 +274,10 @@ Not built in 0.2:
 
 - *Re-search* by reading the files a read-only subagent named: only the similar-start signal is measured.
 - Pruning of compacted events older than 90 days: rewriting the log could drop a line another session appends.
+- The two-level combination (`projectPriorStrength`): the report shows each project's own cells. It is used by
+  selection from 0.3.
+- The tool error rate: `tool-error` signals are recorded but play no part in outcomes or the report yet.
 
 The effort a task is learned under is the subagent's own (its `$.agent.list()` row at report time), else the
-effort of its last request, which is the session's effective level; a task with neither is not learned.
+effort of its last request, which is the session's effective level, else the effort the router set at the start;
+a task with none is not learned.

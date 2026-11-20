@@ -87,7 +87,7 @@ model, against the parent's model the event carries, and logs the decision. Star
 | Case | Action |
 |---|---|
 | The call carries a model | Keep it. Log `explicit`. |
-| The agent's definition fixes a model | Keep it. The event does not show a fixed model, and a hook's model would override it (S3), so the mod reads the definition: it routes the built-in types that inherit (`general-purpose`, `Explore`, `Plan`) and project or user agents (`<cwd>/.claude/agents/<type>.md`, `<config dir>/agents/<type>.md`) whose frontmatter names no model or `inherit`. Any other type (a plugin's agent, a definition it cannot read) is kept. Log `keep`. |
+| The agent's definition fixes a model | Keep it. The event does not show a fixed model, and a hook's model would override it (S3), so the mod reads the definition: it routes the built-in types verified to inherit (`general-purpose`, `Explore`) and project or user agents (`<cwd>/.claude/agents/<type>.md`, `<config dir>/agents/<type>.md`) whose frontmatter names no model or `inherit`. Any other type (a plugin's agent, a definition it cannot read) is kept. The decision is logged as `keep`, the spawn record with route `fixed`. |
 | A fork or a resume | Keep it. The engine ignores a change anyway. A resume is logged as a `resume` signal of the same task. |
 | The router is off, or a session-wide forced subagent model is set (`CLAUDE_CODE_SUBAGENT_MODEL`) | Keep it. Log `keep`. |
 | No model given | Ask the judge; apply the thresholds below; log. |
@@ -117,7 +117,7 @@ Thresholds, all options:
 | Downgrade needs confidence ≥ | 0.6 | Being wrong means a task gets too little |
 | Upgrade needs confidence ≥ | 0.3 | Being wrong only costs money |
 | `risky` > | 0.7 forces the deep tier and effort ≥ high | Skips both bars |
-| Missing confidence | never lowers the model | |
+| Missing confidence | never changes the model, in either direction | |
 | Unknown current model | counts as an upgrade | |
 
 The numbers come from the reference router, whose authors call them untested. The decision log exists to tune
@@ -135,8 +135,14 @@ downgrade bar, higher levels the upgrade bar); risky work gets at least `high`. 
 Fail open: a judge error, a timeout or an unreadable answer leaves the request unchanged. This is the opposite
 of the guards in `session-hub`, on purpose: a router that fails must never stop work.
 
-Every hook has a `.catch` that hands the event on unchanged, so a hook that throws or times out is fail-open
-too. A judge that answers with an error is logged as `error`.
+The routing and recording hooks each have a `.catch` that hands the event on unchanged, `session.start` catches
+its own work, and `/model-router` answers a fixed line when the log cannot be read, so a hook that throws or times
+out is fail-open too. A judge that answers with an error is logged as `error` (a `!` tag still forces the deep
+tier); a judge call that throws leaves no decision record, and the spawn record shows route `unseen`.
+
+The router's judge tiers stop at the deep tier (`opus`) and the comparison is with the parent's model, so a
+subagent of a `fable` session can be lowered; 0.2 does not hold `review-debug` and `design-open` to the grid's
+floor (the floor applies to exploration and recommendations from 0.3).
 
 Log one line when the mod is ready and one at the first firing of each hook. Without them, a router that never
 loaded looks the same as one with nothing to do. Both go to the debug log (`claude --debug`), not the transcript.
@@ -156,7 +162,7 @@ read-then-write can drop another writer's line.
 }
 ```
 
-Each record also carries `v: 1`, `toolUseId` and `class`. `before` is the parent's model (what the subagent
+Each record also carries `v: 1`, `toolUseId` and `class`. `before` is the model the call carried, else the parent's model (what the subagent
 would have run on), `after` the model the engine started it on.
 
 No cost figures in the decision record. An honest saving needs the model the subagent would really have run on,

@@ -50,7 +50,7 @@
     "minUpgradeConfidence": {
       "type": "number",
       "title": "Confidence to upgrade",
-      "description": "The judge's confidence needed to raise a subagent's model or effort (0 to 1).",
+      "description": "The judge's confidence needed to raise a subagent's model, or to set effort medium, high or xhigh (0 to 1).",
       "required": false,
       "default": 0.3
     },
@@ -98,8 +98,8 @@
     },
     "projectPriorStrength": {
       "type": "number",
-      "title": "Project prior strength",
-      "description": "How many observations the user level counts for in a project's estimate.",
+      "title": "Project prior strength (from 0.3)",
+      "description": "How many observations the user level counts for in a project's estimate. Unused in 0.2.",
       "required": false,
       "default": 5
     },

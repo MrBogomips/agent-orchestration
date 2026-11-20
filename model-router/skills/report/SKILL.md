@@ -25,16 +25,17 @@ If `CLAUDE_PLUGIN_ROOT` is not set, the script is in the installed plugin's fold
 ## 2. Answer
 
 Give the user the absolute path of the page and, in two or three lines, what it covers. If the script printed an
-error, show it and say that no data was changed: the event log is never rewritten.
+error, show it. The event log is only appended to, never rewritten, but the compaction that runs first may already
+have updated the quality data; a later run does not count a task twice.
 
 When the page has no data yet, say why it may be empty:
 
-- the mod records only when its `measure` option is on (the default) and the Claude Code version runs mods
-  (2.1.329 or later);
-- a task counts only once its rework window (`reworkWindowMin`, 30 minutes by default) has closed or its session
-  has ended;
-- tasks without a class (`[mr:<class>]` tag or the judge's answer), risky tasks and tasks on unknown models are
-  measured but not learned.
+- the mod records only when mods are turned on, the Claude Code version runs them (2.1.329 or later) and its
+  `measure` option is on (the default);
+- a task counts only once its rework window (`reworkWindowMin`, 30 minutes by default; the script uses the
+  options the mod saved at the last session start) has closed or its session has ended;
+- tasks without a class (`[mr:<class>]` tag or the judge's answer), risky tasks, tasks on unknown models and tasks
+  with no known effort are measured but not learned.
 
 ## Limits
 

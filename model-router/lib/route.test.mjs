@@ -26,7 +26,7 @@ test('routeCase: no model given goes to the judge', () => {
 test('definitionCase: inheriting built-ins and model-less definitions are routable', () => {
   assert.equal(definitionCase('general-purpose'), 'inherit');
   assert.equal(definitionCase('Explore'), 'inherit');
-  assert.equal(definitionCase('Plan'), 'inherit');
+  assert.equal(definitionCase('Plan'), 'unknown', 'not verified to inherit: kept');
   assert.equal(definitionCase('reviewer', '---\nname: reviewer\ndescription: x\n---\nbody'), 'inherit');
   assert.equal(definitionCase('reviewer', '---\nname: reviewer\nmodel: inherit\n---\nbody'), 'inherit');
 });

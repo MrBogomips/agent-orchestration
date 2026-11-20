@@ -28,10 +28,10 @@ const GRID = {
 
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
 
-type World = { appended: any[]; agentCalls: any[]; spawns: any[]; judgeCalls: any[] }
+type World = { appended: any[]; agentCalls: any[]; spawns: any[]; judgeCalls: any[]; runs: any[] }
 
 function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, text: FAST_ANSWER, usage: {} } }), stdout = ''): World {
-  const w: World = { appended: [], agentCalls: [], spawns: [], judgeCalls: [] }
+  const w: World = { appended: [], agentCalls: [], spawns: [], judgeCalls: [], runs: [] }
   mock.env(on, { HOME: '/home/u' })
   on('fs.read', () => ({ value: JSON.stringify(GRID) }))
   on('fs.exists', () => ({ value: false }))
@@ -48,7 +48,8 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     return judge()
   })
   on('process.run', ($, e) => {
-    if (e.argv[0] === 'sh') w.appended.push(...String(e.init?.stdin ?? '').trim().split('\n').map((l) => JSON.parse(l)))
+    w.runs.push(e)
+    if (e.argv[0] === 'sh' && String(e.argv[4]).includes('events.jsonl')) w.appended.push(...String(e.init?.stdin ?? '').trim().split('\n').map((l) => JSON.parse(l)))
     return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('tool.call', ($, e) => {
@@ -159,6 +160,24 @@ describe('/model-router', () => {
     const out = await $.command.run({ command: 'model-router', args: '', origin: { kind: 'composer' }, presentation: {} } as any)
     expect(out.text).toContain('downgrade')
     expect(out.text).toContain('opus -> haiku')
+  })
+})
+
+describe('session start', () => {
+  test('saves the effective options for compaction and the report', { options: { reworkWindowMin: 120 } }, async ($, on) => {
+    const { runs } = world(on)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: false })
+    const save = runs.find((r) => String(r.argv.join(' ')).includes('options.json'))
+    expect(save.argv).toContain('/home/u/.claude/model-router/options.json')
+    expect(JSON.parse(save.init.stdin).reworkWindowMin).toBe(120)
+  })
+})
+
+describe('/model-router on a malformed log', () => {
+  test('a decision without its fields does not break the command', async ($, on) => {
+    world(on, undefined, '{"type":"decision"}\nnot json\n')
+    const out = await $.command.run({ command: 'model-router', args: '', origin: { kind: 'composer' }, presentation: {} } as any)
+    expect(out.text).toContain('model-router')
   })
 })
 

@@ -122,6 +122,13 @@ async function appendEvents($: any, ctx: Ctx, records: readonly object[]) {
   if (run.exitCode !== 0) $.ui.log(`[model-router] could not append to ${file}: ${run.stderr.slice(0, 200)}`, { to: 'debug' })
 }
 
+/** Saves the options compaction and the report read when they are run without `--options`. */
+async function saveOptions($: any, ctx: Ctx, opts: Options) {
+  const file = `${await configDirOf($, ctx)}/model-router/options.json`
+  const stdin = JSON.stringify({ halfLifeDays: opts.halfLifeDays, reworkWindowMin: opts.reworkWindowMin, similarityThreshold: opts.similarityThreshold, projectPriorStrength: opts.projectPriorStrength })
+  await $.process.run(['sh', '-c', 'mkdir -p "$(dirname "$1")" && cat > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"', 'sh', file], { stdin })
+}
+
 /** One debug line the first time each hook fires, so a router that never loaded tells apart from an idle one. */
 function firstFire($: any, fired: Set<string>, hook: string) {
   if (fired.has(hook)) return
@@ -205,7 +212,7 @@ async function decisionsText($: any, ctx: Ctx, opts: Options): Promise<string> {
   const decisions = lines.flatMap((l: string) => {
     try {
       const r = JSON.parse(l)
-      return r.type === 'decision' ? [r] : []
+      return r?.type === 'decision' && typeof r.ts === 'string' && typeof r.action === 'string' ? [r] : []
     } catch {
       return []
     }
@@ -229,9 +236,9 @@ export const register: Register = (on, options) => {
       await $.command.register({ name: 'model-router', description: 'Latest routing decisions; on or off for this session', argumentHint: '[on|off]' })
       $.ui.log(`[model-router] ready: routing ${opts.routeSubagents ? 'on' : 'off'}, measuring ${opts.measure ? 'on' : 'off'}`, { to: 'debug' })
       if (opts.measure) {
-        const args = JSON.stringify({ halfLifeDays: opts.halfLifeDays, reworkWindowMin: opts.reworkWindowMin, similarityThreshold: opts.similarityThreshold })
+        await saveOptions($, ctx, opts)
         void $.process
-          .run(['node', `${$.plugin.root}/scripts/compact.mjs`, '--config-dir', await configDirOf($, ctx), '--options', args], { timeoutMs: 60000 })
+          .run(['node', `${$.plugin.root}/scripts/compact.mjs`, '--config-dir', await configDirOf($, ctx)], { timeoutMs: 60000 })
           .catch((err: unknown) => $.ui.log(`[model-router] compaction failed: ${errorText(err)}`, { to: 'debug' }))
       }
     } catch (err) {
@@ -247,7 +254,7 @@ export const register: Register = (on, options) => {
       return { text: `model-router: routing turned ${arg} for this session.` }
     }
     return { text: await decisionsText($, ctx, opts) }
-  })
+  }).catch(($, e) => ({ text: 'model-router: could not read the decision log.' }))
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
     firstFire($, fired, 'tool.call Agent')

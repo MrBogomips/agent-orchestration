@@ -2,8 +2,8 @@
 // Plain ES module with no Node or engine imports, so both the mod and node scripts load it.
 import { familyOf, tierRank, effortOf, raiseEffort } from './tiers.mjs';
 
-/** Built-in agent types that inherit the parent's model in Claude Code 2.1.329 (spike S3). */
-export const INHERITING_BUILTINS = Object.freeze(['general-purpose', 'Explore', 'Plan']);
+/** Built-in agent types verified to inherit the parent's model in Claude Code 2.1.329 (spike S3). */
+export const INHERITING_BUILTINS = Object.freeze(['general-purpose', 'Explore']);
 
 /**
  * Whether an agent type leaves the model to the caller: `inherit` (routable), `fixed` (its definition names a

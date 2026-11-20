@@ -57,5 +57,6 @@ Side findings:
 - `claude plugin validate` accepts `$` passed only to a function declared at the top of the module file (or
   imported from a file of the plugin); a helper defined inside `register` is refused.
 - An agent definition's fixed model has to be read from its file: the mod routes only the built-in types that
-  inherit (`general-purpose`, `Explore`, `Plan`) and project or user agents whose definition file it can read and
-  that name no model (or `inherit`). Any other type is kept and logged as `fixed`.
+  were seen to inherit (`general-purpose`, `Explore`) and project or user agents whose definition file it can read and
+  that name no model (or `inherit`). Any other type (`Plan` included, not tested) is kept: the decision is logged as
+  `keep`, the spawn record with route `fixed`.

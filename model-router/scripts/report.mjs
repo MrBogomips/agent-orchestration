@@ -8,7 +8,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { compact, defaultConfigDir, loadGrid, paths, readEvents, writeWhole, DEFAULT_OPTIONS } from './compact.mjs';
+import { compact, defaultConfigDir, effectiveOptions, loadGrid, paths, readEvents, writeWhole } from './compact.mjs';
 import { ageCell, metrics, recommend } from '../lib/aggregate.mjs';
 import { renderReport } from '../lib/report-html.mjs';
 
@@ -106,11 +106,11 @@ function projectLevels(p) {
 
 /** Everything the page shows, after a compaction. */
 export function buildReportData({ configDir = defaultConfigDir(), now = Date.now(), options = {}, grid = loadGrid() } = {}) {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const opts = effectiveOptions(configDir, options);
   compact({ configDir, now, options: opts, grid });
   const p = paths(configDir);
   const events = readEvents(p.events);
-  const outcomes = events.filter((e) => e.type === 'outcome');
+  const outcomes = [...new Map(events.filter((e) => e.type === 'outcome').map((o) => [o.task, o])).values()];
   const user = readJson(p.user) ?? { cells: {} };
   const levels = [
     { kind: 'user', title: 'user', classes: classesOf({ ...user, kind: 'user' }, grid, now, opts, outcomes) },
