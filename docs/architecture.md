@@ -8,7 +8,7 @@ they may change before they ship.
 | Plugin | Version | In one line |
 |---|---|---|
 | `session-hub` | 0.2.2 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
-| `model-router` | 0.3.1 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
+| `model-router` | 0.3.2 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
 
@@ -694,9 +694,11 @@ with mods off, the skills still work, no subagent start is routed and no event i
 
 ### Routing a subagent start
 
-At a subagent start through the `Agent` tool, a `tool.call` hook decides the case and asks the judge, and sets the
-effort on the call itself; the `agent.spawn` hook that follows (same `tool_use_id`) sets the model against the
-parent's model and logs the decision. An explicit model, a fork, a resume, routing turned off, a session-wide
+At a subagent start through the `Agent` tool, a `tool.call` hook decides the case and asks the judge, and passes
+the call on unchanged: in auto permission mode the classifier reviews the call's input before the hooks run, and
+the engine refuses a call a hook changed afterwards. The `agent.spawn` hook that follows (same `tool_use_id`) sets
+the model against the parent's model and logs the decision, and keeps the routed effort for the subagent's
+`agentId`; a `turn.step` hook sets that effort on each of the subagent's model requests. An explicit model, a fork, a resume, routing turned off, a session-wide
 subagent model, and an agent whose definition fixes a model or that the mod cannot read (a plugin's agent, a
 built-in type other than `general-purpose` and `Explore`) are kept. The judge is one call to the fast tier (8 s
 limit) with a prompt generated from `grid.json`; the task is wrapped as data with closing tags escaped. A
@@ -839,6 +841,9 @@ What was verified on 2.1.329:
   restart and resume; `ListAgents`, called by a mod, lists peer sessions with their status.
 - At `agent.spawn` a model fixed by an agent's definition is not shown, and a hook's model overrides it; a
   subagent's effort is set by rewriting `effort` on the `Agent` tool call.
+- On 2.1.330, in auto permission mode, that tool call rewrite makes the engine refuse the start; a `turn.step`
+  rewrite of `effort` for the subagent's `agentId` works in auto and default mode, from its first request, and the
+  model rewrite at `agent.spawn` works in both.
 - At `agent.report`, the agent's `$.agent.list()` row carries `usage` and `cost`; a subagent's `Edit` and `Write`
   calls carry its `agentId` and the file path; continuing a subagent through `SendMessage` cost about a fifth of a
   fresh start on the same follow-up.

@@ -79,9 +79,10 @@ Second release. Read `research/mods-capabilities.md` before designing it.
 
 ### Behaviour at a subagent's start
 
-Two hooks share the work, joined by the start's `tool_use_id` (S3): a `tool.call` hook on the `Agent` tool
-decides the case, asks the judge and sets the effort on the call; the `agent.spawn` hook that follows sets the
-model, against the parent's model the event carries, and logs the decision. Starts that no `Agent` call makes
+Three hooks share the work. A `tool.call` hook on the `Agent` tool decides the case and asks the judge, and
+passes the call on unchanged; the `agent.spawn` hook that follows, joined to it by the start's `tool_use_id` (S3),
+sets the model against the parent's model the event carries and logs the decision; a `turn.step` hook sets the
+effort on each model request of the started subagent, by its `agentId` (S14). Starts that no `Agent` call makes
 (another plugin's `$.agent.spawn`, a workflow's agents) are not routed, only measured.
 
 | Case | Action |
@@ -125,8 +126,17 @@ them.
 
 ### Effort for subagents
 
-`agent.spawn` has no effort field. The mod rewrites `effort` on the `Agent` tool call itself, which works in
-2.1.329 (S3): the subagent's steps and its `$.agent.list()` row carry the new level. An effort the call already
+`agent.spawn` has no effort field. Up to 0.3.1 the mod rewrote `effort` on the `Agent` tool call, which works in
+default mode (S3). In auto permission mode the engine refuses it (S14): the classifier reviews the call's input
+before the `tool.call` hooks run, and a call whose input a hook changed afterwards is not run ("a hook changed this
+call's input after auto mode reviewed it"). Every routed start then failed, which a router must never cause.
+
+From 0.3.2 the mod never changes the `Agent` call's input. When `agent.spawn` answers the subagent's `agentId`,
+the mod keeps the routed effort for that id, and a `turn.step` hook sets it on every model request of that loop
+(a step rewrite lasts one step). The model request is not a tool input, so no permission mode reviews it; the
+subagent's first request already carries the level (S14). The `$.agent.list()` row then has no `effort` of its
+own, so the report record takes the level from the row's `lastRequest`. The map lives in the module: after a
+reload, a subagent started earlier runs at its inherited effort, which fails open. An effort the call already
 carries is kept. Otherwise the judge's level is set when its `effort_confidence` passes the bar (`low` needs the
 downgrade bar, higher levels the upgrade bar); risky work gets at least `high`. `max` is never set.
 

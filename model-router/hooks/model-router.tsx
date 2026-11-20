@@ -62,6 +62,7 @@ type Pending = {
   judge: Judged | null
   judgeMs: number | null
   effort: string | undefined
+  callEffort: string | undefined
   error: string | null
 }
 
@@ -168,7 +169,11 @@ async function runJudge($: any, ctx: Ctx, opts: Options, e: any): Promise<{ judg
   return { judge, ms, error: judge ? null : 'judge: unreadable answer' }
 }
 
-/** Decides at the Agent tool call: the routing case, the judge, the effort. The model is applied at agent.spawn. */
+/**
+ * Decides at the Agent tool call: the routing case, the judge, the effort. The call's input is never rewritten:
+ * in auto mode the classifier has already reviewed it, and a changed input is refused. The model is applied at
+ * agent.spawn, the effort at each turn.step of the started agent.
+ */
 async function planStart($: any, ctx: Ctx, opts: Options, e: any): Promise<Pending> {
   const grid = await gridOf($, ctx)
   const tag = parseTag(e.description, grid.classes.map((c: any) => c.name))
@@ -181,7 +186,7 @@ async function planStart($: any, ctx: Ctx, opts: Options, e: any): Promise<Pendi
     forcedModel: await $.env.get('CLAUDE_CODE_SUBAGENT_MODEL'),
     definition: e.model || subagentType === 'fork' ? 'inherit' : await definitionOf($, ctx, subagentType),
   })
-  const base = { route, reason, cls: tag.cls, risky: tag.risky, judge: null, judgeMs: null, effort: e.effort, error: null }
+  const base = { route, reason, cls: tag.cls, risky: tag.risky, judge: null, judgeMs: null, effort: e.effort, callEffort: e.effort, error: null }
   if (route !== 'judge') return base
   const { judge, ms, error } = await runJudge($, ctx, opts, e)
   const risky = isRisky(judge, tag.risky, opts.riskThreshold)
@@ -275,6 +280,8 @@ export const register: Register = (on, options) => {
   const opts = optionsOf(options)
   const ctx: Ctx = {}
   const pending = new Map<string, Pending>()
+  // The effort each routed subagent runs at, by agentId, applied to every one of its steps (a step rewrite lasts one step).
+  const stepEffort = new Map<string, string>()
   const fired = new Set<string>()
 
   on('session.start', async ($, e, next) => {
@@ -382,10 +389,17 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
     firstFire($, fired, 'tool.call Agent')
-    const planned = await planStart($, ctx, opts, e)
-    pending.set(e.tool_use_id, planned)
-    return planned.effort && planned.effort !== e.effort ? next({ ...e, effort: planned.effort } as typeof e) : next(e)
+    pending.set(e.tool_use_id, await planStart($, ctx, opts, e))
+    return next(e)
   }).catch(($, e, next) => next(e))
+
+  // Sets the routed effort on each model request of the subagent; any other loop's steps pass unchanged.
+  on('turn.step', async function* ($, e, next) {
+    const effort = e.agentId ? stepEffort.get(e.agentId) : undefined
+    if (!effort || effort === e.effort) return yield* next(e)
+    firstFire($, fired, 'turn.step effort')
+    return yield* next({ ...e, effort } as typeof e)
+  })
 
   on('agent.spawn', async ($, e, next) => {
     firstFire($, fired, 'agent.spawn')
@@ -398,7 +412,9 @@ export const register: Register = (on, options) => {
     pending.delete(e.tool_use_id)
     const decision = planned ? decisionOf(planned, e, opts) : null
     const started = await next(decision?.model && !e.fork ? { ...e, model: decision.model } : e)
-    if (!opts.measure || 'deny' in started) return started
+    if ('deny' in started) return started
+    if (planned?.effort && planned.effort !== planned.callEffort && started.agentId && !e.fork) stepEffort.set(started.agentId, planned.effort)
+    if (!opts.measure) return started
     const session = await $.session.id()
     const tag = parseTag(e.description, (await gridOf($, ctx)).classes.map((c: any) => c.name))
     const records: object[] = []

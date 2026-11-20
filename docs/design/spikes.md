@@ -18,10 +18,11 @@ files it affects. None of them was run during the design.
 | S11 | Does `$.agent.list()` still return a subagent's `usage` and `cost` when its `agent.report` fires? | A mod that, at `agent.report`, reads the agent's row and logs `usage` and `cost`. | Whether the quality loop reads cost at report time or must sample it earlier. |
 | S12 | Does `tool.call` carry `agentId` for a subagent's `Edit` and `Write`? | Log `e.agentId` and `file_path` at `tool.call` while a subagent edits a file. | How the quality loop attributes written files to a subagent (rework signal). |
 | S13 | How many tokens does continuing a subagent through the message tool cost compared with a fresh start on the same follow-up? | Same follow-up twice: once continued, once as a new subagent; compare `usage`. | Whether the *continue, do not restart* rule in `choose-model` holds. |
+| S14 | Does a `tool.call` rewrite of the `Agent` call survive auto permission mode, and can a `turn.step` hook set a subagent's effort instead? | Start a routed subagent in auto mode with the 0.3.1 mod, then with a mod that leaves the call unchanged and rewrites `effort` at `turn.step` for the subagent's `agentId`; compare with default mode. | Whether the router sets effort on the tool call or on the subagent's requests. |
 
 ## Order
 
-S1, S4 and S5 block `session-hub` 0.1. S3 blocks the `model-router` mod; S11 and S12 block its quality loop (`model-router-quality-loop.md`), S13 only a rule in `choose-model`. The others block only the mods.
+S1, S4 and S5 block `session-hub` 0.1. S3 blocks the `model-router` mod, S14 its effort in auto mode; S11 and S12 block its quality loop (`model-router-quality-loop.md`), S13 only a rule in `choose-model`. The others block only the mods.
 
 ## Results
 
@@ -90,3 +91,15 @@ Side findings for the send guard (from the S8 and S9 setups):
   `skill.prompt`, `command.run` and `ui.render` ran. The scope line therefore also rides a prompt as context.
 - After a compaction, `$.session.usage().context.tokens` is undefined until the next request measures it; the mod
   uses that, or a smaller size than at the previous prompt, as its compaction signal.
+
+## Results for model-router 0.3.2
+
+Setup: tmux, `claude --plugin-dir <worktree>/model-router --model haiku --effort low` with `--debug-file`, once
+with `--permission-mode auto` and once with `default`, in the repository; the user-scope `model-router` was
+installed but disabled (`claude plugin list`), and a `--plugin-dir` plugin of the same name takes precedence over
+it anyway. One `general-purpose` start with no model, tagged `[mr:read-search]`, then one tagged
+`[mr:read-search!]` so that the model and the effort both change.
+
+| ID | Date | Claude Code | Setup | Outcome |
+|---|---|---|---|---|
+| S14 | 2026-11-21 | 2.1.330 | As above; first with the 0.3.1 mod, then with 0.3.2. | **0.3.1 in auto mode: the start is refused.** The row reads "Not run · auto mode's check had no usable answer"; the tool error says a hook changed the call's input (`effort: "low"`) after auto mode reviewed it. **0.3.2 in auto mode: both starts run.** The plain one is logged `keep` on haiku with effort `low` (the session's own, so no step is rewritten); the `!` one `forced-risk`, haiku to `claude-opus-5-5` through `agent.spawn`, effort `high` through `turn.step`; the debug log has `first turn.step effort` before the subagent's first API request (`model=claude-opus-5-5`), and the report record has `model: claude-opus-5-5`, `effort: high`. **Default mode: the same** for the `!` start. A `tool.call` hook that calls `next(e)` unchanged does not disturb the auto mode review. `agent.spawn`'s input in this build has no effort field (it has `permissionMode`, the parent's). |
