@@ -1,0 +1,28 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Plugins and skills agree
+        run: bash tests/validate.sh
+
+      - name: Unit tests
+        run: |
+          files=$(find . -path ./node_modules -prune -o -name '*.test.mjs' -print)
+          if [ -n "$files" ]; then node --test $files; else echo "no unit tests yet"; fi
