@@ -188,3 +188,16 @@ test('SKILL.md states the price order of grid.json', () => {
     'SKILL.md does not state the price order',
   );
 });
+
+test('setup/SKILL.md lists exactly the models, effort levels and classes of grid.json', () => {
+  const setup = readFileSync(join(HERE, 'skills', 'setup', 'SKILL.md'), 'utf8');
+  const grid = loadGrid();
+  const listed = (label) => {
+    const line = setup.split('\n').find((l) => l.trim().startsWith(`- ${label}:`));
+    assert.ok(line, `setup/SKILL.md has no "- ${label}:" line`);
+    return [...line.replace(/\(never[^)]*\)/, '').matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  };
+  assert.deepEqual(listed('models'), grid.tiers.map((t) => t.name));
+  assert.deepEqual(listed('effort'), grid.effort.levels);
+  assert.deepEqual(listed('classes'), grid.classes.map((c) => c.name));
+});
