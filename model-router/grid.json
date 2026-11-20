@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Model and effort grid of model-router. skills/choose-model/SKILL.md states the same grid in prose; grid.test.mjs fails when the two drift apart.",
+  "about": "Model and effort grid of model-router. skills/choose-model/SKILL.md states the same grid in prose; grid.test.mjs fails when the two drift apart. A class's default is the grid's usual choice for it: the router mod and the quality loop use it as the prior.",
   "tiers": [
     {
       "name": "haiku",
@@ -51,12 +51,12 @@
     ]
   },
   "classes": [
-    { "name": "read-search", "covers": "find files, symbols or facts", "neverBelowGrid": false },
-    { "name": "read-analyze", "covers": "read and conclude: explain, compare, summarize", "neverBelowGrid": false },
-    { "name": "edit-mechanical", "covers": "repetitive edits that are easy to check", "neverBelowGrid": false },
-    { "name": "edit-specified", "covers": "a change whose done-state fits in one sentence", "neverBelowGrid": false },
-    { "name": "review-debug", "covers": "review, or debugging with an unknown cause", "neverBelowGrid": true },
-    { "name": "design-open", "covers": "open-ended design where judgment matters", "neverBelowGrid": true }
+    { "name": "read-search", "covers": "find files, symbols or facts", "neverBelowGrid": false, "default": { "tier": "haiku", "effort": "low" } },
+    { "name": "read-analyze", "covers": "read and conclude: explain, compare, summarize", "neverBelowGrid": false, "default": { "tier": "sonnet", "effort": "medium" } },
+    { "name": "edit-mechanical", "covers": "repetitive edits that are easy to check", "neverBelowGrid": false, "default": { "tier": "haiku", "effort": "low" } },
+    { "name": "edit-specified", "covers": "a change whose done-state fits in one sentence", "neverBelowGrid": false, "default": { "tier": "sonnet", "effort": "medium" } },
+    { "name": "review-debug", "covers": "review, or debugging with an unknown cause", "neverBelowGrid": true, "default": { "tier": "opus", "effort": "medium" } },
+    { "name": "design-open", "covers": "open-ended design where judgment matters", "neverBelowGrid": true, "default": { "tier": "fable", "effort": "high" } }
   ],
   "tag": {
     "format": "[mr:<class>]",

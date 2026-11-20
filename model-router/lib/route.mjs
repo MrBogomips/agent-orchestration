@@ -1,0 +1,84 @@
+// The routing table of docs/design/model-router.md: which starts the router may change, and how.
+// Plain ES module with no Node or engine imports, so both the mod and node scripts load it.
+import { familyOf, tierRank, effortOf, raiseEffort } from './tiers.mjs';
+
+/** Built-in agent types that inherit the parent's model in Claude Code 2.1.329 (spike S3). */
+export const INHERITING_BUILTINS = Object.freeze(['general-purpose', 'Explore', 'Plan']);
+
+/**
+ * Whether an agent type leaves the model to the caller: `inherit` (routable), `fixed` (its definition names a
+ * model) or `unknown` (no readable definition). `definitionText` is the agent's definition file, when found.
+ */
+export function definitionCase(subagentType, definitionText) {
+  if (INHERITING_BUILTINS.includes(subagentType)) return 'inherit';
+  if (typeof definitionText !== 'string') return 'unknown';
+  const lines = definitionText.split('\n');
+  if (lines[0]?.trim() !== '---') return 'inherit';
+  for (const line of lines.slice(1)) {
+    if (line.trim() === '---') break;
+    const m = line.match(/^model\s*:\s*["']?([^"'#\s]*)["']?/);
+    if (m) return m[1] === '' || m[1] === 'inherit' ? 'inherit' : 'fixed';
+  }
+  return 'inherit';
+}
+
+/**
+ * Which row of the routing table a start falls in: `explicit`, `fork`, `off`, `forced`, `fixed`, or `judge`
+ * when no model was given and the router may choose.
+ */
+export function routeCase({ subagentType, model, enabled, routeSubagents, forcedModel, definition }) {
+  if (!routeSubagents || !enabled) return { route: 'off', reason: 'router off' };
+  if (subagentType === 'fork') return { route: 'fork', reason: 'a fork inherits its parent' };
+  if (model) return { route: 'explicit', reason: 'the call carries a model' };
+  if (forcedModel) return { route: 'forced', reason: 'a session-wide subagent model is set' };
+  if (definition !== 'inherit') {
+    return { route: 'fixed', reason: definition === 'fixed' ? 'the definition fixes a model' : 'definition not readable' };
+  }
+  return { route: 'judge', reason: 'no model given' };
+}
+
+/** Whether the start is risky: the tag's marker, or the judge's `risky` above the threshold. */
+export function isRisky(judge, tagRisky, riskThreshold) {
+  if (tagRisky) return true;
+  return typeof judge?.risky === 'number' && judge.risky > riskThreshold;
+}
+
+/**
+ * The effort to put on the start call, or undefined to leave it. An explicit effort is kept; risky work gets at
+ * least `high`; otherwise the judge's level when its confidence passes the bar (`low` is a downgrade).
+ */
+export function decideEffort({ judge, explicitEffort, risky, options }) {
+  if (explicitEffort) return explicitEffort;
+  const level = effortOf(judge?.effort);
+  const confident = (bar) => typeof judge?.effortConfidence === 'number' && judge.effortConfidence >= bar;
+  if (risky) return raiseEffort(level, 'high');
+  if (!level) return undefined;
+  const bar = level === 'low' ? options.minDowngradeConfidence : options.minUpgradeConfidence;
+  return confident(bar) ? level : undefined;
+}
+
+/**
+ * The model decision at the start, against the model the subagent would run on otherwise (`current`).
+ * Returns `{ action, model?, reason }`, `action` one of `downgrade`, `upgrade`, `keep`, `forced-risk`.
+ */
+export function decideModel({ judge, current, risky, options, models }) {
+  if (risky) {
+    const deep = models.deep;
+    if (tierRank(current) >= tierRank(deep) && tierRank(current) >= 0) {
+      return { action: 'keep', reason: 'risky work: already at or above the deep tier' };
+    }
+    return { action: 'forced-risk', model: deep, reason: 'risky work: deep tier' };
+  }
+  if (!judge) return { action: 'keep', reason: 'no judge answer' };
+  const target = models[judge.tier];
+  const from = tierRank(current);
+  const to = tierRank(target);
+  const conf = typeof judge.confidence === 'number' ? judge.confidence : null;
+  const reason = `judge: ${judge.tier} at ${conf ?? 'no confidence'}`;
+  const isUpgrade = from < 0 || to > from;
+  if (familyOf(current) === familyOf(target) && from >= 0) return { action: 'keep', reason };
+  if (isUpgrade) {
+    return conf !== null && conf >= options.minUpgradeConfidence ? { action: 'upgrade', model: target, reason } : { action: 'keep', reason };
+  }
+  return conf !== null && conf >= options.minDowngradeConfidence ? { action: 'downgrade', model: target, reason } : { action: 'keep', reason };
+}
