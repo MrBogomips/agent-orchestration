@@ -67,8 +67,7 @@ role has to come from the handoff file, and the scope guard is inactive, which `
 | Path | Owner | Content |
 |---|---|---|
 | `<config dir>/session-hub/children-<hub id>.json` | `session-hub` (master writes) | the children record, unless the `Registry` key says otherwise |
-| `<config dir>/model-router/decisions.jsonl` | `model-router` | the decision log |
-| `<config dir>/model-router/events.jsonl`, `quality/` | `model-router` | the quality loop's event log and aggregates (`model-router-quality-loop.md`) |
+| `<config dir>/model-router/events.jsonl`, `quality/` | `model-router` | the event log (routing decisions included) and the quality aggregates (`model-router-quality-loop.md`) |
 
 `<config dir>` is the active Claude Code config folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`). Never write state
 inside a hub or a repository.
