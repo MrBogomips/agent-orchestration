@@ -39,3 +39,16 @@ Start a child by hand with `SESSION_HUB_ROLE=child` and no `SESSION_HUB_SCOPE_RO
 ## A session that is not a child
 
 - [ ] In the master and in a plain session, the plugin's hook never blocks a write
+
+## Runs
+
+| Date | Claude Code | Steps | Result |
+|---|---|---|---|
+| 2026-11-21 | 2.1.330 | Blocked write, mods on (tmux, `--plugin-dir`, haiku at low effort, child started by hand with the `SESSION_HUB_*` variables and a handoff) | Pass: asked for writes under `design`, the child refused before any tool call, did not retry through the shell and sent `out-of-scope` messages to the master; `design/docs/notes.md` unchanged. The hook itself was not reached with mods on. |
+| 2026-11-21 | 2.1.330 | Blocked write, mods off (scratch copy of the plugin without `modules`) | Pass: the `Edit` was blocked with `[session-hub] Write blocked: <hub>/design/docs/notes.md is outside this child's write root <hub>/product. Do not retry this write through the shell or any other tool. …`; no retry. With mods off the child has no master name, so it asked the user instead of messaging the master. |
+| 2026-11-21 | 2.1.330 | Allowed write | Pass: the child fixed the typo in `product/docs/notes.md` with `Edit`. |
+| 2026-11-21 | 2.1.330 | Escapes (`design-link` → `../design`) | Pass for the shell: Bash and `Monitor` appends through the link were denied by the mod. The `Edit` through the link was not reached: the child saw the link and refused first. |
+| 2026-11-21 | 2.1.330 | Guards off, fails closed, a session that is not a child | Not run. |
+
+The 2026-11-21 fixture had no git repositories (folders only), so the `git status` checks were replaced by reading
+the files.
