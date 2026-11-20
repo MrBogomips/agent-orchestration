@@ -1,0 +1,55 @@
+Usage · last 7 days · user level
+
+── Overview ────────────────────────────────────────────────────────────────────
+Status:               routing on · measuring on · adapt off
+
+Session
+Subagents:            3 · $0.034
+Usage by model:
+   claude-sonnet-5-5: 1 × 52.0k tokens ($0.021)
+   claude-haiku-5-5:  2 × 2.0k input, 6.0k output, 950.0k cache read,
+                      50.0k cache write ($0.013)
+Dropped agents show total tokens only (from the log).
+
+Routing · 4 decisions this session
+  downgrade           ██████████░░░░░░░░░░ 2
+  keep                █████░░░░░░░░░░░░░░░ 1
+  explicit            █████░░░░░░░░░░░░░░░ 1
+
+── Models ──────────────────────────────────────────────────────────────────────
+Models · last 7 days · 8 closed tasks · 457.3k tokens · $0.530
+                tasks  tokens    cost  FPY                       $/success
+haiku·low           2  166.3k $0.0095  ████████████████████ 100%   $0.0047
+sonnet·low          3   48.0k  $0.070  ████████████████████ 100%    $0.023
+sonnet·medium       2   33.0k  $0.050  ████████████████████ 100%    $0.025
+opus·high           1  210.0k  $0.400  ░░░░░░░░░░░░░░░░░░░░   0%         –
+Model ids: claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5
+
+── Classes ─────────────────────────────────────────────────────────────────────
+Classes · user level · last 7 days
+                       n  FPY                        rework $/success
+read-search            2  ████████████████████ 100%      0%   $0.0047
+  grid haiku·low · best: not enough data · read-only: weak signal, n < 5
+    haiku·low          2  ████████████████████ 100%      0%   $0.0047
+edit-specified         4  ████████████████████ 100%      0%    $0.028
+  grid sonnet·medium · best sonnet·low $0.023 (differs) · n < 5
+  * sonnet·low         3  ████████████████████ 100%      0%    $0.023
+    sonnet·medium      1  ████████████████████ 100%      0%    $0.040
+review-debug           1  ░░░░░░░░░░░░░░░░░░░░   0%      0%         –
+  grid opus·high · best: not enough data · n < 5
+    opus·high          1  ░░░░░░░░░░░░░░░░░░░░   0%      0%         –
+
+Recommendations
+  100%  edit-specified: sonnet·low over grid sonnet·medium · $0.023/success
+
+── Decisions ───────────────────────────────────────────────────────────────────
+Decisions · latest 5 of 5 · all sessions · UTC
+11-17 12:00  downgrade   sonnet → haiku·low    general-purpose: judge: downgrade
+11-20 11:10• downgrade   opus → haiku·low      general-purpose: judge: downgrade
+11-20 11:20• downgrade   opus → sonnet·medium  general-purpose: judge: downgrade
+11-20 11:30• keep        opus → opus           general-purpose: judge: keep
+11-20 11:40• explicit    opus → opus·high      general-purpose: judge: explicit
+• this session
+
+Data read 2026-11-20 12:00 UTC.
+/model-router help: tabs, windows, levels and keys.

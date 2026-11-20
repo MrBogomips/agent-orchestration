@@ -23,7 +23,14 @@
 
 ## 4. Command and switches
 
-- [ ] `/model-router` shows the latest decisions; `/model-router off` stops routing for the session.
+- [ ] `/model-router` opens the usage view as a dialog; Overview lists this session's subagents by model and its
+      routing decisions by action.
+- [ ] `1`–`4` and Left/Right switch tabs; `d`, `w`, `m`, `a` change the window; `p` switches to the project level;
+      `r` refreshes; `o` opens the report page; Esc closes the view.
+- [ ] The Classes tab under `a` shows the same FPY and cost per success as the report page.
+- [ ] In a terminal under 60 columns, and with `claude -p "/model-router models"`, the command prints the rows as
+      text instead; `/model-router weekly` prints the help.
+- [ ] `/model-router off` stops routing for the session.
 - [ ] With `measure` off, no line is written and routing still works.
 
 ## 5. Failing open
