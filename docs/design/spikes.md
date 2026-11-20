@@ -61,3 +61,9 @@ Side findings for the send guard (from the S8 and S9 setups):
 - A refused send reads well: the tool result is `Not sent: a plugin hook refused it (<reason>)`, and the model
   reported it without trying another route.
 - The `SendFile` tool, which also reaches peer sessions, is not offered in this build's terminal sessions.
+- An organization's managed mod (here `cc-plugin-sec-default`) runs first and can send an event on past a user
+  mod's hook. Seen live for `prompt.compose`, `session.compact` and `classic.SessionStart`: the session shows
+  `session-hub: its <event> hook was skipped`. `session.send`, `session.receive`, `prompt.submit`, `tool.call`,
+  `skill.prompt`, `command.run` and `ui.render` ran. The scope line therefore also rides a prompt as context.
+- After a compaction, `$.session.usage().context.tokens` is undefined until the next request measures it; the mod
+  uses that, or a smaller size than at the previous prompt, as its compaction signal.
