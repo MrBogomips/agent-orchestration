@@ -1,13 +1,11 @@
 ---
 name: dispatch
 description: >-
-  Master side of a session hub (a folder holding several git repositories). At the start of a piece of work,
-  decides which repositories it touches and how each is handled: read by the master, a read-only subagent, a
-  read-only child, a writing child, or a message to a child already running; states the decision in one table.
-  While children run, handles their messages (question, out-of-scope, pr, done, abandoned), routes out-of-scope
-  requests to the right child, and keeps the duties the hub reserves to the master. Use when work in a hub
-  touches one or more of its repositories, when a child sends a message with a `[<task> <repo>]` prefix, or
-  when the user asks for the status of the children.
+  Master side of a session hub (a folder holding several git repositories): decides how each repository a piece
+  of work touches is handled (master reads it, a read-only subagent, a read-only or writing child, or a message
+  to a running child), routes out-of-scope requests from children, and keeps master-only duties. Use when work in
+  a hub touches its repositories, when a child sends a `[<task> <repo>]` message, or when the user asks for the
+  status of the children.
 ---
 
 # Dispatch
