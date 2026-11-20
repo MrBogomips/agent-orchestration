@@ -130,6 +130,15 @@ test('task classes are the fixed list, each with a description', () => {
   assert.deepEqual(protectedClasses, ['review-debug', 'design-open']);
 });
 
+test('every class names the grid choice the quality loop uses as its prior', () => {
+  const grid = loadGrid();
+  for (const c of grid.classes) {
+    assert.ok(c.default, `class ${c.name} has no default`);
+    assert.ok(grid.priceOrder.includes(c.default.tier), `class ${c.name}: unknown tier ${c.default.tier}`);
+    assert.ok(grid.effort.levels.includes(c.default.effort), `class ${c.name}: unknown effort ${c.default.effort}`);
+  }
+});
+
 test('the judge maps fast, balanced and deep onto tiers', () => {
   const { judge, tiers } = loadGrid();
   assert.deepEqual(judge, EXPECTED_JUDGE);
