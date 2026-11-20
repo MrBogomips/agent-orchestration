@@ -77,7 +77,7 @@ A dialog pane in the style of `/usage`, with four tabs:
 | Tab | Shows |
 |---|---|
 | Overview | Routing on or off, measuring, adapt; this session's subagents by model with input, output, cache-read and cache-write tokens and cost; this session's routing decisions by action, with bars |
-| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield (FPY) with a bar, cost per successful task, and the model ids behind each tier |
+| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield (FPY) with a bar, cost per successful task, and the model ids seen in the window. A cancelled task counts in the tasks, not in FPY |
 | Classes | Per task class, over the window and at the level: n, FPY with a bar, rework rate, cost per successful task, the grid's choice next to the best measured cell, weak-signal flags, and each cell under its class (`*` marks the recommended one); then up to three recommendations that differ from the grid, each led by its FPY |
 | Decisions | The latest twelve routing decisions of every session (UTC), `•` marking this session's |
 

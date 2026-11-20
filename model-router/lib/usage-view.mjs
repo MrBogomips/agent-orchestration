@@ -18,6 +18,7 @@ const BAR_MAX = 20;
 const DECISIONS_SHOWN = 12;
 const RECOMMENDATIONS_SHOWN = 3;
 const ACTION_ORDER = ['downgrade', 'upgrade', 'keep', 'explicit', 'forced-risk', 'error'];
+const has = (table, key) => Object.hasOwn(table, key);
 const TAB_ALIASES = { overview: 'overview', models: 'models', model: 'models', classes: 'classes', class: 'classes', stats: 'classes', decisions: 'decisions', log: 'decisions' };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -35,8 +36,8 @@ export function parseArgs(text) {
   const view = { kind: 'view', tab: null, window: null, level: null };
   for (const word of words) {
     const bare = word.replace(/^--/, '');
-    if (TAB_ALIASES[word] && !view.tab) view.tab = TAB_ALIASES[word];
-    else if (WINDOW_TITLES[word] && !view.window) view.window = word;
+    if (has(TAB_ALIASES, word) && !view.tab) view.tab = TAB_ALIASES[word];
+    else if (has(WINDOW_TITLES, word) && !view.window) view.window = word;
     else if (LEVELS.includes(bare) && !view.level) view.level = bare;
     else return { kind: 'unknown', word };
   }
@@ -48,17 +49,18 @@ export function helpText() {
   return [
     'Usage: /model-router [tab] [window] [level] | on | off | report | help',
     '',
-    '  (none)              open the usage view on Overview, last 7 days, user level',
-    '  overview|models|classes|decisions   open on that tab',
-    '  24h|7d|30d|all      the window (all: the aged aggregates, as the report page)',
-    '  user|project        the level: all your projects, or this one',
-    '  on|off              routing on or off for this session',
-    '  report              write and open the HTML report; prints its path',
-    '  help                this list',
+    '  (none)          the usage view on Overview, last 7 days, user level',
+    '  overview|models|classes|decisions',
+    '                  open on that tab',
+    '  24h|7d|30d|all  the window (all: Classes as on the report page)',
+    '  user|project    the level: all your projects, or this one',
+    '  on|off          routing on or off for this session',
+    '  report          write and open the HTML report; prints its path',
+    '  help            this list',
     '',
-    'Keys in the view: 1-4 or Left/Right/Tab switch tab · d/w/m/a window 24h/7d/30d/all ·',
-    'p user/project · o open the report · r refresh (runs compaction) · Esc close.',
-    'Where no pane can be placed (headless, -p, under 60 columns) the view is printed as text.',
+    'Keys: 1-4 or Left/Right/Tab switch tab · d/w/m/a window 24h/7d/30d/all ·',
+    'p user/project · o report · r refresh (runs compaction) · Esc close.',
+    'Where no pane fits (headless, -p, under 60 columns) the view prints as text.',
   ].join('\n');
 }
 
@@ -258,7 +260,7 @@ export function tabRows(data, view, columns) {
   const width = layoutWidth(columns);
   const v = { ...DEFAULT_VIEW, ...Object.fromEntries(Object.entries(view ?? {}).filter(([, x]) => x !== null && x !== undefined)) };
   if (!TABS.includes(v.tab)) v.tab = DEFAULT_VIEW.tab;
-  if (!WINDOW_TITLES[v.window]) v.window = DEFAULT_VIEW.window;
+  if (!has(WINDOW_TITLES, v.window)) v.window = DEFAULT_VIEW.window;
   if (!data) return [dim('Reading the usage data…')];
   return BUILDERS[v.tab](data, v, width);
 }
@@ -279,7 +281,8 @@ export function noteRows(data, columns) {
 export function textView(data, view, columns) {
   const width = layoutWidth(columns);
   const v = { ...DEFAULT_VIEW, ...Object.fromEntries(Object.entries(view ?? {}).filter(([, x]) => x !== null && x !== undefined)) };
-  const tabs = view?.tab ? [view.tab] : TABS;
+  if (!has(WINDOW_TITLES, v.window)) v.window = DEFAULT_VIEW.window;
+  const tabs = TABS.includes(view?.tab) ? [view.tab] : TABS;
   const out = [`Usage · ${WINDOW_TITLES[v.window] ?? v.window} · ${v.level === 'project' ? 'project' : 'user'} level`];
   for (const tab of tabs) {
     out.push('', `── ${TAB_TITLES[tab]} ${'─'.repeat(Math.max(0, width - TAB_TITLES[tab].length - 4))}`);

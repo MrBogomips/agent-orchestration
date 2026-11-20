@@ -31,7 +31,8 @@ const GRID = {
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
 
 type World = { appended: any[]; agentCalls: any[]; spawns: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[] }
-type Answers = { usage?: { exitCode: number; stdout: string; stderr?: string }; isPlaced?: boolean }
+type Run = { exitCode: number; stdout: string; stderr?: string }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
@@ -71,7 +72,7 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     const answer = script.endsWith('usage.mjs')
       ? answers.usage ?? USAGE
       : script.endsWith('report.mjs')
-        ? { exitCode: 0, stdout: '/home/u/.claude/model-router/report.html\n' }
+        ? answers.report ?? { exitCode: 0, stdout: '/home/u/.claude/model-router/report.html\n' }
         : { exitCode: 0, stdout: '' }
     return { value: { stderr: '', ...answer, isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -336,6 +337,12 @@ describe('/model-router usage view', () => {
     const out = await run($, 'report')
     expect(out.text).toBe('Report written to /home/u/.claude/model-router/report.html')
     expect(out.isTextDisplayOnly).toBe(true)
+  })
+
+  test('a report that fails says so, not that the usage data is unreadable', async ($, on) => {
+    world(on, undefined, { report: { exitCode: 1, stdout: '', stderr: 'disk full' } })
+    const out = await run($, 'report')
+    expect(out.text).toBe('Could not write the report: disk full')
   })
 
   test('on and off answer for the person only', async ($, on) => {

@@ -88,7 +88,10 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--config-dir') args.configDir = argv[++i];
     else if (argv[i] === '--options') args.options = JSON.parse(argv[++i] ?? '{}');
-    else if (argv[i] === '--budget-ms') args.budgetMs = Math.max(0, Number(argv[++i]) || DEFAULT_BUDGET_MS);
+    else if (argv[i] === '--budget-ms') {
+      const ms = Number(argv[++i]);
+      args.budgetMs = Number.isFinite(ms) && ms >= 0 ? ms : DEFAULT_BUDGET_MS;
+    }
   }
   return args;
 }

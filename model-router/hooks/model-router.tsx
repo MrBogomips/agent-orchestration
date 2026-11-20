@@ -230,7 +230,9 @@ async function loadUsage($: any, ctx: Ctx): Promise<{ [key: string]: unknown }> 
 }
 
 /** Reads the data again into the view's state; an error is kept for the pane to show, never thrown. */
-async function refreshUsage($: any, ctx: Ctx) {
+// One read at a time from the `r` key; opening the view always reads, so a flag left by a reload cannot stick.
+async function refreshUsage($: any, ctx: Ctx, force = false) {
+  if (!force && (await read($, usageState)).isLoading) return
   await update($, usageState, (u) => ({ ...u, isLoading: true }))
   try {
     const data = await loadUsage($, ctx)
@@ -257,7 +259,7 @@ async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | 
   if (columns >= MIN_COLUMNS) {
     const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true })
     if (opened.isPlaced) {
-      await refreshUsage($, ctx)
+      await refreshUsage($, ctx, true)
       return display('Usage view opened (Esc closes it).')
     }
     await $.ui.close({ id: PANE }).catch(() => undefined)
@@ -304,7 +306,13 @@ export const register: Register = (on, options) => {
     }
     if (asked.kind === 'help') return display(helpText())
     if (asked.kind === 'unknown') return display(`Unknown argument "${asked.word}".\n\n${helpText()}`)
-    if (asked.kind === 'report') return display(`Report written to ${await writeReport($, ctx)}`)
+    if (asked.kind === 'report') {
+      try {
+        return display(`Report written to ${await writeReport($, ctx)}`)
+      } catch (err) {
+        return display(`Could not write the report: ${errorText(err)}`)
+      }
+    }
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
   }).catch(($, e, next) => ({ text: `Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
 

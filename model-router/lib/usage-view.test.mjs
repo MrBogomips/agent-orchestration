@@ -94,6 +94,9 @@ test('arguments: tab, window and level in any order; on, off, report, help; anyt
   assert.deepEqual(parseArgs('models models'), { kind: 'unknown', word: 'models' });
   assert.deepEqual(parseArgs('on models'), { kind: 'unknown', word: 'on' });
   assert.deepEqual(parseArgs('weekly'), { kind: 'unknown', word: 'weekly' });
+  assert.deepEqual(parseArgs('constructor'), { kind: 'unknown', word: 'constructor' });
+  assert.deepEqual(parseArgs('__proto__'), { kind: 'unknown', word: '__proto__' });
+  assert.ok(helpText().split('\n').every((l) => l.length <= 80), 'the help fits 80 columns');
   assert.match(helpText(), /^Usage: \/model-router/);
 });
 
