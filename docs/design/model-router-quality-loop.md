@@ -205,3 +205,30 @@ Measuring first lets the user check that the signals are sane before they drive 
 - Stop-word list, exact window bookkeeping, file layout inside the mod.
 - Report styling and charts, within a self-contained page.
 - How the cost order of tiers is encoded when there is no data.
+
+## Builder questions settled
+
+A builder check of this document raised the questions below. Each answer is the designer's call, made while the
+user was away; the user may change any of them.
+
+1. **A typed prompt counts as rework only when it is about the task.** It must be one of the next two prompts the
+   person types after the report, and either name a file the subagent wrote or reach `similarityThreshold`
+   against the subagent's description. Any other prompt is not a signal.
+2. **Tiers are the four model families, ordered by price: `haiku` < `sonnet` < `opus` < `fable`.** "One step away"
+   follows this order. The judge's three tiers map to `fast` = `haiku`, `balanced` = `sonnet`, `deep` = `opus`;
+   `fable` is reached only by the grid or an explicit choice. A full model id maps to its family; an id outside
+   the four families is logged as `other` and not learned. A cell also stores the model id it was measured on:
+   when the model behind an alias changes, a new cell starts with the old cell's counts halved as its prior.
+   A start without an effort is learned under the session's effective effort when the mod can read it, and is
+   not learned otherwise; a numeric effort is mapped to the nearest named level.
+3. **Only writes made through the session's own tools count.** Edits in an outside editor are not seen in 0.2/0.3.
+4. **Limits on moving down.**
+   - `choose-model` adds `!` to the tag of a risky start (`[mr:edit-specified!]`); such starts are measured but
+     not learned, like the judge's risky starts.
+   - Exploration and recommendations never go below the grid's tier or effort for `review-debug` and
+     `design-open`, and never below the project's *Model routing* defaults for any class.
+5. **A stop that cannot be attributed is `cancelled`**, not learned. Only a stop by the parent's own stop call
+   followed by a rework signal counts as `failure`.
+6. **One log.** `events.jsonl` replaces `decisions.jsonl` from `model-router.md`: a routing decision is one record
+   type in it (`type: "decision"`), next to `spawn`, `signal` and `outcome`. `/model-router` reads the decision
+   records.
