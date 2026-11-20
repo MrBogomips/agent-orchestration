@@ -723,8 +723,35 @@ both levels (user, project). The mod keeps that data in `$.state` (`usage`), wit
 (`view`), so a key redraws without running anything; `r` runs the script again. The rows of each tab come from
 `lib/usage-view.mjs`, a pure module, for the pane's width; where no pane can be placed, the command answers the
 same rows as text. Every answer of the command carries `isTextDisplayOnly`, so the model never reads it. A script
-that fails or times out (15 seconds) gives one short line, or a line in the pane in place of the rows. The
-commands of both plugins are listed in [Commands](#commands).
+that fails or times out (15 seconds) gives one short line; in the pane, a line in place of the rows when there is
+no data yet, or a warning under the earlier rows after a failed refresh. The commands of both plugins are listed in
+[Commands](#commands).
+
+```mermaid
+sequenceDiagram
+  actor P as Person
+  participant M as model-router mod
+  participant U as scripts/usage.mjs
+  participant C as compact.mjs (child)
+  participant F as config dir/model-router
+  P->>M: /model-router [tab] [window] [level]
+  M->>M: $.ui.open (focus, closeOnEscape)
+  alt pane placed
+    M->>U: stdin {session, project, live agents}
+    U->>C: start compaction
+    C->>F: outcomes, aggregates (under the lock)
+    U-->>U: wait at most 3 s (else note: as of the last compaction)
+    U->>F: read events.jsonl and aggregates once
+    U-->>M: JSON: every window, both levels
+    M->>M: $.state usage, view; the pane draws the tab's rows
+    P->>M: 1-4, Left/Right, d/w/m/a, p (redraw only)
+    P->>M: r (usage.mjs again), o (report.mjs)
+  else no pane (headless, -p, under 60 columns)
+    M->>U: the same read
+    U-->>M: JSON
+    M-->>P: the rows as text (isTextDisplayOnly)
+  end
+```
 
 ## Commands
 

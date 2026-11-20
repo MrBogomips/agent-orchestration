@@ -195,7 +195,7 @@ drawn by a `ui.render` hook on its `Pane`. It has four tabs:
 | Tab | Shows |
 |---|---|
 | Overview | A status line (routing on or off for the session, measuring, adapt). **Session**: this session's subagents by model, with input, output, cache-read and cache-write tokens and cost, and the total. **Routing**: this session's decisions counted by action (downgrade, upgrade, keep, explicit, forced-risk, error). |
-| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar, cost per successful task; the model ids seen behind each tier. |
+| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar, cost per successful task; the model ids seen in the window, on one line. A task closed `cancelled` counts in the tasks but not in the first-pass yield. |
 | Classes | Per class, over the window and at the level: n, first-pass yield with a bar, rework rate, cost per successful task, the best measured cell next to the grid's choice, weak-signal flags; under each class its cells. Then up to three recommendation rows that differ from the grid, each led by the recommended cell's first-pass yield. |
 | Decisions | The latest routing decisions, all sessions, newest last: time, action, model before and after, effort, subagent type, reason. |
 
@@ -212,8 +212,7 @@ hotkeys drive them:
 | Esc | Close |
 
 **Arguments.** `/model-router models 30d` opens on that tab and window; tab, window (`24h`, `7d`, `30d`, `all`)
-and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session, as
-before. `report` writes and opens the report page and answers with its path. `help`, and any argument the
+and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` writes and opens the report page and answers with its path. `help`, and any argument the
 command does not know, print the list of arguments and keys.
 
 **Text fallback.** Where no pane can be placed (headless or `claude -p`, a terminal narrower than 60 columns, or
@@ -222,15 +221,15 @@ the same rows as aligned text: the requested tab, or all four stacked when no ta
 of the command carries `isTextDisplayOnly: true`: it is for the person, and the model does not read it.
 
 **Window and level.** The default window is 7 days, the default level the user. A window counts the closed
-tasks (`outcome` records) whose report falls inside it. Models counts every closed task, learned or not; Classes
+tasks (`outcome` records) whose report, or for a task with no report its outcome, falls inside it. Models counts every closed task, learned or not; Classes
 counts learned tasks only, as the aggregates do. Under the `all` window, Classes reads the aged aggregates
 (`quality/user.json`, `quality/projects/<id>.json`), so it shows the very numbers of the report page; under a
 shorter window it folds the window's outcomes without aging. The project level is the session's project (the
 same id the spawn records carry).
 
 **One source of numbers.** The aggregation is plain code shared with the report page: `lib/usage-data.mjs`
-builds the view's data from the records and the aggregates (it also holds the functions `scripts/report.mjs`
-used to keep to itself: classes with their cells and recommendation, decisions by action, the weekly trend), on
+builds the view's data from the records and the aggregates (it also holds what the page needs: classes with their cells and recommendation, decisions by action, the
+weekly trend), on
 top of `metrics` and `recommend` in `lib/aggregate.mjs`; the scripts read the files. `lib/usage-view.mjs` is pure: from that data, a tab, a
 window, a level and a width it returns the rows to draw; the pane and the text fallback both draw those rows.
 
@@ -246,8 +245,10 @@ with a minimum layout at 60 columns and 80 headless. Bars take what is left afte
 and 20 cells. Lines that cannot fit are cut with `…`.
 
 **Failure.** The command fails open like the rest of the mod: a hook error, a script that fails or times out,
-or unreadable output answers one short line (`model-router: could not read the usage data: …`) and never throws
-to the engine. The pane draws a note in place of rows when it has no data.
+or unreadable output answers one short line (`Could not read the usage data: …`; the engine shows it under the
+plugin's name) and never throws to the engine. `report` that fails or takes more than 60 seconds answers
+`Could not write the report: …`. The pane draws a note in place of the rows when it has no data; after a failed
+refresh the earlier rows stay, with a warning under them. A second `r` while a read runs is ignored.
 
 **With mods off** there is no command; the `model-router:report` skill builds the same page from the same code.
 

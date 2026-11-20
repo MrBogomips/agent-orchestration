@@ -61,7 +61,7 @@ files: it reads the record and keeps the rest in the session's memory.
 ### Commands
 
 `/session-hub` is registered by the mod. With mods off there is no command; the scope guard hook still guards a
-child's writes, and the children record can be read with `node scripts/registry.mjs read --hub <hub>`. Every
+child's writes, and the children record stays readable at its path (see *Children record* below). Every
 answer is for you only: the model has the scope in its own scope line and reads the children from the record.
 
 | Command | Does |

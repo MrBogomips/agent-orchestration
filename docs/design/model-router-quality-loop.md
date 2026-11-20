@@ -1,7 +1,7 @@
 # `model-router` quality loop
 
 Status: agreed with the user, 2026-11-20. Extends `model-router.md`. The spikes it depended on (S11–S13) were run
-for release 0.2 and hold (`spikes.md`); "As built in 0.2" at the end records the builder's choices.
+for release 0.2 and hold (`spikes.md`); "As built in 0.2" and "As built in 0.3" at the end record the builder's choices.
 
 ## Why
 
@@ -291,4 +291,5 @@ a task with none is not learned.
   trend; the latest outcome of each task; windows over outcomes. `scripts/report.mjs` builds the page from it,
   `scripts/usage.mjs` the terminal's data.
 - **Windows.** The page shows the aged aggregates only. The terminal adds windows of 24 hours, 7 and 30 days over
-  the closed outcomes (by report time), folded without aging; its `all` window is the page's numbers.
+  the closed outcomes (by report time, or by outcome time for a task with no report), folded without aging. Under
+  its `all` window, Classes shows the page's numbers; Models adds up outcomes without aging in every window.
