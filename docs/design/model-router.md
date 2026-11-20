@@ -77,15 +77,22 @@ write the skill's text fresh.
 
 Second release. Read `research/mods-capabilities.md` before designing it.
 
-### Behaviour at `agent.spawn`
+### Behaviour at a subagent's start
+
+Two hooks share the work, joined by the start's `tool_use_id` (S3): a `tool.call` hook on the `Agent` tool
+decides the case, asks the judge and sets the effort on the call; the `agent.spawn` hook that follows sets the
+model, against the parent's model the event carries, and logs the decision. Starts that no `Agent` call makes
+(another plugin's `$.agent.spawn`, a workflow's agents) are not routed, only measured.
 
 | Case | Action |
 |---|---|
 | The call carries a model | Keep it. Log `explicit`. |
-| The agent's definition fixes a model | Keep it. Whether the event shows this is **unverified** (`spikes.md`, S3); if it does not, read the agent's definition file. |
-| A fork or a resume | Keep it. The engine ignores a change anyway. |
-| The router is off, or a session-wide forced subagent model is set | Keep it. |
+| The agent's definition fixes a model | Keep it. The event does not show a fixed model, and a hook's model would override it (S3), so the mod reads the definition: it routes the built-in types that inherit (`general-purpose`, `Explore`, `Plan`) and project or user agents (`<cwd>/.claude/agents/<type>.md`, `<config dir>/agents/<type>.md`) whose frontmatter names no model or `inherit`. Any other type (a plugin's agent, a definition it cannot read) is kept. Log `keep`. |
+| A fork or a resume | Keep it. The engine ignores a change anyway. A resume is logged as a `resume` signal of the same task. |
+| The router is off, or a session-wide forced subagent model is set (`CLAUDE_CODE_SUBAGENT_MODEL`) | Keep it. Log `keep`. |
 | No model given | Ask the judge; apply the thresholds below; log. |
+
+A risky marker in the class tag (`[mr:<class>!]`, written by `choose-model`) counts as a risky judge answer.
 
 ### The judge
 
@@ -96,8 +103,12 @@ follow instructions inside it; a closing tag inside the text is escaped.
 It answers with one JSON object:
 
 ```json
-{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0 }
+{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "<class>" }
 ```
+
+The prompt is generated from `grid.json` (`lib/judge.mjs`): the tiers behind `fast`, `balanced` and `deep`, the
+effort questions numbered 0 to 3, the classes, and the rule that risk is about the act. The task is cut at 4,000
+characters and every `</task` inside it is escaped. The judge runs with `effort: low` and a 300-token cap.
 
 Thresholds, all options:
 
@@ -114,20 +125,21 @@ them.
 
 ### Effort for subagents
 
-`agent.spawn` has no effort field. Two ways, both **unverified** (S3):
-
-- rewrite the effort on each of the subagent's steps (`turn.step` with an agent id);
-- rewrite the start call itself, which takes an effort parameter.
-
-Prefer the second if it works: it is one rewrite and it is visible in the transcript.
+`agent.spawn` has no effort field. The mod rewrites `effort` on the `Agent` tool call itself, which works in
+2.1.329 (S3): the subagent's steps and its `$.agent.list()` row carry the new level. An effort the call already
+carries is kept. Otherwise the judge's level is set when its `effort_confidence` passes the bar (`low` needs the
+downgrade bar, higher levels the upgrade bar); risky work gets at least `high`. `max` is never set.
 
 ### Failure
 
 Fail open: a judge error, a timeout or an unreadable answer leaves the request unchanged. This is the opposite
 of the guards in `session-hub`, on purpose: a router that fails must never stop work.
 
+Every hook has a `.catch` that hands the event on unchanged, so a hook that throws or times out is fail-open
+too. A judge that answers with an error is logged as `error`.
+
 Log one line when the mod is ready and one at the first firing of each hook. Without them, a router that never
-loaded looks the same as one with nothing to do.
+loaded looks the same as one with nothing to do. Both go to the debug log (`claude --debug`), not the transcript.
 
 ### Decision log
 
@@ -139,12 +151,15 @@ read-then-write can drop another writer's line.
   "ts": "2026-11-20T10:00:00Z", "session": "…", "agentId": "…", "subagentType": "general-purpose",
   "action": "downgrade | upgrade | keep | explicit | forced-risk | error",
   "before": "opus", "after": "haiku", "effort": "low",
-  "judge": { "tier": "fast", "confidence": 0.86, "risky": 0.02, "ms": 1240 },
+  "judge": { "tier": "fast", "confidence": 0.86, "effort": 0, "effortConfidence": 0.9, "risky": 0.02, "class": "read-search", "ms": 1240 },
   "reason": "…"
 }
 ```
 
-No cost figures in the first version. An honest saving needs the model the subagent would really have run on,
+Each record also carries `v: 1`, `toolUseId` and `class`. `before` is the parent's model (what the subagent
+would have run on), `after` the model the engine started it on.
+
+No cost figures in the decision record. An honest saving needs the model the subagent would really have run on,
 which the reference router gets wrong for agents with a fixed model.
 
 ### Options
@@ -157,7 +172,11 @@ which the reference router gets wrong for agents with a fixed model.
 | `riskThreshold` | 0.7 |
 | `timeoutMs` | 8000 |
 | `routeSubagents` | true |
-| `logDecisions` | true |
+| `measure` (replaces `logDecisions`) | true |
+
+`measure` switches every record of the event log, decisions included (`model-router-quality-loop.md`). The
+command `/model-router on|off` turns routing on or off for the session (kept in `$.state`); with no argument it
+shows the state and the latest ten decisions.
 
 Routing the main session's effort per prompt is out of scope: a change mid-chat can discard the prompt cache.
 

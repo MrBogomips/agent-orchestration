@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the two plugins in this repository as built for release 0.1: what each one is for, what
-it is made of, how its parts work together, what it keeps on disk and how it behaves when something fails. Parts
+This document describes the two plugins in this repository as built (`session-hub` 0.1, `model-router` 0.2):
+what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves when something fails. Parts
 that are planned for later releases are marked **Planned** with their release; they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
 | `session-hub` | 0.1.0 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
-| `model-router` | 0.1.0 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent. |
+| `model-router` | 0.2.0 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
 
@@ -74,12 +74,17 @@ flowchart LR
     registry["script<br/>scripts/registry.mjs"]
     guard["hook<br/>session-hub-scope-guard<br/>(hooks.json + scope-guard.mjs)"]
   end
-  subgraph MR["model-router 0.1"]
+  subgraph MR["model-router 0.2"]
     choose["skill<br/>model-router:choose-model"]
     mrsetup["skill<br/>model-router:setup"]
+    mrreport["skill<br/>model-router:report"]
+    mod["mod<br/>model-router<br/>(hooks/model-router.ts)"]
+    compactjs["script<br/>scripts/compact.mjs"]
+    reportjs["script<br/>scripts/report.mjs"]
     grid["data<br/>grid.json"]
     gridtest["test<br/>grid.test.mjs"]
   end
+  events[("events.jsonl, quality/<br/>config dir/model-router/")]
   hubfile[("hub instruction file<br/>## Child sessions")]
   projfile[("project instruction file<br/>## Model routing")]
   record[("children record<br/>config dir/session-hub/")]
@@ -100,6 +105,12 @@ flowchart LR
   gridtest -->|checks against| grid
   gridtest -->|checks against| choose
   gridtest -->|checks against| mrsetup
+  mod -->|judge prompt from| grid
+  mod -->|appends records| events
+  mod -->|at session start| compactjs
+  mrreport --> reportjs
+  reportjs --> compactjs
+  compactjs -->|outcomes, aggregates| events
 ```
 
 ### session-hub
@@ -122,10 +133,36 @@ The `spawn` skill carries its reference material under `skills/spawn/references/
 |---|---|---|
 | `model-router:choose-model` | skill | States the grid. Loads whenever an agent is about to start a subagent, a child session or a workflow of agents, and makes it pass a model and an effort explicitly. |
 | `model-router:setup` | skill | Writes or updates a `## Model routing` section in the project's instruction file with the project's defaults and exceptions, only after the user's explicit yes. |
-| `grid.json` | data | The same grid in machine-readable form, for the router planned for 0.2. |
+| `model-router:report` | skill | Runs `scripts/report.mjs` and gives the user the page's path. Computes nothing itself. |
+| `model-router` | mod | `hooks/model-router.ts`, registered as a module in `hooks/hooks.json`. Routes subagent starts that carry no model and records the quality loop's events. Thin glue over the plain modules in `lib/`. |
+| `/model-router` | command | Registered by the mod: routing state and the latest ten decisions; `on` or `off` for the session. |
+| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
+| `scripts/compact.mjs`, `scripts/report.mjs` | scripts | Node, no dependencies. Compaction closes outcomes and updates the aggregates under a lock; the report renders them into one self-contained page and opens it. |
+| `grid.json` | data | The same grid in machine-readable form, with each class's usual choice (`default`); the judge's prompt is generated from it. |
 | `grid.test.mjs` | test | Fails when `grid.json` and the two skills drift apart. |
+| `tests/model-router.test.ts` | test | The mod's tests, run by `claude plugin test ./model-router`. |
 
-Release 0.1 of `model-router` has no hook, no mod and no command.
+The skills work with mods turned off; the router, the command and the measurement need the mod.
+
+### The router mod
+
+At a subagent start through the `Agent` tool, a `tool.call` hook decides the case and asks the judge, and sets the
+effort on the call itself; the `agent.spawn` hook that follows (same `tool_use_id`) sets the model against the
+parent's model and logs the decision. An explicit model, a fork, a resume, routing turned off, a session-wide
+subagent model, and an agent whose definition fixes a model (or that the mod cannot read: a plugin's agent) are
+kept. The judge is one call to the fast tier (8 s limit) with a prompt generated from `grid.json`; the task is
+wrapped as data with closing tags escaped. A downgrade needs confidence 0.6, an upgrade 0.3; risk above 0.7 (or a
+`!` in the class tag) forces the deep tier and at least `high` effort.
+
+### The quality loop (measuring only in 0.2)
+
+The mod appends `decision`, `spawn`, `signal` (`write`, `tool-error`, `prompt`, `stop`, `resume`), `report` and
+`session-end` records to `events.jsonl` with `cat >>` through `$.process.run`. Compaction, started by the mod at
+session start and by the report, decides the outcome of every task whose rework window closed (`success`,
+`rework`, `failure`, `cancelled`), appends it as an `outcome` record, and folds the learned ones into cells of
+class × tier × effort at two levels (user, project), with aging and the grid as prior. The report shows first-pass
+yield, rework rate, cost per task and per successful task, the explored share, a recommendation per class, a
+weekly trend and the router's decisions. The router does not use the data until 0.3.
 
 ## Roles
 
@@ -571,7 +608,7 @@ runs on `opus` at `medium` unless its own design work is hard.
 **Quality hints.** When `<config dir>/model-router/quality/recommendations.json` exists, `choose-model` reads the
 entry for the task's class as a hint. The hint never overrides the order of precedence, never goes below the grid
 for `review-debug` or `design-open`, never goes below the project's defaults, and does not apply to a risky start.
-Release 0.1 does not write this file.
+Releases 0.1 and 0.2 do not write this file.
 
 ### How `grid.json`, the skills and the test relate
 
@@ -581,11 +618,11 @@ flowchart LR
   choose["choose-model/SKILL.md<br/>the grid in prose"]
   setup["setup/SKILL.md<br/>allowed values"]
   test["grid.test.mjs"]
-  router["router mod<br/>(planned 0.2)"]
+  router["router mod<br/>hooks/model-router.ts"]
   test -->|checks| grid
   test -->|"### Model, ### Effort,<br/>### Task classes, tags,<br/>price order"| choose
   test -->|"- models:, - effort:,<br/>- classes: lines"| setup
-  grid -.->|will read| router
+  grid -->|judge prompt, class defaults| router
 ```
 
 `grid.json` is the machine-readable source of the grid. `choose-model` states the same grid in prose for the
@@ -594,15 +631,16 @@ drift apart. It checks that:
 
 - `grid.json` has every part, with the tiers in check order, the price order, the effort levels and questions
   (ending with the `medium` fallback, never `max`), the six classes with `review-debug` and `design-open` flagged
-  as never below the grid, the tag format `[mr:<class>]` with the `!` marker, and the judge mapping
+  as never below the grid and each with a valid `default` tier and effort, the tag format `[mr:<class>]` with the `!` marker, and the judge mapping
   `fast` = `haiku`, `balanced` = `sonnet`, `deep` = `opus`;
 - the tables under `### Model` and `### Task classes` in `choose-model` name the same tiers and classes in the
   same order, the questions under `### Effort` give the same levels in the same order and forbid `max`, every
   `[mr:…]` tag names a known class, and the price order is stated;
 - the `- models:`, `- effort:` and `- classes:` lines of `setup` list exactly the values of `grid.json`.
 
-A change to the grid therefore touches `grid.json` and both skills in the same change. The judge mapping is not
-used by any 0.1 component; it is there for the planned router.
+A change to the grid therefore touches `grid.json` and both skills in the same change. The router mod reads the
+judge mapping, the tiers, the effort questions and the classes from `grid.json` to build the judge's prompt, and
+the quality loop reads each class's `default` as its prior.
 
 ## State on disk
 
@@ -616,9 +654,10 @@ No plugin keeps state inside a hub or a repository. State lives under the active
 | a path named by the hub's *Registry* key | session-hub | the master, through `registry.mjs` | the children record, when the hub moves it; never inside the hub | 0.1 |
 | `<scratchpad or mktemp -d>/<name>-handoff.md` | session-hub | `spawn` | one handoff per child; none for a desktop app child, whose handoff is passed inline | 0.1 |
 | `<config dir>/model-router/quality/recommendations.json` | model-router | nothing in 0.1 (read only, if present) | per-class model and effort hints | written from 0.3 |
-| `<config dir>/model-router/events.jsonl` | model-router | the router mod, append only | spawns, signals, outcomes and routing decisions | **Planned 0.2** |
-| `<config dir>/model-router/quality/user.json`, `quality/projects/<project id>.json`, `quality/.lock` | model-router | compaction | quality aggregates per user and per project, and their lock | **Planned 0.2** |
-| `<config dir>/model-router/report.html` | model-router | `model-router:report` | the local quality report | **Planned 0.2** |
+| `<config dir>/model-router/events.jsonl` | model-router | the router mod and compaction, append only | routing decisions, spawns, signals, reports, session ends; outcomes (compaction) | 0.2 |
+| `<config dir>/model-router/quality/user.json`, `quality/projects/<project id>.json` | model-router | compaction, written whole (temporary name, then rename) | quality aggregates per user and per project | 0.2 |
+| `<config dir>/model-router/quality/state.json`, `quality/.lock` | model-router | compaction | the offset of the earliest open task, and the lock (stale after 2 minutes) | 0.2 |
+| `<config dir>/model-router/report.html` | model-router | `scripts/report.mjs` | the local quality report | 0.2 |
 
 The plugins also write two kinds of files in a hub or a project, both configuration and both only after the
 user's explicit yes: the `## Child sessions` section of the hub's instruction file (`session-hub:setup`, or `spawn`
@@ -636,9 +675,11 @@ record from a newer format, or a lock that cannot be taken stops the write and l
 record never stops the work, though: when `registry.mjs` fails, `spawn` and `dispatch` tell the user and carry on
 without recording.
 
-**`model-router` fails open.** An error never stops work. In 0.1, a missing or unreadable
-`recommendations.json`, or one with no entry for the class, means the grid alone decides, silently. The planned
-router mod keeps this rule: an error, a timeout or an unreadable judge answer leaves the start unchanged.
+**`model-router` fails open.** An error never stops work. In the skills, a missing or unreadable
+`recommendations.json`, or one with no entry for the class, means the grid alone decides, silently. The router mod
+keeps this rule: every hook has a `.catch` that hands the event on unchanged, and a judge error, a timeout or an
+unreadable answer leaves the start unchanged (logged as `error`). A compaction that fails leaves the event log
+untouched; the next run retries.
 
 ## Compatibility
 
@@ -646,8 +687,8 @@ router mod keeps this rule: an error, a timeout or an unreadable judge answer le
 |---|---|
 | Claude Code version tested | 2.1.329 |
 | Cross-session messaging (needed by `session-hub`) | Claude Code 2.1.224 or later |
-| Mods (planned 0.2 components) | exist from Claude Code 2.1.287; each mod will declare its minimum version in `engines["claude-code"]` |
-| `node` | on `PATH`, for the scope guard and the record script; no dependencies |
+| Mods | exist from Claude Code 2.1.287; the `model-router` mod declares `engines["claude-code"]: ">=2.1.329"`, the version it was tested on |
+| `node` | on `PATH`, for the scope guard, the record script and the `model-router` scripts; no dependencies |
 | Operating system | macOS and Linux only: the hook wrapper in `hooks.json` is a POSIX `sh` command |
 
 What was verified on 2.1.329:
@@ -657,6 +698,11 @@ What was verified on 2.1.329:
 - `SESSION_HUB_*` variables set on the launch command reach a `PreToolUse` hook in the same four environments.
 - A session started in a repository nested in the hub, or in a worktree under it, loads the hub's instruction file
   as well as its own. A worktree in a sibling folder outside the hub loads only the repository's file.
+- At `agent.spawn` a model fixed by an agent's definition is not shown, and a hook's model overrides it; a
+  subagent's effort is set by rewriting `effort` on the `Agent` tool call (S3).
+- At `agent.report`, the agent's `$.agent.list()` row carries `usage` and `cost` (S11); a subagent's `Edit` and
+  `Write` calls carry its `agentId` and the file path (S12); continuing a subagent through `SendMessage` cost
+  about a fifth of a fresh start on the same follow-up (S13).
 
 Not verified: the desktop app's start tool (role variables, model and effort). A hub under the system temporary
 folder loaded no project instruction file at all, so test hubs belong under the home folder.
@@ -679,54 +725,22 @@ Every guard of the mod will fail closed. The mod does not replace the classic ho
 writes where mods are turned off. The first prompt of a child is not treated as coming from the master, because a
 launcher that types into a pane looks like the user.
 
-### model-router 0.2: the router mod
+### model-router 0.3: adaptive selection
 
-- At a subagent's start, the mod acts only when no model was given. It keeps an explicit model, a model fixed by
-  the agent's definition, a fork or a resume.
-- Otherwise it asks a judge, one call to the fast tier with a time limit (default 8 seconds), for a tier, an
-  effort, their confidences and a risk score. A downgrade needs more confidence (default 0.6) than an upgrade
-  (default 0.3); a risk above 0.7 forces the deep tier and at least `high` effort.
-- Every decision is logged as a `decision` record in `events.jsonl`. `/model-router` shows the latest decisions
-  and turns the router on or off for the session. Options cover the models behind the tiers, the thresholds, the
-  timeout and the on/off switches.
-- Fails open, as above.
-
-### model-router 0.2 and 0.3: the quality loop
-
-Two of its signals (the cost of a subagent read when it reports, and which subagent wrote a file) still have to
-be confirmed on a running engine before 0.2 is built.
-
-The loop measures how well each choice of model and effort worked and, from 0.3, adapts the choice. In 0.2 it only
-measures, so that the signals can be checked before they drive anything.
-
-- **Signals**, taken only from what the engine already records, with no extra model call: tokens and estimated
-  cost per subagent, how its run ended, its tool error rate, the files it wrote, and rework after its report (the
-  parent or the user writes the same files, a similar start of the same class, or a prompt from the person about
-  the same task, within a window of 30 minutes by default). For read-only work, a repeated search is a weaker
-  signal.
-- **Outcome of a task**: `success`, `rework`, `failure`, or `cancelled` (not learned).
-- **Metrics**, per task class × tier × effort: cost per task, rework rate, **first-pass yield** (successes over
-  all learned outcomes), and **cost per successful task** (cost per task divided by first-pass yield), the number
-  the loop minimizes.
-- **Memory** at two levels, user and project, under `<config dir>/model-router/`. The project level starts from
-  the user level and follows its own data as it grows. Counts **age** with a half-life of 30 days by default, so
-  old evidence fades.
-- **Selection (0.3)** by **Thompson sampling**: for the grid's choice and its neighbours one step away in tier or
-  effort, sample a success probability from each one's posterior and pick the lowest estimated cost per success.
-  The grid is the prior, so it wins until the data disagrees. Exploration is capped (default 10% of recent
-  decisions in a class). Risky starts are measured but never explored or learned; `review-debug` and
-  `design-open` never go below the grid, and no class goes below the project's defaults. Compaction writes `recommendations.json`, which `choose-model` already reads as a hint.
-- **Report**: a `model-router:report` skill compacts the data and writes a self-contained local page,
-  `<config dir>/model-router/report.html`, with first-pass yield, rework rate, cost per task and per successful
-  task per level and class, weekly trends, the share of explored decisions and the current recommendations.
-  Nothing leaves the machine.
+- **Selection** by **Thompson sampling** when `adapt` is on: for the grid's choice and its neighbours one step
+  away in tier or effort, sample a success probability from each one's two-level posterior and pick the lowest
+  estimated cost per success. The grid is the prior, so it wins until the data disagrees. Exploration is capped
+  (default 10% of recent decisions in a class). Risky starts are measured but never explored or learned;
+  `review-debug` and `design-open` never go below the grid, and no class goes below the project's defaults.
+- Compaction writes `recommendations.json`, which `choose-model` already reads as a hint.
 
 ## For contributors
 
 - Repository layout: one top-level folder per plugin, each with `.claude-plugin/plugin.json`, `skills/`, and for
-  `session-hub` `hooks/` and `scripts/`. A plugin uses nothing outside its own folder, because only that folder
-  is installed.
-- Checks: `bash tests/validate.sh` for structure, `node --test` on the `*.test.mjs` files next to the code, and
-  `claude plugin validate ./<plugin> --strict`. Manual scenarios are under `tests/scenarios/`.
+  `session-hub` `hooks/` and `scripts/`; `model-router` also has `hooks/` (the mod), `lib/`, `scripts/`, `types/`
+  and `tests/`. A plugin uses nothing outside its own folder, because only that folder is installed.
+- Checks: `bash tests/validate.sh` for structure, `node --test` on the `*.test.mjs` files next to the code,
+  `claude plugin validate ./<plugin> --strict`, and `claude plugin test ./model-router` for the mod. Manual
+  scenarios are under `tests/scenarios/`.
 - The design and the tests run before building are in `docs/design/`; what the two plugins may assume about each
   other is in `docs/design/shared-contract.md`. Change the design there first, then the code, then this document.

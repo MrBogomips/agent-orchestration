@@ -1,7 +1,7 @@
 # `model-router` quality loop
 
-Status: agreed with the user, 2026-11-20. Extends `model-router.md`. Items marked **unverified** depend on a spike
-(`spikes.md`, S11–S13).
+Status: agreed with the user, 2026-11-20. Extends `model-router.md`. The spikes it depended on (S11–S13) were run
+for release 0.2 and hold (`spikes.md`); "As built in 0.2" at the end records the builder's choices.
 
 ## Why
 
@@ -49,10 +49,10 @@ All come from mod events and `$` calls; none calls a model.
 
 | Signal | Source | Strength |
 |---|---|---|
-| Tokens and estimated cost of a subagent, per model | `$.agent.list()` rows: `usage[]`, `cost` (**unverified** at report time, S11) | strong |
+| Tokens and estimated cost of a subagent, per model | `$.agent.list()` rows: `usage[]`, `cost` (verified at report time, S11; cumulative over continuations) | strong |
 | How the run ended | `agent.report`: `status` = `completed` / `failed` / `stopped` | strong |
 | Tool error rate | tool results with `isError`, keyed by `agentId` | medium |
-| Files the subagent wrote | `tool.call` on `Edit`, `Write`, `NotebookEdit` with `agentId` (**unverified**, S12) | needed for rework |
+| Files the subagent wrote | `tool.call` on `Edit`, `Write`, `NotebookEdit` with `agentId` and `file_path` (verified, S12) | needed for rework |
 | Rework | inside the rework window after the report: the parent or the user writes one of the same files; a spawn of the same class whose description is similar (redo or escalation); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
 | Re-search | inside the window, for a read-only subagent: the parent starts another read-only subagent of the same class on a similar description, or reads the files the subagent named | weak; shown as such in the report |
 
@@ -233,3 +233,37 @@ user was away; the user may change any of them.
 6. **One log.** `events.jsonl` replaces `decisions.jsonl` from `model-router.md`: a routing decision is one record
    type in it (`type: "decision"`), next to `spawn`, `signal` and `outcome`. `/model-router` reads the decision
    records.
+
+## As built in 0.2
+
+Choices left to the builder, and where the build departs from the text above.
+
+- **Who writes what.** The mod appends `decision`, `spawn`, `signal` (`write`, `tool-error`, `prompt`, `stop`,
+  `resume`), `report` and `session-end` records. **Outcomes are fixed by compaction**, not by the mod: compaction
+  reads the raw records, decides each task whose window closed, appends its `outcome` record to `events.jsonl`
+  and folds it into the aggregates. The mod stays thin, and the outcome logic is plain code under test
+  (`lib/outcome.mjs`).
+- **Window bookkeeping.** `quality/state.json` holds the byte offset of the earliest task still open and the keys
+  of tasks closed after it. A task with no report closes as `cancelled` when its session ends or after 24 hours.
+  A continued subagent (`SendMessage`) stays one task: its latest report gives the cost and starts the window.
+- **Compaction** is `scripts/compact.mjs` (Node, no dependencies), started by the mod at `session.start` through
+  `$.process.run` without waiting, and by `model-router:report`. It writes the aggregates and `state.json` whole
+  (temporary name, then rename) under `quality/.lock`.
+- **Cells** store aged evidence counts (`n`, `success`, `rework`, `failure`) and the means; `alpha` and `beta` are
+  the grid prior plus those counts, so aging never wears the prior away.
+- **Grid choice per class.** Each class in `grid.json` names its `default` (tier, effort): the prior's favoured
+  cell, the floor of the protected classes, and the report's fallback recommendation.
+- **The report** (`scripts/report.mjs`, page rendered by `lib/report-html.mjs`) shows a recommendation per class
+  in 0.2 too: the cell with the lowest cost per successful task among cells with at least 3 tasks, never below
+  the grid for protected classes; the router does not use it until 0.3.
+- **Project id** comes from the engine's `$.session.repo()` (`origin` URL and root), else the session root.
+- **Privacy.** The prompt signal keeps the first 2,000 characters of a typed prompt, so that compaction can tell
+  whether it is about the task. All of it stays under the config folder.
+
+Not built in 0.2:
+
+- *Re-search* by reading the files a read-only subagent named: only the similar-start signal is measured.
+- Pruning of compacted events older than 90 days: rewriting the log could drop a line another session appends.
+
+The effort a task is learned under is the subagent's own (its `$.agent.list()` row at report time), else the
+effort of its last request, which is the session's effective level; a task with neither is not learned.
