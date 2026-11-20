@@ -1,0 +1,17 @@
+{
+  "description": "session-hub-scope-guard: in a child session, blocks file writes outside the scope root",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Edit|Write|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/scope-guard.mjs\" || { rc=$?; [ \"$rc\" = 2 ] && exit 2; [ \"${SESSION_HUB_ROLE:-}\" = child ] && [ \"${SESSION_HUB_GUARDS:-on}\" != off ] && { echo \"[session-hub] Write blocked: the scope guard could not run (exit $rc).\" >&2; exit 2; }; exit 0; }",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
