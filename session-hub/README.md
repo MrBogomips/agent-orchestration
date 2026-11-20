@@ -103,8 +103,9 @@ inside a hub or a repository. Writes are atomic and take a lock file next to the
 
 - **Shell writes are covered on a best-effort basis, and only with mods on.** The hook sees `Edit`, `Write` and
   `NotebookEdit`. The mod's shell check reads the command line only: it does not judge a target held in a
-  variable, a command substitution, a glob or a relative path after a `cd`, nor what any other program writes
-  (a script, `git`, a build tool). Relative paths are read against the session's folder. With mods off, a shell
+  variable, a command substitution or a glob, nor a relative path after a `cd` whose target is one of those (or
+  `cd -`, `popd`), nor what any other program writes (a script, `git`, a build tool). Relative paths are read
+  against the session's folder, or against the folder of an earlier literal `cd` in the same command. With mods off, a shell
   write is held back only by the handoff.
 - **The desktop app has no guard.** Its session tool takes no environment variables, so a child started there
   has no role variables: the scope holds by the handoff alone. `spawn` says so in its report.
