@@ -27,7 +27,8 @@ conversation.
 - A session with no role variables is neither. Hooks and the mod do nothing in it, except that the first use of
   `session-hub:spawn` or `session-hub:dispatch` makes it a master for the mod's panel.
 
-Whether the variables reach the child in every environment is **unverified** (`spikes.md`, S4).
+The variables reach the child's hooks in the terminal, tmux and Herdr environments (`spikes.md`, S4); the desktop
+app is not covered.
 
 ## Activation: `session-hub:dispatch`
 
@@ -114,7 +115,9 @@ The handoff file keeps the old sections and gains three. Order:
 5. References.
 6. Repository and workflow.
 7. Siblings: who else is working and on what. A change to a shared interface goes to the master first.
-8. Hub rules: only what the *Propagate* key lists, quoted word for word.
+8. Hub rules: a child started inside the hub already loads the hub's instruction file (`spikes.md`, S5). This
+   section says which parts of it are for the master only and do not apply to the child, and quotes the
+   *Propagate* rules word for word only for a child whose working folder is outside the hub (a sibling worktree).
 9. **Messages** (new, replaces *Channel to the master*): the prefix, the five types, the master-only rule.
 10. Rules: the fixed rules above.
 11. First step.
@@ -216,9 +219,6 @@ Constraints:
 
 ## Open points
 
-- Effort at launch: which mechanism works (`spikes.md`, S1).
-- Whether a child loads the hub's instruction file from the parent folder, and what `spawn` should then stop
-  repeating in the handoff (S5).
 - Whether to keep a manual environment (print the commands, start nothing) now that the non-Claude path is gone.
 - The launcher wrapper: some users start sessions through a wrapper that sets up an identity before `claude`
   runs. The old skill rebuilds only the config folder and home variables, not the wrapper. Decide whether a
