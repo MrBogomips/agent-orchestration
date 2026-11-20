@@ -230,3 +230,25 @@ test('an unknown context size after a known one counts as a compaction, twice in
   const three = await $.prompt.submit({ text: 'three', origin: { kind: 'composer' }, wait: false })
   expect(three.context?.join('\n')).toMatch(/Write root/)
 })
+
+test('/session-hub help and an unknown argument print the help; every answer is for the person only', async ($, on) => {
+  engine(on, CHILD_ENV)
+  const help = await $.command.run({ ...RUN, args: 'help' })
+  expect(help.text).toMatch(/^Usage: \/session-hub \[help\]/)
+  expect(help.isTextDisplayOnly).toBe(true)
+  const unknown = await $.command.run({ ...RUN, args: 'children' })
+  expect(unknown.text).toMatch(/Unknown argument "children"/)
+  const shown = await $.command.run(RUN)
+  expect(shown.isTextDisplayOnly).toBe(true)
+})
+
+test('/session-hub sizes the children table to the terminal', async ($, on) => {
+  engine(on, {}, '/hub')
+  on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify(RECORD), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Bash', command: 'node "/p/scripts/registry.mjs" upsert --hub /hub --entry \'{}\'' })
+  const { text } = await $.command.run({ ...RUN, presentation: { isFullscreen: false, columns: 70 } })
+  expect((text ?? '').split('\n').every((l: string) => l.length <= 70)).toBe(true)
+  expect(text).toMatch(/t42-product/)
+})

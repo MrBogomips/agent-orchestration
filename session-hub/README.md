@@ -25,7 +25,7 @@ important one, the write scope, with a hook.
 | `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, and tells the model to send an `out-of-scope` message to the master. |
 | `scripts/registry.mjs` | script | Reads and writes the children record, atomically. Used by the skills and, read only, by the mod. |
 | `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel. See *The mod* below. |
-| `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel. |
+| `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel. See [Commands](#commands). |
 
 ### Roles
 
@@ -57,6 +57,33 @@ Code 2.1.329 or later (`engines` in `plugin.json`). With mods off, everything ab
 Guards fail closed: a send guard or shell check that fails refuses and says why. `SESSION_HUB_GUARDS=off` turns
 off the send guard and the shell check (and the hook); the marking and the scope line stay. The mod keeps no
 files: it reads the record and keeps the rest in the session's memory.
+
+### Commands
+
+`/session-hub` is registered by the mod. With mods off there is no command; the scope guard hook still guards a
+child's writes, and the children record can be read with `node scripts/registry.mjs read --hub <hub>`. Every
+answer is for you only: the model has the scope in its own scope line and reads the children from the record.
+
+| Command | Does |
+|---|---|
+| `/session-hub` | In a child: its role, write root, handoff, record and whether the guards are on. In a master: the record's path and the children table (status, live status, model and effort, last message), sized to the terminal, and the children panel opened beside the chat. In any other session: that it has no role. |
+| `/session-hub help` | What the command does. Any other argument prints the same. |
+
+In a session with no role (a real run of `claude -p "/session-hub"`):
+
+```text
+session-hub: This session has no session-hub role. It becomes a master when it uses session-hub:spawn or session-hub:dispatch.
+```
+
+In a child (from the mod's tests):
+
+```text
+Role: child of "hub"
+Write root: /w/repo
+Handoff: /h/t42.md
+Children record: not set
+Guards: on (scope guard, shell check, send guard)
+```
 
 ### Messages
 
