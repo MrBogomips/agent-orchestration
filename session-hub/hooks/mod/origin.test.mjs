@@ -53,3 +53,12 @@ test('markContext adds nothing for the person, outside a child', () => {
   assert.equal(markContext({ role: child, kind: 'composer', text: 'x' }), undefined);
   assert.equal(markContext({ role: readRole({}), kind: 'peer', text: 'x' }), undefined);
 });
+
+test('a coordinator delivery with no teammate is the child\'s own main conversation and is not marked', () => {
+  assert.equal(markText({ role: child, kind: 'coordinator', text: 'do X' }), 'do X');
+  assert.notEqual(markText({ role: child, kind: 'coordinator', teammate: 'team-lead', text: 'do X' }), 'do X');
+});
+
+test('at prompt.submit a coordinator is another session\'s hand-off and is marked', () => {
+  assert.deepEqual(markContext({ role: child, kind: 'coordinator', text: 'do X' }), [ORIGIN_LINE]);
+});

@@ -1,8 +1,8 @@
 // The session-hub mod: the engine glue around the pure modules in ./mod.
 //
-// In a child: the send guard (session.send), the best-effort shell check (tool.call on Bash), origin marking
-// (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel and the
-// scope line. In every session: the /session-hub command. Guards fail closed; the panel and the marking never
+// In a child: the send guard (session.send), the best-effort shell check (tool.call on Bash and Monitor), origin
+// marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel and
+// the scope line. In every session: the /session-hub command. Guards fail closed; the panel and the marking never
 // block anything. The classic scope guard in hooks.json stays and covers file writes with mods off.
 
 import { atom, read, update } from 'claude-code'
@@ -23,6 +23,7 @@ const PANE = 'session-hub-children'
 const COMMAND = 'session-hub'
 const REFRESH_MS = 30_000
 const SKILLS = /^(session-hub:)?(spawn|dispatch)$/
+const SHELL_TOOLS = ['Bash', 'Monitor'] as const
 
 const masterState = atom({ plugin: 'session-hub', key: 'master' } as const, { isMaster: false } as SessionHubMaster, {
   shape: 'master-1',
@@ -51,20 +52,32 @@ async function loadRole($: $): Promise<Role> {
   })
 }
 
+// Only a missing path may count as "not there yet"; any other failure throws, so the guard fails closed.
+const isNotFound = (error: unknown) =>
+  /\b(ENOENT|ENOTDIR)\b/.test(`${(error as { code?: unknown })?.code ?? ''} ${error instanceof Error ? error.message : error}`)
+
 // Where a path lands, symbolic links resolved in the part that exists; a part not there yet is kept as written.
 // A name that is listed in its folder but does not stat is a dangling link: where it lands is unknown, so it throws.
-async function realpath($: $, path: string): Promise<string> {
-  const stat = await $.fs.stat(path, { resolve: true }).catch(() => undefined)
-  if (stat?.realPath) return stat.realPath
+async function walk($: $, path: string): Promise<{ real: string; isDir: boolean }> {
+  if (path === '/') return { real: '/', isDir: true }
+  const stat = await $.fs.stat(path, { resolve: true }).catch((error: unknown) => {
+    if (isNotFound(error)) return undefined
+    throw error
+  })
+  if (stat?.realPath) return { real: stat.realPath, isDir: stat.kind === 'dir' }
   if (stat) throw new Error(`cannot resolve ${path}`)
   const cut = path.lastIndexOf('/')
-  if (cut <= 0) return path
-  const parent = await realpath($, path.slice(0, cut))
+  if (cut < 0) throw new Error(`cannot resolve ${path}: not an absolute path`)
+  const parent = await walk($, path.slice(0, cut) || '/')
   const name = path.slice(cut + 1)
-  const entries = await $.fs.list(parent).catch(() => [])
-  if (entries.some((entry) => entry.name === name)) throw new Error(`${path} is a link that leads nowhere`)
-  return `${parent === '/' ? '' : parent}/${name}`
+  if (parent.isDir) {
+    const entries = await $.fs.list(parent.real)
+    if (entries.some((entry) => entry.name === name)) throw new Error(`${path} is a link that leads nowhere`)
+  }
+  return { real: `${parent.real === '/' ? '' : parent.real}/${name}`, isDir: false }
 }
+
+const realpath = async ($: $, path: string) => (await walk($, path)).real
 
 // The children record, read through the registry script: never written by the mod.
 async function readRecord($: $, master: SessionHubMaster, cwd: string): Promise<unknown> {
@@ -168,7 +181,9 @@ export const register: Register = (on) => {
     }
   })
 
-  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+  // Every tool whose input is a command run in the session's shell: Bash, and Monitor (its `ws` form has none).
+  on('tool.call', { tool: SHELL_TOOLS }, async ($, e, next) => {
+    if (typeof e.command !== 'string') return next(e)
     const role = await loadRole($)
     if (role.guarding) {
       const verdict = await judgeShell({
@@ -181,7 +196,7 @@ export const register: Register = (on) => {
       return verdict.allow ? next(e) : { deny: verdict.reason }
     }
     const result = await next(e)
-    const found = role.kind === 'none' ? parseRegistryCall(e.command) : undefined
+    const found = role.kind === 'none' && e.tool === 'Bash' ? parseRegistryCall(e.command) : undefined
     if (found) {
       await becomeMaster($, { record: found.file, hub: found.hub })
       await refreshPanel($)
@@ -204,7 +219,8 @@ export const register: Register = (on) => {
   })
 
   on('session.receive', async ($, e, next) => {
-    const text = markText({ role: await loadRole($), kind: e.origin?.kind, text: e.text })
+    const teammate = e.origin && 'teammate' in e.origin ? e.origin.teammate : undefined
+    const text = markText({ role: await loadRole($), kind: e.origin?.kind, teammate, text: e.text })
     return text === e.text ? next(e) : next({ ...e, text })
   })
 

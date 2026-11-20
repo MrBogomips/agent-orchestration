@@ -4,7 +4,7 @@ export const ORIGIN_LINE: string
 
 export function isFromAnotherSession(kind: string | undefined): boolean
 
-export function markText(input: { role: Role; kind: string; text: string }): string
+export function markText(input: { role: Role; kind: string; teammate?: string; text: string }): string
 
 export function markContext(input: {
   role: Role

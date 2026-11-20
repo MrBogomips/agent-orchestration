@@ -169,3 +169,91 @@ test('a temporary-folder path is judged after its links are resolved', async () 
   const verdict = await judgeShell({ role: child, command: 'echo x > /tmp/l/file', cwd: '/w/repo', realpath });
   assert.equal(verdict.allow, false);
 });
+
+// Second review
+
+test('commands after reserved words and inside braces and function bodies are judged', () => {
+  assert.deepEqual(shellWriteTargets('if true; then touch /hub/other/x; fi'), ['/hub/other/x']);
+  assert.deepEqual(shellWriteTargets('if touch /a/1; then :; elif rm /a/2; then :; else mkdir /a/3; fi'), ['/a/1', '/a/2', '/a/3']);
+  assert.deepEqual(shellWriteTargets('for f in a b; do rm /a/$f; touch /a/x; done'), ['/a/$f', '/a/x']);
+  assert.deepEqual(shellWriteTargets('while false; do tee /a/w; done; until true; do rm /a/u; done'), ['/a/w', '/a/u']);
+  assert.deepEqual(shellWriteTargets('{ touch /a/1; }'), ['/a/1']);
+  assert.deepEqual(shellWriteTargets('! rm /a/1'), ['/a/1']);
+  assert.deepEqual(shellWriteTargets('time rm /a/1'), ['/a/1']);
+  assert.deepEqual(shellWriteTargets('f() { touch /a/1; }; f'), ['/a/1']);
+  assert.deepEqual(shellWriteTargets('function g { rm /a/2; }'), ['/a/2']);
+  assert.deepEqual(shellWriteTargets('function g() { rm /a/3; }'), ['/a/3']);
+});
+
+test('a cd after a reserved word still counts as a change of directory', async () => {
+  for (const command of ['if true; then cd /etc; fi; touch ../x', '{ cd /etc; }; touch ../x', 'f() { cd /etc; }; touch ../x']) {
+    assert.deepEqual(await judgeShell({ role: child, command, cwd: '/w/repo', realpath: identity }), { allow: true }, command);
+  }
+  const verdict = await judgeShell({ role: child, command: 'if true; then cd /etc; touch /w/x; fi', cwd: '/w/repo', realpath: identity });
+  assert.equal(verdict.allow, false);
+});
+
+test('timeout and xargs are wrappers', () => {
+  assert.deepEqual(shellWriteTargets('timeout 5 rm /a/1'), ['/a/1']);
+  assert.deepEqual(shellWriteTargets('timeout -s KILL -k 2 10s touch /a/2'), ['/a/2']);
+  assert.deepEqual(shellWriteTargets('timeout --signal TERM --preserve-status 1m rm /a/3'), ['/a/3']);
+  assert.deepEqual(shellWriteTargets('timeout --kill-after=3 5 rm /a/4'), ['/a/4']);
+  assert.deepEqual(shellWriteTargets('find . | xargs rm /a/5'), ['/a/5']);
+  assert.deepEqual(shellWriteTargets('find . | xargs -0 -n 1 -P 4 -I {} cp {} /a/6'), ['/a/6']);
+  assert.deepEqual(shellWriteTargets('ls | xargs -0 -- rm /a/7'), ['/a/7']);
+});
+
+test('bundled short options and a target directory without =', () => {
+  assert.deepEqual(shellWriteTargets('cp -rt /etc a b'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('cp -rt/etc a b'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('mv -ft /etc a'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('ln -sft /etc a'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('install -m 644 -Dt /etc a'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('install -m644 a /etc/b'), ['/etc/b']);
+  assert.deepEqual(shellWriteTargets('cp --target-directory /etc a b'), ['/etc']);
+  assert.deepEqual(shellWriteTargets('touch -cr /etc/passwd /w/repo/f'), ['/w/repo/f']);
+  assert.deepEqual(shellWriteTargets('touch --reference /etc/passwd /w/repo/f'), ['/w/repo/f']);
+  assert.deepEqual(shellWriteTargets('mkdir --mode 755 /w/repo/d'), ['/w/repo/d']);
+});
+
+test('sed -i: every form of the script leaves the files as targets', () => {
+  assert.deepEqual(shellWriteTargets('sed -i --expression=s/a/b/ /a/f'), ['/a/f']);
+  assert.deepEqual(shellWriteTargets('sed -i --expression s/a/b/ /a/f'), ['/a/f']);
+  assert.deepEqual(shellWriteTargets('sed -i -f script.sed /a/f /a/g'), ['/a/f', '/a/g']);
+  assert.deepEqual(shellWriteTargets('sed -i --file=script.sed /a/f'), ['/a/f']);
+  assert.deepEqual(shellWriteTargets('sed -i --file script.sed /a/f'), ['/a/f']);
+  assert.deepEqual(shellWriteTargets('sed -i -es/a/b/ /a/f'), ['/a/f']);
+  assert.deepEqual(shellWriteTargets('sed -ni s/a/b/p /a/f'), ['/a/f']);
+  assert.deepEqual(shellWriteTargets('sed --in-place=.bak s/a/b/ /a/f'), ['/a/f']);
+  assert.deepEqual(shellWriteTargets('sed -n s/a/b/p /a/f'), []);
+});
+
+test('.. is resolved where the part before it really lands', async () => {
+  const realpath = async (path) => path.replace(/^\/w\/repo\/l(?=\/|$)/, '/elsewhere/deep');
+  const escaped = await judgeShell({ role: child, command: 'echo x > l/../escaped', cwd: '/w/repo', realpath });
+  assert.equal(escaped.allow, false);
+  assert.match(escaped.reason, /\/elsewhere\/escaped/);
+  const sibling = await judgeShell({ role: child, command: 'echo x > ../sibling', cwd: '/w/repo/sub', realpath: identity });
+  assert.deepEqual(sibling, { allow: true });
+  const devEscape = await judgeShell({ role: child, command: 'echo x > /dev/../etc/x', cwd: '/w/repo', realpath: identity });
+  assert.equal(devEscape.allow, false);
+});
+
+test('a target that cannot be resolved blocks in a guarding child', async () => {
+  const cases = [
+    { command: 'touch ~/x', home: undefined },
+    { command: 'touch ~root/x', home: '/Users/me' },
+    { command: 'touch x', home: '/Users/me', cwd: undefined },
+  ];
+  for (const input of cases) {
+    const verdict = await judgeShell({ role: child, cwd: '/w/repo', realpath: identity, ...input });
+    assert.equal(verdict.allow, false, input.command);
+    assert.match(verdict.reason, /could not evaluate/);
+  }
+});
+
+test('a wrapper that changes the folder counts as a change of directory', async () => {
+  for (const command of ['env -C /etc touch ../x', 'sudo --chdir=/etc touch ../x']) {
+    assert.deepEqual(await judgeShell({ role: child, command, cwd: '/w/repo', realpath: identity }), { allow: true }, command);
+  }
+});

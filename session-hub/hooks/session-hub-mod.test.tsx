@@ -20,15 +20,17 @@ const RUN = {
 
 const COMPOSE = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as const
 
-function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails = false, sent: string[] = []) {
+type Fs = { stat?: () => { deny: string }; list?: () => { deny: string } | { value: never[] } }
+
+function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails = false, sent: string[] = [], fs: Fs = {}) {
   on('env.get', (_, e) => {
     if (envFails) throw new Error('env unavailable')
     return { value: env[e.name] }
   })
   on('session.cwd', () => ({ value: cwd }))
   on('agent.list', () => ({ value: [] }))
-  on('fs.stat', () => ({ deny: 'ENOENT' }))
-  on('fs.list', () => ({ value: [] }))
+  on('fs.stat', fs.stat ?? (() => ({ deny: 'ENOENT' })))
+  on('fs.list', fs.list ?? (() => ({ value: [] })))
   on('session.send', (_, e) => (sent.push(e.to), { isDelivered: true }))
   on('session.receive', (_, e) => ({ text: e.text }))
   on('prompt.submit', (_, e) => ({ text: e.text, context: e.context }))
@@ -80,6 +82,39 @@ test('a shell write outside the write root is denied; inside it runs', async ($,
   expect('deny' in outside && outside.deny).toMatch(/outside this child's write root/)
   const inside = await $.tool.call({ tool: 'Bash', command: 'echo x > /w/repo/a.txt' })
   expect('deny' in inside).toBe(false)
+})
+
+test('a Monitor command is checked like a Bash command; a Monitor socket is left alone', async ($, on) => {
+  engine(on, CHILD_ENV)
+  on('tool.call', () => ({ result: {} }))
+  const outside = await $.tool.call({ tool: 'Monitor', command: 'tail -f x > /w/other.log', description: 'd', timeout_ms: 1000 })
+  expect('deny' in outside && outside.deny).toMatch(/outside this child's write root/)
+  const inside = await $.tool.call({ tool: 'Monitor', command: 'tail -f /w/repo/x', description: 'd', timeout_ms: 1000 })
+  expect('deny' in inside).toBe(false)
+  const socket = await $.tool.call({ tool: 'Monitor', ws: { url: 'wss://x' }, description: 'd', timeout_ms: 1000 })
+  expect('deny' in socket).toBe(false)
+})
+
+test('a stat error other than not-found blocks the shell write', async ($, on) => {
+  engine(on, CHILD_ENV, '/w/repo', false, [], { stat: () => ({ deny: 'EACCES' }) })
+  on('tool.call', () => ({ result: {} }))
+  const verdict = await $.tool.call({ tool: 'Bash', command: 'echo x > /w/repo/a.txt' })
+  expect('deny' in verdict && verdict.deny).toMatch(/could not evaluate/)
+})
+
+test('a folder that cannot be listed blocks the shell write', async ($, on) => {
+  engine(on, CHILD_ENV, '/w/repo', false, [], { list: () => ({ deny: 'EIO' }) })
+  on('tool.call', () => ({ result: {} }))
+  const verdict = await $.tool.call({ tool: 'Bash', command: 'echo x > /w/repo/a.txt' })
+  expect('deny' in verdict && verdict.deny).toMatch(/could not evaluate/)
+})
+
+test('a coordinator delivery to one of the child\'s own agents is not marked', async ($, on) => {
+  engine(on, CHILD_ENV)
+  const own = await $.session.receive({ origin: { kind: 'coordinator' }, text: 'work on X', agentId: 'a1' })
+  expect(own.text).toBe('work on X')
+  const lead = await $.session.receive({ origin: { kind: 'coordinator', teammate: 'team-lead', isVerified: true }, text: 'work on X' } as never)
+  expect(lead.text).toMatch(/comes from another session/)
 })
 
 test('a delivery from another session is marked; the person is not', async ($, on) => {
