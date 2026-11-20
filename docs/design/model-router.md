@@ -9,7 +9,7 @@ Picks the model and the effort level for sessions and for subagents. Works in an
 | `model-router:choose-model` | skill | Holds the grid. The agent uses it whenever it starts a subagent or a session, and passes model and effort explicitly. |
 | `model-router:setup` | skill | Writes a *Model routing* section in the project's instruction file with project defaults and exceptions, after the user confirms. |
 | `model-router` | mod | At a subagent's start, acts only when no model was given. Logs every decision. |
-| `/model-router` | command (mod) | Shows the latest decisions; turns the router on or off for the session. |
+| `/model-router` | command (mod) | Opens the usage view, a tabbed dialog pane (overview, models, classes, decisions); falls back to text where no pane can be placed. Turns the router on or off for the session. See *Command*. |
 | Decision log | file | `decision` records in `~/.claude/model-router/events.jsonl` (under the active config folder); see `model-router-quality-loop.md`. |
 | Options | `userConfig` | Tier models, thresholds, judge timeout, on/off switches. |
 | `model-router:report` | skill | Compacts the quality data and opens a local report page. See `model-router-quality-loop.md`. |
@@ -141,8 +141,8 @@ out is fail-open too. A judge that answers with an error is logged as `error` (a
 tier); a judge call that throws leaves no decision record, and the spawn record shows route `unseen`.
 
 The router's judge tiers stop at the deep tier (`opus`) and the comparison is with the parent's model, so a
-subagent of a `fable` session can be lowered; 0.2 does not hold `review-debug` and `design-open` to the grid's
-floor (the floor applies to exploration and recommendations from 0.3).
+subagent of a `fable` session can be lowered; up to 0.3 it does not hold `review-debug` and `design-open` to the grid's
+floor (the floor applies to exploration and recommendations from 0.4).
 
 Log one line when the mod is ready and one at the first firing of each hook. Without them, a router that never
 loaded looks the same as one with nothing to do. Both go to the debug log (`claude --debug`), not the transcript.
@@ -181,8 +181,76 @@ which the reference router gets wrong for agents with a fixed model.
 | `measure` (replaces `logDecisions`) | true |
 
 `measure` switches every record of the event log, decisions included (`model-router-quality-loop.md`). The
-command `/model-router on|off` turns routing on or off for the session (kept in `$.state`); with no argument it
-shows the state and the latest ten decisions.
+command `/model-router on|off` turns routing on or off for the session (kept in `$.state`); see *Command*.
+
+### Command
+
+`/model-router [tab] [window] [level] | on | off | report | help`, modelled on the built-in `/usage` dialog: one
+view of every number the mod and the quality loop hold, in compact blocks with aligned labels, `k`/`M` token
+counts, `$` costs and text bars sized to the room.
+
+**The usage view** is a dialog pane: `$.ui.open({ id: 'model-router-usage', focus: true, closeOnEscape: true })`,
+drawn by a `ui.render` hook on its `Pane`. It has four tabs:
+
+| Tab | Shows |
+|---|---|
+| Overview | A status line (routing on or off for the session, measuring, adapt). **Session**: this session's subagents by model, with input, output, cache-read and cache-write tokens and cost, and the total. **Routing**: this session's decisions counted by action (downgrade, upgrade, keep, explicit, forced-risk, error). |
+| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar, cost per successful task; the model ids seen in the window, on one line. A task closed `cancelled` counts in the tasks but not in the first-pass yield. |
+| Classes | Per class, over the window and at the level: n, first-pass yield with a bar, rework rate, cost per successful task, the best measured cell next to the grid's choice, weak-signal flags; under each class its cells. Then up to three recommendation rows that differ from the grid, each led by the recommended cell's first-pass yield. |
+| Decisions | The latest routing decisions, all sessions, newest last: time, action, model before and after, effort, subagent type, reason. |
+
+Keys while the pane holds the keyboard. The tabs and the footer are Buttons, so the engine's own focus ring and
+hotkeys drive them:
+
+| Key | Does |
+|---|---|
+| `1`–`4`, or Tab onto a tab | Switch tab (a `ui.focus` hook switches as the ring lands on a tab) |
+| `d` `w` `m` `a` | Window: last 24 hours, 7 days, 30 days, all |
+| `p` | Level: the user's data or this project's |
+| `o` | Write and open the HTML report (`scripts/report.mjs`); a toast gives its path |
+| `r` | Refresh: run compaction and read again |
+| Esc | Close |
+
+**Arguments.** `/model-router models 30d` opens on that tab and window; tab, window (`24h`, `7d`, `30d`, `all`)
+and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` writes and opens the report page and answers with its path. `help`, and any argument the
+command does not know, print the list of arguments and keys.
+
+**Text fallback.** Where no pane can be placed (headless or `claude -p`, a terminal narrower than 60 columns, or
+an open that answers `isPlaced: false`, which is then closed so it does not appear later), the command answers
+the same rows as aligned text: the requested tab, or all four stacked when no tab was named. Every text answer
+of the command carries `isTextDisplayOnly: true`: it is for the person, and the model does not read it.
+
+**Window and level.** The default window is 7 days, the default level the user. A window counts the closed
+tasks (`outcome` records) whose report, or for a task with no report its outcome, falls inside it. Models counts every closed task, learned or not; Classes
+counts learned tasks only, as the aggregates do. Under the `all` window, Classes reads the aged aggregates
+(`quality/user.json`, `quality/projects/<id>.json`), so it shows the very numbers of the report page; under a
+shorter window it folds the window's outcomes without aging. The project level is the session's project (the
+same id the spawn records carry).
+
+**One source of numbers.** The aggregation is plain code shared with the report page: `lib/usage-data.mjs`
+builds the view's data from the records and the aggregates (it also holds what the page needs: classes with their cells and recommendation, decisions by action, the
+weekly trend), on
+top of `metrics` and `recommend` in `lib/aggregate.mjs`; the scripts read the files. `lib/usage-view.mjs` is pure: from that data, a tab, a
+window, a level and a width it returns the rows to draw; the pane and the text fallback both draw those rows.
+
+**Reading.** The mod runs `node scripts/usage.mjs`, which runs compaction in a child process with a 3-second
+budget, then reads `events.jsonl` and the aggregates once and prints the data for every window and both levels as
+JSON, so changing window or level redraws without running anything. If compaction is still running at the end of
+its budget, or another run holds the lock, the data is as of the last compaction and the view says so. The
+session's subagents come live from `$.agent.list()`, passed to the script on stdin; agents the engine has already
+dropped come from this session's `report` records, with total tokens only. The whole read has a 15-second limit.
+
+**Width.** Rows fit the room they are drawn in: the pane's `bodyColumns`, or `presentation.columns` for text,
+with a minimum layout at 60 columns and 80 headless. Bars take what is left after the fixed columns, between 6
+and 20 cells. Lines that cannot fit are cut with `…`.
+
+**Failure.** The command fails open like the rest of the mod: a hook error, a script that fails or times out,
+or unreadable output answers one short line (`Could not read the usage data: …`; the engine shows it under the
+plugin's name) and never throws to the engine. `report` that fails or takes more than 60 seconds answers
+`Could not write the report: …`. The pane draws a note in place of the rows when it has no data; after a failed
+refresh the earlier rows stay, with a warning under them. A second `r` while a read runs is ignored.
+
+**With mods off** there is no command; the `model-router:report` skill builds the same page from the same code.
 
 Routing the main session's effort per prompt is out of scope: a change mid-chat can discard the prompt cache.
 
@@ -192,7 +260,8 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 |---|---|
 | 0.1 | `choose-model`, `setup`. |
 | 0.2 | The mod, the decision log, the command, the options; the quality loop measuring only, and `report`. |
-| 0.3 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
+| 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. |
+| 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
 
 ## Open points
 

@@ -23,7 +23,14 @@
 
 ## 4. Command and switches
 
-- [ ] `/model-router` shows the latest decisions; `/model-router off` stops routing for the session.
+- [ ] `/model-router` opens the usage view as a dialog; Overview lists this session's subagents by model and its
+      routing decisions by action.
+- [ ] `1`–`4` and Tab switch tabs; `d`, `w`, `m`, `a` change the window; `p` switches to the project level;
+      `r` refreshes; `o` opens the report page; Esc closes the view.
+- [ ] The Classes tab under `a` shows the same FPY and cost per success as the report page.
+- [ ] In a terminal under 60 columns, and with `claude -p "/model-router models"`, the command prints the rows as
+      text instead; `/model-router weekly` prints the help.
+- [ ] `/model-router off` stops routing for the session.
 - [ ] With `measure` off, no line is written and routing still works.
 
 ## 5. Failing open
@@ -36,3 +43,4 @@
 | Date | Claude Code | Steps | Result |
 |---|---|---|---|
 | 2026-11-20 | 2.1.329 | 1, 3 (`claude -p`, twice) | Pass: `sonnet` lowered to `haiku` at `low`; decision, spawn, report, outcome and aggregate records written. Steps 2, 4 and 5 are covered by `claude plugin test` and the unit tests, not yet by hand. |
+| 2026-11-20 | 2.1.329 | usage view (tmux, 160 columns) | Pass: `/model-router` opens the pane with four tabs; `3`, `a` and Tab switch tab and window. Left/Right went to the prompt, not the pane: the arrows are not documented as keys. |

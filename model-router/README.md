@@ -12,7 +12,7 @@ record where it departs from the grid, and catches the starts that still carry n
 each kind of task and each model and effort, how often the work was right the first time and what a successful
 task cost, so the grid can be checked against real work.
 
-## Components (0.2)
+## Components (0.3)
 
 | Name | Kind | What it does |
 |---|---|---|
@@ -20,9 +20,9 @@ task cost, so the grid can be checked against real work.
 | `model-router:setup` | skill | Writes or updates a *Model routing* section in the project's instruction file, `AGENTS.md` or else `CLAUDE.md`, with defaults and exceptions per kind of work or task class, only after the user says yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs`: compacts the quality data, writes a self-contained page and opens it. |
 | `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model. Records decisions, starts, signals and reports. Fails open. |
-| `/model-router` | command | Shows whether routing is on and the latest ten decisions in the log (all sessions); `/model-router off` and `/model-router on` switch routing for the session. |
+| `/model-router` | command | The usage view: a dialog with four tabs (Overview, Models, Classes, Decisions), or the same rows as text where no pane fits; `on` and `off` switch routing for the session. See [Commands](#commands). |
 | `grid.json` | data | The grid in machine-readable form, with each class's usual choice. The judge's prompt is generated from it; `grid.test.mjs` fails when it and the skills drift apart. |
-| `scripts/compact.mjs`, `scripts/report.mjs` | scripts | Node, no dependencies. Compaction closes the outcome of each task and keeps aggregates per user and per project; the report renders them. |
+| `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes the outcome of each task and keeps aggregates per user and per project; the report renders them; `usage.mjs` gives `/model-router` its data. The page and the command share one aggregation (`lib/usage-data.mjs`), so their numbers agree. |
 
 ### What the router does at a start
 
@@ -44,7 +44,7 @@ similar start of the same class follows, or one of the next two prompts you type
 no class (no `[mr:<class>]` tag and no judge answer), tasks on a model outside the four families and tasks with no
 known effort are recorded but not learned. Cells of class × tier × effort keep first-pass yield, rework rate,
 cost per task and cost per successful task, aged with a 30-day half-life, at two levels: you, and each project.
-Release 0.2 only measures: the router does not yet choose from this data.
+Up to release 0.3 the router only measures: it does not yet choose from this data.
 
 ## Usage
 
@@ -52,9 +52,108 @@ Release 0.2 only measures: the router does not yet choose from this data.
   mod covers the starts that still carry no model.
 - Ask for *model-router setup* in a project to record its defaults, for example a higher effort for database
   migrations.
-- Ask for the *model-router report* to see the measured quality, or type `/model-router` for the latest
-  decisions.
+- Type `/model-router` to see this session's subagents, the models in use and the measured quality in the
+  terminal, or ask for the *model-router report* for the same numbers on a page.
 - An explicit model or effort you ask for in the conversation always wins.
+
+## Commands
+
+`/model-router` is registered by the mod. With mods off there is no command: ask for the *model-router report*
+instead, which builds the page from the same numbers. Every answer of the command is for you only: the model
+does not read it.
+
+| Command | Does |
+|---|---|
+| `/model-router` | Opens the usage view on Overview, last 7 days, user level |
+| `/model-router [overview\|models\|classes\|decisions] [24h\|7d\|30d\|all] [user\|project]` | Opens it on that tab, window and level, in any order (`stats` and `log` work as `classes` and `decisions`) |
+| `/model-router on`, `/model-router off` | Turns routing on or off for this session |
+| `/model-router report` | Writes and opens the report page, and prints its path |
+| `/model-router help` | Lists the arguments and the keys; any unknown argument does the same |
+
+### The usage view
+
+A dialog pane in the style of `/usage`, with four tabs:
+
+| Tab | Shows |
+|---|---|
+| Overview | Routing on or off, measuring, adapt; this session's subagents by model with input, output, cache-read and cache-write tokens and cost; this session's routing decisions by action, with bars |
+| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield (FPY) with a bar, cost per successful task, and the model ids seen in the window. A cancelled task counts in the tasks, not in FPY |
+| Classes | Per task class, over the window and at the level: n, FPY with a bar, rework rate, cost per successful task, the grid's choice next to the best measured cell, weak-signal flags, and each cell under its class (`*` marks the recommended one); then up to three recommendations that differ from the grid, each led by its FPY |
+| Decisions | The latest twelve routing decisions of every session (UTC), `•` marking this session's |
+
+| Key | Does |
+|---|---|
+| `1`–`4`, or Tab onto a tab | Switches tab |
+| `d`, `w`, `m`, `a` | Window: last 24 hours, 7 days, 30 days, or all time |
+| `p` | Switches between your data across projects (user) and this project's |
+| `o` | Writes and opens the report page; a toast gives its path |
+| `r` | Refreshes: runs compaction and reads again |
+| Esc | Closes the view |
+
+The `all` window of Classes shows the aged aggregates, the very numbers of the report page; shorter windows count
+the tasks whose report fell inside them. Opening the view runs compaction for at most 3 seconds; if it takes
+longer, the view shows the numbers as of the last compaction and says so.
+
+Where no pane can be placed (`claude -p`, a headless run, a terminal under 60 columns), the command prints the same
+rows as text: the tab you named, or all four. A real run of `claude -p "/model-router"` on a machine with two
+measured subagents:
+
+```text
+model-router: Usage · last 7 days · user level
+
+── Overview ────────────────────────────────────────────────────────────────────
+Status:               routing on · measuring on · adapt off
+
+Session
+No subagent has run in this session yet.
+
+Routing · 0 decisions this session
+No routing decision in this session yet.
+
+── Models ──────────────────────────────────────────────────────────────────────
+Models · last 7 days · 2 closed tasks · 166.3k tokens · $0.0097
+                tasks  tokens    cost  FPY                       $/success
+haiku·low           2  166.3k $0.0097  ████████████████████ 100%   $0.0049
+Model ids: claude-haiku-5-5
+
+── Classes ─────────────────────────────────────────────────────────────────────
+Classes · user level · last 7 days
+                       n  FPY                        rework $/success
+read-search            2  ████████████████████ 100%      0%   $0.0049
+  grid haiku·low · best: not enough data · read-only: weak signal, n < 5
+    haiku·low          2  ████████████████████ 100%      0%   $0.0049
+
+Recommendations
+  None differs from the grid.
+
+── Decisions ───────────────────────────────────────────────────────────────────
+Decisions · latest 2 of 2 · all sessions · UTC
+11-20 21:37  downgrade   sonnet → haiku·low    general-purpose: judge: fast at …
+11-20 21:48  downgrade   sonnet → haiku·low    Explore: judge: fast at 0.95
+
+Data read 2026-11-20 22:38 UTC.
+/model-router help: tabs, windows, levels and keys.
+```
+
+In a session with subagents, Overview reads like this (from the test data set):
+
+```text
+Session
+Subagents:            3 · $0.034
+Usage by model:
+   claude-sonnet-5-5: 1 × 52.0k tokens ($0.021)
+   claude-haiku-5-5:  2 × 2.0k input, 6.0k output, 950.0k cache read,
+                      50.0k cache write ($0.013)
+Dropped agents show total tokens only (from the log).
+
+Routing · 4 decisions this session
+  downgrade           ██████████░░░░░░░░░░ 2
+  keep                █████░░░░░░░░░░░░░░░ 1
+  explicit            █████░░░░░░░░░░░░░░░ 1
+```
+
+The pane draws the same rows under a row of tab buttons, with the window, level, report and refresh keys at the
+bottom.
 
 ## Options
 
@@ -69,10 +168,10 @@ Set in `/config` or under `pluginConfigs` in settings.
 | `timeoutMs` | 8000 | Judge time limit; past it the start is left unchanged |
 | `routeSubagents` | true | Route subagent starts at all |
 | `measure` | true | Record the event log and the quality data |
-| `adapt` | false | Choose from the quality data; from release 0.3, unused in 0.2 |
+| `adapt` | false | Choose from the quality data; from release 0.4, unused before |
 | `halfLifeDays` | 30 | Aging of the quality data |
-| `projectPriorStrength` | 5 | How many observations the user level counts for in a project's estimate; from release 0.3, unused in 0.2 |
-| `exploreCap` | 0.1 | Share of decisions per class that may explore; from release 0.3 |
+| `projectPriorStrength` | 5 | How many observations the user level counts for in a project's estimate; from release 0.4, unused before |
+| `exploreCap` | 0.1 | Share of decisions per class that may explore; from release 0.4 |
 | `reworkWindowMin` | 30 | Minutes after a report during which a redo counts as rework |
 | `similarityThreshold` | 0.5 | Word overlap at which two task descriptions count as the same task |
 
@@ -96,7 +195,7 @@ receives the subagent type, its short description and the first 4,000 characters
 - An agent defined by a plugin is never routed: its definition file is not read. Of the built-in types, only
   `general-purpose` and `Explore` are routed (verified to inherit the parent's model).
 - The judge's tiers are haiku, sonnet and opus: the router never picks `fable`, and it compares with the
-  parent's model, so a subagent of a `fable` session can be lowered. In 0.2 it does not hold `review-debug` and
+  parent's model, so a subagent of a `fable` session can be lowered. Up to 0.3 it does not hold `review-debug` and
   `design-open` to the grid's floor.
 - Costs are the engine's estimates. Edits made outside the session's own tools are not seen.
 - Read-only classes and cells with fewer than five tasks are weak signals; the report flags them.
@@ -115,4 +214,4 @@ uses `choose-model` for the model and effort of child sessions. The skills work 
 the command and the measurement need the mod.
 
 Design: `docs/design/model-router.md` and `docs/design/model-router-quality-loop.md` in the source repository.
-Adaptive selection from the quality data comes in 0.3.
+Adaptive selection from the quality data comes in 0.4.

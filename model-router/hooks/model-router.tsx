@@ -5,18 +5,27 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
+import type { UsageCache, UsageView } from '../types'
+
 import { buildJudgePrompt, parseJudgeAnswer } from '../lib/judge.mjs'
 import { projectId } from '../lib/project-id.mjs'
 import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky, routeCase } from '../lib/route.mjs'
 import { parseTag } from '../lib/text.mjs'
+import { DEFAULT_VIEW, MIN_COLUMNS, TAB_TITLES, TABS, WINDOW_KEYS, helpText, noteRows, parseArgs, tabRows, textView } from '../lib/usage-view.mjs'
+import type { Row } from '../lib/usage-view.mjs'
 
 const PLUGIN = 'model-router'
 const PROMPT_CHARS = 2000
-const TAIL_LINES = '2000'
-const SHOWN_DECISIONS = 10
+const PANE = 'model-router-usage'
+const PANE_TITLE = 'model-router usage'
+const USAGE_TIMEOUT_MS = 15000
+const REPORT_TIMEOUT_MS = 60000
 const WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit']
 
 const enabled = atom({ plugin: 'model-router', key: 'enabled' } as const, true)
+// Change a shape tag when its value's fields change: it declines what an earlier version stored.
+const viewState = atom({ plugin: 'model-router', key: 'view' } as const, { ...DEFAULT_VIEW } as UsageView, { shape: 'view-1' })
+const usageState = atom({ plugin: 'model-router', key: 'usage' } as const, { isLoading: false } as UsageCache, { shape: 'usage-1' })
 
 type Options = {
   fastModel: string
@@ -203,27 +212,64 @@ async function reportOf($: any, e: any) {
   }
 }
 
-async function decisionsText($: any, ctx: Ctx, opts: Options): Promise<string> {
-  const on = await read($, enabled)
-  const head = `model-router: ${on && opts.routeSubagents ? 'on' : 'off'} for this session` +
-    `${opts.routeSubagents ? '' : ' (routeSubagents is false)'}; measuring ${opts.measure ? 'on' : 'off'}.`
-  const file = `${await configDirOf($, ctx)}/model-router/events.jsonl`
-  const tail = await $.process.run(['tail', '-n', TAIL_LINES, file])
-  const lines = tail.exitCode === 0 ? tail.stdout.split('\n') : []
-  const decisions = lines.flatMap((l: string) => {
-    try {
-      const r = JSON.parse(l)
-      return r?.type === 'decision' && typeof r.ts === 'string' && typeof r.action === 'string' ? [r] : []
-    } catch {
-      return []
-    }
-  }).slice(-SHOWN_DECISIONS)
-  if (decisions.length === 0) return `${head}\nNo routing decision logged yet.`
-  const rows = decisions.map((d: any) =>
-    `${d.ts.slice(0, 19).replace('T', ' ')}  ${d.action.padEnd(11)} ${String(d.before ?? '?')} -> ${String(d.after ?? '?')}` +
-    `${d.effort ? ` · ${d.effort}` : ''}  ${d.subagentType ?? ''}: ${String(d.reason ?? '').slice(0, 60)}`)
-  return `${head}\nLatest decisions:\n${rows.join('\n')}`
+async function statusOf($: any, opts: Options) {
+  return { routing: (await read($, enabled)) && opts.routeSubagents, routeSubagents: opts.routeSubagents, measuring: opts.measure, adapt: opts.adapt }
 }
+
+/** Runs scripts/usage.mjs (compaction within its budget, then one read) with this session's live agents. */
+async function loadUsage($: any, ctx: Ctx): Promise<{ [key: string]: unknown }> {
+  const agents: any[] = await $.agent.list().catch(() => [])
+  const live = agents.map((a) => ({ id: a.id, model: a.model ?? null, usage: a.usage ?? [], cost: a.cost ?? null }))
+  const stdin = JSON.stringify({ session: await $.session.id(), project: await projectOf($, ctx), live })
+  const argv = ['node', `${$.plugin.root}/scripts/usage.mjs`, '--config-dir', await configDirOf($, ctx)]
+  const run = await $.process.run(argv, { stdin, timeoutMs: USAGE_TIMEOUT_MS })
+  if (run.exitCode !== 0) throw new Error(run.stderr.trim() || `usage.mjs exited with ${run.exitCode}`)
+  const data = JSON.parse(run.stdout)
+  if (!data || typeof data !== 'object' || data.version !== 1) throw new Error('usage.mjs gave unreadable data')
+  return data
+}
+
+/** Reads the data again into the view's state; an error is kept for the pane to show, never thrown. */
+// One read at a time from the `r` key; opening the view always reads, so a flag left by a reload cannot stick.
+async function refreshUsage($: any, ctx: Ctx, force = false) {
+  if (!force && (await read($, usageState)).isLoading) return
+  await update($, usageState, (u) => ({ ...u, isLoading: true }))
+  try {
+    const data = await loadUsage($, ctx)
+    await update($, usageState, () => ({ data, isLoading: false }))
+  } catch (err) {
+    await update($, usageState, (u) => ({ ...u, isLoading: false, error: errorText(err) }))
+  }
+}
+
+/** Writes the report page with scripts/report.mjs, which opens it, and returns its path. */
+async function writeReport($: any, ctx: Ctx): Promise<string> {
+  const argv = ['node', `${$.plugin.root}/scripts/report.mjs`, '--config-dir', await configDirOf($, ctx)]
+  const run = await $.process.run(argv, { timeoutMs: REPORT_TIMEOUT_MS })
+  if (run.exitCode !== 0) throw new Error(run.stderr.trim() || `report.mjs exited with ${run.exitCode}`)
+  return run.stdout.trim()
+}
+
+const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
+
+/** Opens the usage view; where no pane can be placed, answers its rows as text. */
+async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | null; window: string | null; level: string | null }, columns: number) {
+  const view: UsageView = { tab: asked.tab ?? DEFAULT_VIEW.tab, window: asked.window ?? DEFAULT_VIEW.window, level: asked.level ?? DEFAULT_VIEW.level }
+  await update($, viewState, () => view)
+  if (columns >= MIN_COLUMNS) {
+    const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true })
+    if (opened.isPlaced) {
+      await refreshUsage($, ctx, true)
+      return display('Usage view opened (Esc closes it).')
+    }
+    await $.ui.close({ id: PANE }).catch(() => undefined)
+  }
+  const data = await loadUsage($, ctx)
+  return display(textView(data, { ...asked, window: view.window, level: view.level, status: await statusOf($, opts) }, columns))
+}
+
+const toneProps = (row: Row) =>
+  row.tone === 'title' ? { bold: true } : row.tone === 'dim' ? { dimColor: true } : row.tone === 'warn' ? { color: 'warning' as const } : {}
 
 export const register: Register = (on, options) => {
   const opts = optionsOf(options)
@@ -234,7 +280,11 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     try {
-      await $.command.register({ name: 'model-router', description: 'Latest routing decisions; on or off for this session', argumentHint: '[on|off]' })
+      await $.command.register({
+        name: 'model-router',
+        description: 'Usage view: subagents, models, classes and routing decisions; routing on or off for this session',
+        argumentHint: '[overview|models|classes|decisions] [24h|7d|30d|all] [user|project] | on | off | report | help',
+      })
       $.ui.log(`[model-router] ready: routing ${opts.routeSubagents ? 'on' : 'off'}, measuring ${opts.measure ? 'on' : 'off'}`, { to: 'debug' })
       if (opts.measure) {
         await saveOptions($, ctx, opts)
@@ -249,13 +299,86 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'model-router' }, async ($, e) => {
-    const arg = e.args.trim().toLowerCase()
-    if (arg === 'on' || arg === 'off') {
-      await update($, enabled, () => arg === 'on')
-      return { text: `model-router: routing turned ${arg} for this session.` }
+    const asked = parseArgs(e.args)
+    if (asked.kind === 'toggle') {
+      await update($, enabled, () => asked.on)
+      return display(`Routing turned ${asked.on ? 'on' : 'off'} for this session.`)
     }
-    return { text: await decisionsText($, ctx, opts) }
-  }).catch(($, e) => ({ text: 'model-router: could not read the decision log.' }))
+    if (asked.kind === 'help') return display(helpText())
+    if (asked.kind === 'unknown') return display(`Unknown argument "${asked.word}".\n\n${helpText()}`)
+    if (asked.kind === 'report') {
+      try {
+        return display(`Report written to ${await writeReport($, ctx)}`)
+      } catch (err) {
+        return display(`Could not write the report: ${errorText(err)}`)
+      }
+    }
+    return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
+  }).catch(($, e, next) => ({ text: `Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
+
+  // The ring landing on a tab (Tab, or an arrow where the engine routes it to the pane) switches to it.
+  // A ring move carries the element as `element`; this plugin's own $.ui.focus call names it `key`.
+  on('ui.focus', { requestId: PANE }, async ($, e, next) => {
+    const element: unknown = (e as { element?: unknown }).element ?? (e as { key?: unknown }).key
+    const tab = typeof element === 'string' && element.startsWith('tab-') ? element.slice(4) : undefined
+    if (tab && TABS.includes(tab)) await update($, viewState, (v) => ({ ...v, tab }))
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const view = await read($, viewState)
+    const usage = await read($, usageState)
+    const columns = Math.max(20, e.props.bodyColumns ?? 80)
+    const status = await statusOf($, opts)
+    const rows = usage.error && !usage.data
+      ? [{ text: `Could not read the usage data: ${usage.error}`, tone: 'warn' as const }]
+      : tabRows(usage.data ?? null, { ...view, status }, columns)
+    const notes = [
+      ...noteRows(usage.data ?? null, columns),
+      ...(usage.isLoading && usage.data ? [{ text: 'Refreshing…', tone: 'dim' as const }] : []),
+      ...(usage.error && usage.data ? [{ text: `Last refresh failed: ${usage.error}`, tone: 'warn' as const }] : []),
+    ]
+    const setView = (patch: Partial<UsageView>) => update($, viewState, (v) => ({ ...v, ...patch }))
+    const windowKeys = Object.entries(WINDOW_KEYS)
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row" gap={1}>
+          {TABS.map((tab, i) => (
+            <Button key={`tab-${tab}`} label={TAB_TITLES[tab]} hotkey={String(i + 1)} variant={view.tab === tab ? 'primary' : 'secondary'}
+              autoFocus={view.tab === tab ? true : undefined} onPress={() => setView({ tab })} />
+          ))}
+        </Box>
+        <Box flexDirection="column" marginTop={1}>
+          {rows.map((row) => (
+            <Text {...toneProps(row)} wrap="truncate">{row.text || ' '}</Text>
+          ))}
+        </Box>
+        <Box flexDirection="column" marginTop={1}>
+          {notes.map((row) => (
+            <Text {...toneProps(row)} wrap="truncate">{row.text}</Text>
+          ))}
+        </Box>
+        <Box flexDirection="row" gap={2}>
+          {windowKeys.map(([key, window]) => (
+            <Button key={`window-${window}`} label={window} hotkey={key} plain dimColor={view.window !== window} onPress={() => setView({ window })} />
+          ))}
+          <Button key="level" label={view.level === 'project' ? 'project' : 'user'} hotkey="p" plain
+            onPress={() => setView({ level: view.level === 'project' ? 'user' : 'project' })} />
+          <Button key="report" label="report" hotkey="o" plain dimColor
+            onPress={async () => {
+              try {
+                $.ui.toast(`model-router: report written to ${await writeReport($, ctx)}`)
+              } catch (err) {
+                $.ui.toast(`model-router: could not write the report: ${errorText(err)}`)
+              }
+            }} />
+          <Button key="refresh" label="refresh" hotkey="r" plain dimColor onPress={() => refreshUsage($, ctx)} />
+          <Text dimColor>Esc close</Text>
+        </Box>
+      </Box>
+    )
+  })
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
     firstFire($, fired, 'tool.call Agent')

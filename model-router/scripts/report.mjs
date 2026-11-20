@@ -9,14 +9,11 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { compact, defaultConfigDir, effectiveOptions, loadGrid, paths, readEvents, writeWhole } from './compact.mjs';
-import { ageCell, metrics, recommend } from '../lib/aggregate.mjs';
+import { agedCells, classesOf, decisionsOf, latestOutcomes, trendOf } from '../lib/usage-data.mjs';
 import { renderReport } from '../lib/report-html.mjs';
 
-const READ_ONLY_CLASSES = ['read-search', 'read-analyze'];
-const WEAK_N = 5;
-const DAY_MS = 86400000;
-
-function readJson(file) {
+/** A JSON file's value, or null when it is missing or unreadable. */
+export function readJson(file) {
   try {
     return JSON.parse(readFileSync(file, 'utf8'));
   } catch {
@@ -24,78 +21,8 @@ function readJson(file) {
   }
 }
 
-function exploreShare(outcomes, cell, projectId) {
-  const mine = outcomes.filter((o) => o.learn && o.class === cell.class && o.tier === cell.tier && o.effort === cell.effort &&
-    (!projectId || o.project?.id === projectId));
-  return mine.length ? mine.filter((o) => o.explore).length / mine.length : 0;
-}
-
-function classesOf(level, grid, now, options, outcomes) {
-  const aged = Object.fromEntries(Object.entries(level.cells ?? {}).map(([k, c]) => [k, ageCell(c, now, options.halfLifeDays)]));
-  const projectId = level.kind === 'project' ? level.project?.id : null;
-  return grid.classes
-    .filter((spec) => Object.values(aged).some((c) => c.class === spec.name))
-    .map((spec) => {
-      const recommendation = recommend(aged, spec.name, grid);
-      const cells = Object.values(aged)
-        .filter((c) => c.class === spec.name)
-        .sort((a, b) => b.n - a.n)
-        .map((c) => {
-          const flags = [];
-          if (READ_ONLY_CLASSES.includes(c.class)) flags.push('read-only: weak signal');
-          if (c.n < WEAK_N) flags.push(`n < ${WEAK_N}`);
-          return {
-            tier: c.tier, effort: c.effort, model: c.model, ...metrics(c), exploreShare: exploreShare(outcomes, c, projectId), flags,
-            recommended: recommendation?.source === 'data' && recommendation.tier === c.tier && recommendation.effort === c.effort,
-          };
-        });
-      const differs = recommendation?.source === 'data' &&
-        (recommendation.tier !== spec.default.tier || recommendation.effort !== spec.default.effort);
-      return { cls: spec.name, covers: spec.covers, default: spec.default, recommendation, differs, cells };
-    });
-}
-
-function weekOf(iso) {
-  const d = new Date(iso);
-  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - ((d.getUTCDay() + 6) % 7) * DAY_MS);
-  return monday.toISOString().slice(0, 10);
-}
-
-function trendOf(outcomes) {
-  const weeks = new Map();
-  for (const o of outcomes) {
-    if (!['success', 'rework', 'failure'].includes(o.outcome)) continue;
-    const week = weekOf(o.reportTs ?? o.ts);
-    const w = weeks.get(week) ?? { week, n: 0, success: 0, cost: 0, costN: 0 };
-    w.n += 1;
-    if (o.outcome === 'success') w.success += 1;
-    if (typeof o.costUsd === 'number') {
-      w.cost += o.costUsd;
-      w.costN += 1;
-    }
-    weeks.set(week, w);
-  }
-  return [...weeks.values()]
-    .sort((a, b) => a.week.localeCompare(b.week))
-    .map((w) => {
-      const fpy = w.success / w.n;
-      const costPerTask = w.costN ? w.cost / w.costN : null;
-      return { week: w.week, n: w.n, fpy, costPerSuccess: fpy && costPerTask !== null ? costPerTask / fpy : null };
-    });
-}
-
-function decisionsOf(events) {
-  const byAction = {};
-  let total = 0;
-  for (const e of events) {
-    if (e.type !== 'decision') continue;
-    total += 1;
-    byAction[e.action] = (byAction[e.action] ?? 0) + 1;
-  }
-  return { total, byAction };
-}
-
-function projectLevels(p) {
+/** Every project level under quality/projects, sorted by root. */
+export function projectLevels(p) {
   if (!existsSync(p.projects)) return [];
   return readdirSync(p.projects)
     .filter((n) => /^[0-9a-f]{16}\.json$/.test(n))
@@ -110,13 +37,13 @@ export function buildReportData({ configDir = defaultConfigDir(), now = Date.now
   compact({ configDir, now, options: opts, grid });
   const p = paths(configDir);
   const events = readEvents(p.events);
-  const outcomes = [...new Map(events.filter((e) => e.type === 'outcome').map((o) => [o.task, o])).values()];
+  const outcomes = latestOutcomes(events);
   const user = readJson(p.user) ?? { cells: {} };
   const levels = [
-    { kind: 'user', title: 'user', classes: classesOf({ ...user, kind: 'user' }, grid, now, opts, outcomes) },
+    { kind: 'user', title: 'user', classes: classesOf(agedCells(user, now, opts.halfLifeDays), grid, { outcomes }) },
     ...projectLevels(p).map((lv) => ({
       kind: 'project', title: lv.project?.root ?? lv.project?.id ?? 'project',
-      classes: classesOf({ ...lv, kind: 'project' }, grid, now, opts, outcomes),
+      classes: classesOf(agedCells(lv, now, opts.halfLifeDays), grid, { outcomes, projectId: lv.project?.id ?? null }),
     })),
   ];
   return {

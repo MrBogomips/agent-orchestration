@@ -14,7 +14,7 @@ and keeps what works (environment detection, launch command, layouts, worktrees,
 | `session-hub:setup` | skill | Writes or updates the *Child sessions* section of the hub's instruction file, after the user confirms. |
 | `session-hub-scope-guard` | classic hook (PreToolUse) | In a child, blocks writes outside the scope root and tells the model to send the request to the master. |
 | `session-hub` | mod | In a child: refuses sends to any session but the master; checks shell commands for writes outside the scope; marks deliveries from other sessions as information. In the master: draws the children panel. |
-| `/session-hub` | command (mod) | Opens the children panel; shows this session's role and scope. |
+| `/session-hub` | command (mod) | Opens the children panel; shows this session's role and scope. `help` lists what it does. |
 | Children record | file | One entry per child. Path from the *Child sessions* section. |
 
 ## Roles
@@ -205,7 +205,7 @@ results for 0.2 (`spikes.md`); the pure logic lives in `hooks/mod/*.mjs`, the en
 | Origin marking | `session.receive`, `prompt.submit` | In a child, a delivery from another session gets a line in front of its text: information, not authorization. A prompt whose origin is not the person's or the session's own gets the same line as context, once. Every kind but `composer`, `bridge`, `sdk`, `auto-continuation`, `plugin`, `task-notification` and `scheduled-trigger` counts as another session, unknown kinds included. A `coordinator` delivery at `session.receive` without a `teammate` is the child's own main conversation writing to one of its agents, and is not marked; with a `teammate` (an agent team's lead), and at `prompt.submit` (another session's hand-off), it is. The first prompt is not special: it arrives as `composer` (S9). |
 | Scope line | `prompt.compose`, `prompt.submit` | A session-scoped section with the role and the scope (child), or the role and the record (master). Because an organization's managed mod can skip a user mod's `prompt.compose`, `session.compact` and `classic.SessionStart` hooks (seen live), the same text also rides the first prompt after the start and after a compaction as context. A compaction is seen through those events where they run, and otherwise as a context size that is unknown or smaller than at the previous prompt. |
 | Children panel | `ui.render` (`Pane`) | In the master: one row per child from the record (status, live status, model and effort, last message), refreshed on `/session-hub` and every 30 s. Live status comes from the `ListAgents` tool called by the mod (S8). The record is read through `scripts/registry.mjs read`; the mod never writes it. |
-| Command | `$.command.register` | `/session-hub`: the session's role and scope; in a master, the children table and the panel. Registered last at `session.start`, inside a `try`: a name clash with another mod throws (S6) and costs only the command. |
+| Command | `$.command.register` | `/session-hub [help]`: the session's role and scope; in a master, the children table (sized to `presentation.columns`, at least 60) and the panel. `help`, and any other argument, print what the command does. Every answer carries `isTextDisplayOnly`: the model does not need it, since it has the scope in its scope line and reads the children from the record, and a copy in the transcript would go stale in later requests. A failing hook answers one line. From 0.2.1. A tabbed dialog like `/model-router`'s was considered and left out: the children panel is a side pane that stays open beside the chat and refreshes itself, not a dialog the person reads and closes. Registered last at `session.start`, inside a `try`: a name clash with another mod throws (S6) and costs only the command. |
 
 How the mod knows the master: a session with no role becomes a master when it runs `session-hub:spawn` or
 `session-hub:dispatch` (`skill.prompt`), when it runs the registry script (the `--file` or `--hub` of that call
@@ -238,6 +238,7 @@ Constraints:
 |---|---|
 | 0.1 | `spawn`, `dispatch`, `setup`, the scope guard hook, the children record. Scope and the master-only rule are enforced by the hook and by prose. |
 | 0.2 | The mod: send guard, shell check, origin marking, scope line, panel, command. |
+| 0.2.1 | `/session-hub help`; command answers for the person only; the children table sized to the terminal. |
 
 ## Open points
 

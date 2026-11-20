@@ -9,6 +9,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { ScopeLine, SessionHubMaster, SessionHubPanel } from '../types'
+import { helpText, parseCommand } from './mod/command.mjs'
 import { markContext, markText } from './mod/origin.mjs'
 import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall } from './mod/panel.mjs'
 import { readRole } from './mod/role.mjs'
@@ -22,6 +23,7 @@ type $ = EngineInterface
 const PANE = 'session-hub-children'
 const COMMAND = 'session-hub'
 const REFRESH_MS = 30_000
+const MIN_TABLE_COLUMNS = 60
 const SKILLS = /^(session-hub:)?(spawn|dispatch)$/
 const SHELL_TOOLS = ['Bash', 'Monitor'] as const
 
@@ -157,7 +159,7 @@ export const register: Register = (on) => {
     })
     // Last, and alone in its try: a clash with another mod's command throws (spike S6) and must cost only the command.
     try {
-      await $.command.register({ name: COMMAND, description: 'session-hub: this session role and scope, and the children panel' })
+      await $.command.register({ name: COMMAND, description: 'session-hub: this session role and scope, and the children panel', argumentHint: '[help]' })
     } catch (error) {
       $.ui.log(`[session-hub] /${COMMAND} not registered: ${error instanceof Error ? error.message : error}`)
     }
@@ -252,7 +254,13 @@ export const register: Register = (on) => {
     return { sections: [...composed.sections.filter((s) => s.id !== SECTION_ID), section] }
   })
 
-  on('command.run', { command: COMMAND }, async ($) => {
+  // The answer is for the person alone (isTextDisplayOnly): the model already has the scope in its scope line and
+  // reads the children from the record, so a copy in the transcript would only go stale in later requests.
+  on('command.run', { command: COMMAND }, async ($, e) => {
+    const asked = parseCommand(e.args)
+    if (asked.kind === 'help') return { text: helpText(), isTextDisplayOnly: true as const }
+    if (asked.kind === 'unknown') return { text: `Unknown argument "${asked.word}".\n\n${helpText()}`, isTextDisplayOnly: true as const }
+    const width = Math.max(MIN_TABLE_COLUMNS, e.presentation?.columns ?? 80)
     const role = await loadRole($)
     if (role.kind === 'none' && !(await read($, masterState)).isMaster) await detectMaster($, await $.session.cwd())
     const master = await read($, masterState)
@@ -260,11 +268,14 @@ export const register: Register = (on) => {
     if (master.isMaster) {
       const panel = await refreshPanel($)
       await $.ui.open({ id: PANE, title: 'session-hub: children' })
-      lines.push('', headerRow(100), ...panel.rows.map((row) => formatRow(row, 100)))
+      lines.push('', headerRow(width), ...panel.rows.map((row) => formatRow(row, width)))
       if (panel.note) lines.push(panel.note)
     }
-    return { text: lines.join('\n') }
-  })
+    return { text: lines.join('\n'), isTextDisplayOnly: true as const }
+  }).catch(($, e, next) => ({
+    text: `[session-hub] /${COMMAND} failed: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? 'unknown error'}`,
+    isTextDisplayOnly: true as const,
+  }))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)

@@ -77,7 +77,7 @@ function trendTable(trend) {
 function decisionsBlock(decisions) {
   const pills = Object.entries(decisions.byAction).map(([k, v]) => `<span class="pill">${esc(k)}: ${num(v)}</span>`).join('');
   return `<div class="card"><p>${num(decisions.total)} routing decisions logged.</p>${pills}
-<p class="muted">Release 0.2 measures only: no correction from the quality data is applied yet.</p></div>`;
+<p class="muted">The router only measures up to release 0.3: no correction from the quality data is applied before 0.4.</p></div>`;
 }
 
 /** The whole page for the report data. */

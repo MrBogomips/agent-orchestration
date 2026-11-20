@@ -39,6 +39,7 @@ In the child, run `/compact`, then ask, without tools, for the exact words "Crea
 - [ ] `/session-hub` in the child shows `Role: child of "<master>"`, the write root and the handoff
 - [ ] After a `registry.mjs upsert` in the master, `/session-hub` there shows `Role: master` and the child's row
   with its live status, and opens the panel
+- [ ] `/session-hub help` lists what the command does; `/session-hub children` prints the same list
 
 ## Mods off
 
