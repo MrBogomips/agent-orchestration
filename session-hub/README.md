@@ -138,7 +138,7 @@ the old section and proposes the changes below.
 | — | `Model`, `Effort` | new: defaults per repository or kind of work |
 | — | `Scope` | new: what a child of each repository may read outside its write root |
 | — | `Registry` | new: path of the children record, outside the hub |
-| — | `Guards` | new: `on` or `off` for the scope guard |
+| — | `Guards` | new: `on` or `off` for the scope guard and the mod's send guard and shell check |
 
 Other changes: the handoff gains *Session*, *Scope* and *Messages* (which replaces *Channel to the master*); a
 request outside the scope goes to the master even when the user makes it in the child's session; the master
