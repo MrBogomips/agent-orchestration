@@ -37,3 +37,26 @@ Side findings:
   across a nested git repository. The user has to open each child repository once and accept the prompt.
 - A hub under the system temporary folder loaded no project instruction file at all, not even the repository's
   own. Run scenario hubs under the home folder.
+
+## Results for model-router 0.2
+
+Setup for all four: a throwaway mod loaded with `--plugin-dir` from a scratch folder under the home folder, logging
+each event to a file through `$.process.run` (`cat >>`); `claude -p` with `--model haiku` (S3 parts on `--model
+sonnet`, to see an inherited model that differs from haiku); a project agent `fixed` with `model: haiku` in its
+frontmatter.
+
+| ID | Date | Claude Code | Setup | Outcome |
+|---|---|---|---|---|
+| S3 | 2026-11-20 | 2.1.329 | Four starts without a model: the `fixed` agent plain; `fixed` with the hook setting `sonnet` at `agent.spawn`; `general-purpose` with the hook setting `sonnet`; `general-purpose` with `model: sonnet` and a `tool.call` hook on `Agent` rewriting `effort: "low"`. Then `Explore` without a model under a sonnet parent, and a `tool.call` rewrite of both `model: "haiku"` and `effort: "low"`. | **The event does not show a fixed model**: `e.model` is undefined for `fixed` as for `general-purpose`. **A hook's model overrides the definition's**: `fixed` with `model: haiku` ran on sonnet when the hook set it. **Effort is set by rewriting the `Agent` tool call**: the subagent's steps carried `effort: low` and its `$.agent.list()` row `effort: "low"`. A `tool.call` rewrite of `model` is applied too (`agent.spawn` then sees `model: "haiku"`). `tool.call` and `agent.spawn` share the `tool_use_id`. `Explore` inherited the parent's model (no fixed model in this build). |
+| S11 | 2026-11-20 | 2.1.329 | At `agent.report`, the agent's `$.agent.list()` row. | **Yes.** The row is there with `usage[]` (per model) and `cost.usd`, `status` and `taskStatus`. After a continuation through the message tool, `usage` and `cost` are cumulative over both runs, and the report fires again. |
+| S12 | 2026-11-20 | 2.1.329 | A subagent writes a file with `Write`, then changes it with `Edit`. | **Yes.** Both `tool.call` events carry the subagent's `agentId` and the absolute `file_path`. |
+| S13 | 2026-11-20 | 2.1.329 | The same follow-up ("read the file and reply with its content"): once sent through `SendMessage` to the subagent that wrote the file, a minute after its report, once as a new `general-purpose` subagent; both on haiku. | **Continuing is about five times cheaper here**: the continued run cost $0.00094 (206 tokens written to the cache, 82,871 read), the fresh one $0.00457 (32,007 written). The continuation reads the subagent's own warm cache, so the gain holds while that cache lives (5 minutes by default). The *continue, do not restart* rule stands. A continuation raises `agent.spawn` again with `resume.agentId` and the resolved `model`, then `agent.report` again. |
+
+Side findings:
+
+- `claude plugin validate` accepts `$` passed only to a function declared at the top of the module file (or
+  imported from a file of the plugin); a helper defined inside `register` is refused.
+- An agent definition's fixed model has to be read from its file: the mod routes only the built-in types that
+  were seen to inherit (`general-purpose`, `Explore`) and project or user agents whose definition file it can read and
+  that name no model (or `inherit`). Any other type (`Plan` included, not tested) is kept: the decision is logged as
+  `keep`, the spawn record with route `fixed`.

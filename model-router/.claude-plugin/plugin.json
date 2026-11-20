@@ -1,7 +1,7 @@
 {
   "name": "model-router",
-  "version": "0.1.0",
-  "description": "Picks the model and the effort level for sessions and subagents with one written grid; later releases measure how well each choice worked and adapt",
+  "version": "0.2.0",
+  "description": "Picks the model and the effort level for sessions and subagents with one written grid, routes subagent starts that carry no model, and measures locally how well each choice worked",
   "author": {
     "name": "MrBogomips",
     "url": "https://github.com/MrBogomips"
@@ -13,5 +13,116 @@
     "routing",
     "subagents",
     "cost"
-  ]
+  ],
+  "engines": {
+    "claude-code": ">=2.1.329"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "fastModel": {
+      "type": "string",
+      "title": "Fast tier model",
+      "description": "Model behind the fast tier (grid tier haiku); also runs the judge.",
+      "required": false,
+      "default": "haiku"
+    },
+    "balancedModel": {
+      "type": "string",
+      "title": "Balanced tier model",
+      "description": "Model behind the balanced tier (grid tier sonnet).",
+      "required": false,
+      "default": "sonnet"
+    },
+    "deepModel": {
+      "type": "string",
+      "title": "Deep tier model",
+      "description": "Model behind the deep tier (grid tier opus); risky work goes here.",
+      "required": false,
+      "default": "opus"
+    },
+    "minDowngradeConfidence": {
+      "type": "number",
+      "title": "Confidence to downgrade",
+      "description": "The judge's confidence needed to lower a subagent's model or set effort low (0 to 1).",
+      "required": false,
+      "default": 0.6
+    },
+    "minUpgradeConfidence": {
+      "type": "number",
+      "title": "Confidence to upgrade",
+      "description": "The judge's confidence needed to raise a subagent's model, or to set effort medium, high or xhigh (0 to 1).",
+      "required": false,
+      "default": 0.3
+    },
+    "riskThreshold": {
+      "type": "number",
+      "title": "Risk threshold",
+      "description": "Above this risk (0 to 1) the start gets the deep tier and at least high effort.",
+      "required": false,
+      "default": 0.7
+    },
+    "timeoutMs": {
+      "type": "number",
+      "title": "Judge time limit (ms)",
+      "description": "How long the judge may take; past it the start is left unchanged.",
+      "required": false,
+      "default": 8000
+    },
+    "routeSubagents": {
+      "type": "boolean",
+      "title": "Route subagents",
+      "description": "Let the router choose the model and effort of subagent starts that carry no model.",
+      "required": false,
+      "default": true
+    },
+    "measure": {
+      "type": "boolean",
+      "title": "Measure",
+      "description": "Record decisions, starts, signals and outcomes in the local event log under the config folder.",
+      "required": false,
+      "default": true
+    },
+    "adapt": {
+      "type": "boolean",
+      "title": "Adapt (from 0.3)",
+      "description": "Choose from the quality data. Not implemented in 0.2: the loop only measures.",
+      "required": false,
+      "default": false
+    },
+    "halfLifeDays": {
+      "type": "number",
+      "title": "Half-life (days)",
+      "description": "Quality data loses half its weight every this many days.",
+      "required": false,
+      "default": 30
+    },
+    "projectPriorStrength": {
+      "type": "number",
+      "title": "Project prior strength (from 0.3)",
+      "description": "How many observations the user level counts for in a project's estimate. Unused in 0.2.",
+      "required": false,
+      "default": 5
+    },
+    "exploreCap": {
+      "type": "number",
+      "title": "Exploration cap (from 0.3)",
+      "description": "Largest share of decisions per class that may explore. Unused in 0.2.",
+      "required": false,
+      "default": 0.1
+    },
+    "reworkWindowMin": {
+      "type": "number",
+      "title": "Rework window (minutes)",
+      "description": "How long after a subagent's report a redo still counts as rework.",
+      "required": false,
+      "default": 30
+    },
+    "similarityThreshold": {
+      "type": "number",
+      "title": "Similarity threshold",
+      "description": "Word overlap (0 to 1) at which two task descriptions count as the same task.",
+      "required": false,
+      "default": 0.5
+    }
+  }
 }
