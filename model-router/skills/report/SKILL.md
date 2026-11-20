@@ -25,8 +25,8 @@ If `CLAUDE_PLUGIN_ROOT` is not set, the script is in the installed plugin's fold
 ## 2. Answer
 
 Give the user the absolute path of the page and, in two or three lines, what it covers. If the script printed an
-error, show it. The event log is only appended to, never rewritten, but the compaction that runs first may already
-have updated the quality data; a later run does not count a task twice.
+error, show it. If the script fails after it started, running it again is safe: compaction only adds to the event
+log and never counts a task twice.
 
 When the page has no data yet, say why it may be empty:
 
@@ -34,13 +34,16 @@ When the page has no data yet, say why it may be empty:
   `measure` option is on (the default);
 - a task counts only once its rework window (`reworkWindowMin`, 30 minutes by default; the script uses the
   options the mod saved at the last session start) has closed or its session has ended;
-- tasks without a class (`[mr:<class>]` tag or the judge's answer), risky tasks, tasks on unknown models and tasks
-  with no known effort are measured but not learned.
+- cancelled tasks, tasks without a class (`[mr:<class>]` tag or the judge's answer), risky tasks, tasks on unknown
+  models and tasks with no known effort are measured but not learned;
+- if another compaction was running at that moment (for example a session start), the page shows the data from
+  before it; run the report again in a minute.
 
 ## Limits
 
 - Up to release 0.3 the router only measures. The page shows a recommendation per class, but the router does not
   act on it before 0.4.
-- In a session with mods on, `/model-router` shows the same numbers in the terminal, from the same code.
+- In a session with mods on, `/model-router` shows the same numbers in the terminal, and `/model-router report`
+  writes and opens this same page. Suggest it to the user for next time.
 - Read-only classes and cells with fewer than five tasks are weak signals; the page flags them.
 - Nothing leaves the machine. Share the page only when the user asks.

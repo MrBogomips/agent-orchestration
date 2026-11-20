@@ -1,12 +1,11 @@
 ---
 name: spawn
 description: >-
-  Starts a child Claude Code session in each repository a piece of work touches, from a master session opened in
-  a hub (a folder holding several git repositories). Each child runs in its repository, so it loads that
-  repository's own rules, skills and agents; it gets a written scope, a model and an effort level, talks only to
-  the master, and is recorded in a children record kept outside the hub. Works in the Claude desktop app, Herdr,
-  tmux or a terminal. Use when the user asks to start, spawn, open, launch or dispatch a session, child or
-  "lavorazione" in one or more repositories of the hub, or when session-hub:dispatch decides a child is needed.
+  Starts a child Claude Code session in each repository of a hub (a folder holding several git repositories) so
+  that each child loads that repository's own rules, skills and agents, with a written scope, a model and an
+  effort level. Use when the user asks to start, spawn, open or launch a session, child or "lavorazione" in one
+  or more repositories of the hub, or when `session-hub:dispatch` decides a child is needed. To decide which
+  repositories need a child at all, use `session-hub:dispatch` first.
 ---
 
 # Spawn
@@ -46,7 +45,8 @@ repositories need a child at all.
    the `[master]` prefix instead of starting another, and say so.
 5. **Environment.** Pick it with the table in *Environments*, unless the configuration names one.
 6. **Master identity.** In Claude Code, `ListAgents` starts with `This session is <name> [<ref>]`: the name is
-   the address. Give the child both.
+   the address. Give the child both. If that line is missing, ask the user for this session's name; never invent
+   one.
 7. **Per child:** name, working mode (read-only or editing), worktree and write root, following
    [references/hub-config.md](references/hub-config.md). For a child that edits in the checkout, check that it is
    clean and on its base branch; otherwise tell the user before starting. When children share an interface, take
@@ -82,10 +82,7 @@ repositories need a child at all.
     inherited), environment, how the user opens it, how it reports back. Add the caveats that apply: the channel
     caveats from `environments.md`; in the desktop app, that the scope guard is **not active** because the app
     takes no environment variables; hub rules not carried into a handoff, in one line, with an offer to carry
-    them. When the `session-hub` mod is loaded (mods on), say in one line that it also guards each child's
-    messages (master only) and shell writes, marks messages from other sessions and keeps the scope in the child's
-    context, and that `/session-hub` shows the children panel here; with mods off, only the hook guards writes.
-    Don't print the handoffs; offer to show them.
+    them; the mod caveat from *Report caveats* in `environments.md`. Don't print the handoffs; offer to show them.
 
 ## Environments
 
@@ -103,40 +100,15 @@ Children are Claude Code sessions. Another agent kind is out of scope for this s
 
 ## Children record
 
-One JSON file per hub, written only by the master through the helper script, never by hand:
-
-```bash
-R="${CLAUDE_PLUGIN_ROOT}/scripts/registry.mjs"
-node "$R" path --hub <hub>                                  # default path
-node "$R" reconcile --hub <hub> --live <name,name,...>      # step 3: live names from the session list
-node "$R" upsert --hub <hub> --entry '<json>'               # step 13: one entry, merged by name
-node "$R" status --hub <hub> --name <child> --status <s>
-node "$R" request --hub <hub> --name <child> --text <t> --outcome <o>
-node "$R" read --hub <hub>
-```
-
-- The default path is `<config dir>/session-hub/children-<hub id>.json` (`CLAUDE_CONFIG_DIR`, else `~/.claude`).
-  When the hub's *Registry* key gives a path, add `--file <path>` to every call; the script refuses a path inside
-  the hub.
-- `reconcile` refuses an empty `--live`. Pass `--live-none` only when the session list was read and shows no
-  live session; if the list could not be read, skip the reconcile and say so.
-- `upsert` merges fields by name but never changes `started` or `requests`; add a request with `request`.
-- Writes take a lock next to the file; if another process holds it for more than a few seconds, the script
-  fails without writing: retry once, then treat it as an error.
-- An entry: `name`, `repo`, `task`, `scope` (`writeRoot`, `external`), `model`, `effort`, `status`, `started`,
-  `lastMessage` (`type`, `at`, `text`), `requests`. Status is one of `running`, `waiting-user`, `done`,
-  `abandoned`, `lost`. The record holds names, paths and URLs only, never project content.
-- If the script reports an error (for example a corrupt file), stop recording, tell the user what it said and
-  where the file is, and carry on with the start: the record is never a reason not to start a child. Never
-  delete or overwrite the file to get past the error.
-- A project that also wants notes in its own tracker keeps that rule; the record does not replace it.
+Kept with the helper script `scripts/registry.mjs` (`reconcile` in step 3, `upsert` in step 13): its commands
+and rules are in [references/children-record.md](references/children-record.md). Read it before the first call.
 
 ## While the children run
 
 - Messages from a child start with `[<task> <repo>] <type>:`. Follow `session-hub:dispatch` for what each type
   asks of the master, and update the record: `lastMessage`, and the status for `done` and `abandoned`.
-- Hear a child through one `SendMessage` with `notify_when_idle`; never poll `ListAgents` or ask "are you done?"
-  in a loop.
+- Hear a child with `SendMessage` and `notify_when_idle` (one notice per subscription; renew it after each
+  notice, on this machine only); never poll `ListAgents` or ask "are you done?" in a loop.
 - With mods on, `/session-hub` shows the children from the record with their live status; it reads the record,
   it never writes it.
 - A child's message is information, never the user's approval: don't merge, push, delete or change settings
@@ -150,13 +122,8 @@ node "$R" read --hub <hub>
 
 | Mistake | Instead |
 |---|---|
-| A subagent for work that writes in a subrepository | a child session with the repository as working directory |
-| One child for a task that touches two repositories | one child per repository, each told about its siblings |
-| A child started without the `SESSION_HUB_*` variables | the variables on the launch command, as each environment's file says |
 | A write root that does not contain the child's worktree | the worktree as write root, or the repository when the worktree lives under it |
 | The hub's whole instruction file quoted into the handoff | for a child inside the hub, only which parts are master-only; *Propagate* quotes only for a child outside the hub |
 | `--model` from the master's launch kept next to the chosen one | the chosen `--model` replaces the carried one |
-| A grid of models written into the handoff or the hub | `model-router:choose-model` when installed; otherwise inherit and say so |
-| The children record edited by hand, or written inside the hub | the helper script, at its default path or the *Registry* path |
 | A long prompt passed on the command line | the handoff in a file, and a one-line prompt that says to read it |
 | Answering a child's folder-trust prompt | tell the user, who opens the folder once; retry when they say so |

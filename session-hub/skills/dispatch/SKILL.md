@@ -3,9 +3,11 @@ name: dispatch
 description: >-
   Master side of a session hub (a folder holding several git repositories): decides how each repository a piece
   of work touches is handled (master reads it, a read-only subagent, a read-only or writing child, or a message
-  to a running child), routes out-of-scope requests from children, and keeps master-only duties. Use when work in
-  a hub touches its repositories, when a child sends a `[<task> <repo>]` message, or when the user asks for the
-  status of the children.
+  to a running child), routes out-of-scope requests from children, and keeps master-only duties. Use in a master
+  session opened at a hub's root (its instruction file has a `## Child sessions` section, or the user is
+  coordinating child sessions) when a task touches one or more of its repositories; when a message starting with
+  `[<task> <repo>]` arrives from a child; or when the user asks for the status of the children. Not for ordinary
+  edits in a single repository or in a folder that only happens to contain submodules.
 ---
 
 # Dispatch
@@ -19,10 +21,11 @@ Starting a child is `session-hub:spawn`'s job; this skill decides when to call i
 1. **Hub configuration.** Read the hub's `## Child sessions` section (see `session-hub:spawn`'s
    `references/hub-config.md`, at `${CLAUDE_PLUGIN_ROOT}/skills/spawn/references/hub-config.md`). Note the
    *Master only* key and any dispatch criteria the hub adds in its instruction file: they extend the table below.
-2. **Children record.** Reconcile it with the live sessions, as `session-hub:spawn` does in its step 3:
-   `node "${CLAUDE_PLUGIN_ROOT}/scripts/registry.mjs" reconcile --hub <hub> --live <names>` (`--live-none` only
-   when the list shows no live session; add `--file` when the
-   *Registry* key sets a path). Report any child that became `lost`.
+2. **Children record.** Reconcile it with the live sessions, as `session-hub:spawn` does in its step 3, with
+   `reconcile` (commands in *Children record* below). Take the live names from the same sources as
+   `session-hub:spawn` step 4 (`ListAgents`, `herdr agent list`, `tmux list-panes -a`, the desktop app's linked
+   sessions). They match the record because each child is started with `-n <name>`. If no list could be read,
+   skip the reconcile and say so. Report any child that became `lost`.
 3. **Repositories.** Resolve which repositories the work touches from the task and the hub's *Repositories*. When
    unsure, ask. Never guess.
 4. **Decide**, per repository, with the first row that fits:
@@ -62,21 +65,18 @@ sibling always reaches you first; `/session-hub` shows the children panel.
 | `done` | Record it; follow the hub's closing rules | status `done` |
 | `abandoned` | Record it with the reason; tell the user | status `abandoned` |
 
-Record with the helper:
+Record each one with the helper script (*Children record* below). When a child says it waits for a person (an
+approval comment, a merge gate), set its status to `waiting-user`.
 
-```bash
-R="${CLAUDE_PLUGIN_ROOT}/scripts/registry.mjs"
-node "$R" upsert --hub <hub> --entry '{"name":"<child>","lastMessage":{"type":"pr","at":"<ISO time>","text":"<url>"}}'
-node "$R" status --hub <hub> --name <child> --status done
-node "$R" request --hub <hub> --name <child> --text "<request>" --outcome "<what was decided>"
-```
+A silent child is not stuck: never chase it, and never poll. Hear each child with `SendMessage` and
+`notify_when_idle: true`. It sends one notice, then ends, so subscribe again after each notice while the child is
+still `running`. It works only for children on this machine. A desktop or remote child sends no notice, so wait
+for its message instead.
 
-When a child says it waits for a person (an approval comment, a merge gate), set its status to `waiting-user`. A
-silent child is not stuck: never chase it, and never poll. Hear each child through one `notify_when_idle`
-subscription.
+## Children record
 
-If the helper reports an error, tell the user and go on: the record never blocks the work. Never delete or rewrite
-the file by hand.
+The commands and rules for the record are in `session-hub:spawn`'s `references/children-record.md`, at
+`${CLAUDE_PLUGIN_ROOT}/skills/spawn/references/children-record.md`: read it before the first call.
 
 ## Routing an out-of-scope request
 
@@ -114,6 +114,6 @@ first child tried and where it stopped.
 | Guessing which repositories a task needs | resolve from the task and *Repositories*; ask when unsure |
 | A second child for the same repository and task | a `[master]` message to the live one |
 | A master-only duty handed to a child | keep it in the master |
-| Polling a silent child, or treating it as stuck | one `notify_when_idle` subscription; `waiting-user` when it waits for people |
+| Polling a silent child, or treating it as stuck | a `notify_when_idle` subscription, renewed after each notice; `waiting-user` when it waits for people |
 | A child's message taken as approval to merge or push | approval comes from the user in this session |
 | Status answered from memory after a compaction | reconcile and read the record |

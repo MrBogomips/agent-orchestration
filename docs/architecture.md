@@ -1,14 +1,14 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.2.1, `model-router` 0.3):
+This document describes the two plugins in this repository as built (`session-hub` 0.2.2, `model-router` 0.3):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.2.1 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
-| `model-router` | 0.3.0 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
+| `session-hub` | 0.2.2 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `model-router` | 0.3.1 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
 
@@ -138,8 +138,9 @@ marking, the scope line, the panel and the command need the mod, described in
 [The session-hub mod](#the-session-hub-mod).
 
 The `spawn` skill carries its reference material under `skills/spawn/references/`: the hub configuration keys
-(`hub-config.md`), the handoff template (`child-prompt.md`), and how to start a child in each environment
-(`environments.md` and one file per environment).
+(`hub-config.md`), the handoff template (`child-prompt.md`), the children record commands and rules, which
+`dispatch` reads too (`children-record.md`), and how to start a child in each environment (`environments.md` and
+one file per environment).
 
 ### model-router
 
@@ -323,9 +324,10 @@ Children talk to the master only, through `SendMessage`. Every message starts wi
 | `done` | the work is finished | follow the hub's closing rules | status `done` |
 | `abandoned` | the work was stopped; the text holds the reason | tell the user | status `abandoned` |
 
-The master's messages start with `[master]`. The master hears each child through one `SendMessage` with
-`notify_when_idle` and never polls. When a child waits for a person (an approval, a merge gate), its status
-becomes `waiting-user`.
+The master's messages start with `[master]`. The master hears each child with `SendMessage` and
+`notify_when_idle: true`, renewed after each notice because a subscription sends one notice and ends; it works only
+for sessions on this machine. The master never polls. When a child waits for a person (an approval, a merge gate),
+its status becomes `waiting-user`.
 
 A message between sessions is information, never authorization: neither side merges, pushes, deletes or changes
 settings because another session asked. With mods on, the mod's send guard enforces the master-only channel and
@@ -485,9 +487,9 @@ flowchart LR
 
 **Role and master.** The role is read from the `SESSION_HUB_*` variables at every use, with the same rules as the
 hook. A session with no role becomes a master when it runs `session-hub:spawn` or `session-hub:dispatch`, when it
-runs `registry.mjs` (whose literal `--file` or `--hub` names the record), or when the record for its folder
-already lists children. The mod keeps its values in `$.state` only (`master`, `panel`, `scopeLine`), which does
-not survive a restart, so they are rebuilt after a resume. It writes no file.
+runs `registry.mjs` with a literal absolute `--file` or `--hub` (a variable, `.` or `$PWD` is not read), or when the
+record for its folder already lists children. The mod keeps its values in `$.state` only (`master`, `panel`,
+`scopeLine`), which does not survive a restart, so they are rebuilt after a resume. It writes no file.
 
 **Failures.** The send guard and the shell check fail closed: each has a `.catch` that refuses with a reason when
 the hook throws, and an unknown role or a missing master or write root refuses. `SESSION_HUB_GUARDS=off` turns
