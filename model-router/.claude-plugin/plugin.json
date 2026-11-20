@@ -1,6 +1,6 @@
 {
   "name": "model-router",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Picks the model and the effort level for sessions and subagents, measures how well each choice worked and adapts",
   "author": {
     "name": "MrBogomips",
