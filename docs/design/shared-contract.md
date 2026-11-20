@@ -48,6 +48,7 @@ so these names are fixed.
 | `SESSION_HUB_SCOPE_ROOT` | absolute path of the write root |
 | `SESSION_HUB_HANDOFF` | absolute path of the handoff file |
 | `SESSION_HUB_REGISTRY` | absolute path of the children record (read-only for a child) |
+| `SESSION_HUB_GUARDS` | `on` or `off`, from the hub's `Guards` key; absent means `on` |
 
 They reach the child's classic hooks in `--bg`, tmux and Herdr panes (S4; in Herdr through `tab create` / `pane split
 --env`). The desktop app starts sessions through a tool that takes no environment and was not tested: there the
