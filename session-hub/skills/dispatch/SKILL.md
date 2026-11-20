@@ -20,7 +20,8 @@ Starting a child is `session-hub:spawn`'s job; this skill decides when to call i
    `references/hub-config.md`, at `${CLAUDE_PLUGIN_ROOT}/skills/spawn/references/hub-config.md`). Note the
    *Master only* key and any dispatch criteria the hub adds in its instruction file: they extend the table below.
 2. **Children record.** Reconcile it with the live sessions, as `session-hub:spawn` does in its step 3:
-   `node "${CLAUDE_PLUGIN_ROOT}/scripts/registry.mjs" reconcile --hub <hub> --live <names>` (add `--file` when the
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/registry.mjs" reconcile --hub <hub> --live <names>` (`--live-none` only
+   when the list shows no live session; add `--file` when the
    *Registry* key sets a path). Report any child that became `lost`.
 3. **Repositories.** Resolve which repositories the work touches from the task and the hub's *Repositories*. When
    unsure, ask. Never guess.

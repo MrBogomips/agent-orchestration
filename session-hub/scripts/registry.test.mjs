@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -145,6 +145,74 @@ describe('record', () => {
     assert.throws(() => upsertChild(file, entry('a'), { now }), /children/);
     assert.equal(readFileSync(file, 'utf8'), '{"children": "nope"}');
   });
+
+  test('upsert keeps the requests and start time of an existing entry', () => {
+    upsertChild(file, entry('a'), { now });
+    addRequest(file, 'a', { text: 'r1' }, { now });
+    upsertChild(file, { name: 'a', started: '1999-01-01T00:00:00Z', requests: [], model: 'opus' }, { now: () => 'later' });
+    const child = readRecord(file).children[0];
+    assert.equal(child.started, now());
+    assert.equal(child.requests.length, 1);
+    assert.equal(child.model, 'opus');
+  });
+
+  test('reconcile refuses an empty live list unless told there is no live session', () => {
+    upsertChild(file, entry('a'), { now });
+    assert.throws(() => reconcile(file, []), /--live-none/);
+    assert.equal(readRecord(file).children[0].status, 'running');
+    assert.deepEqual(reconcile(file, [], { noneLive: true }).changed, ['a']);
+  });
+
+  test('a record written by a newer format is never rewritten', () => {
+    mkdirSync(dirname(file), { recursive: true });
+    const newer = JSON.stringify({ version: 2, hub: null, children: [] });
+    writeFileSync(file, newer);
+    assert.deepEqual(readRecord(file).children, []);
+    assert.throws(() => upsertChild(file, entry('a'), { now }), /newer/);
+    assert.equal(readFileSync(file, 'utf8'), newer);
+  });
+
+  test('a write waits for the lock and fails when it cannot take it', () => {
+    upsertChild(file, entry('a'), { now });
+    writeFileSync(`${file}.lock`, 'held');
+    const before = readFileSync(file, 'utf8');
+    assert.throws(() => upsertChild(file, entry('b'), { now, lockTimeoutMs: 200 }), /lock/);
+    assert.equal(readFileSync(file, 'utf8'), before);
+    assert.ok(existsSync(`${file}.lock`), 'a lock held by someone else is left alone');
+  });
+
+  test('a stale lock is removed', () => {
+    upsertChild(file, entry('a'), { now });
+    writeFileSync(`${file}.lock`, 'stale');
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(`${file}.lock`, old, old);
+    upsertChild(file, entry('b'), { now, lockTimeoutMs: 200 });
+    assert.equal(readRecord(file).children.length, 2);
+    assert.equal(existsSync(`${file}.lock`), false);
+  });
+
+  test('the lock is released after a failed write', () => {
+    upsertChild(file, entry('a'), { now });
+    assert.throws(() => setStatus(file, 'nobody', 'done'), RegistryError);
+    assert.equal(existsSync(`${file}.lock`), false);
+  });
+});
+
+describe('hub id normalization', () => {
+  test('the same hub spelled in another case or Unicode form gets the same id', () => {
+    const nfc = join(base, 'café');
+    mkdirSync(nfc);
+    const nfd = join(base, 'café');
+    assert.equal(hubId(nfd), hubId(nfc));
+    const upper = join(base, 'HUB');
+    let caseInsensitive = true;
+    try {
+      realpathSync(upper);
+    } catch {
+      caseInsensitive = false;
+    }
+    if (caseInsensitive) assert.equal(hubId(upper), hubId(hub));
+  });
 });
 
 describe('command line', () => {
@@ -164,6 +232,9 @@ describe('command line', () => {
     assert.equal(r.status, 0, r.stderr);
     r = cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('t42-design'))]);
     r = cli(['reconcile', '--hub', hub, '--live', '']);
+    assert.equal(r.status, 1, 'an empty --live is refused');
+    assert.match(r.stderr, /--live-none/);
+    r = cli(['reconcile', '--hub', hub, '--live-none']);
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(JSON.parse(r.stdout).changed, ['t42-design']);
 
@@ -171,6 +242,32 @@ describe('command line', () => {
     const record = JSON.parse(r.stdout);
     assert.equal(record.hub, hub);
     assert.deepEqual(record.children.map((c) => c.status), ['done', 'lost']);
+  });
+
+  test('read of a missing file says there is no record yet', () => {
+    const r = cli(['read', '--hub', hub]);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout).children, []);
+    assert.match(r.stderr, /no record yet/);
+  });
+
+  test('parallel upserts from separate processes lose no entry', async () => {
+    const { spawn } = await import('node:child_process');
+    const runOne = (i) =>
+      new Promise((resolve) => {
+        const child = spawn(
+          process.execPath,
+          [SCRIPT, 'upsert', '--hub', hub, '--entry', JSON.stringify(entry(`child-${i}`))],
+          { env: { ...process.env, CLAUDE_CONFIG_DIR: join(base, 'cfg') }, stdio: ['ignore', 'ignore', 'pipe'] },
+        );
+        let stderr = '';
+        child.stderr.on('data', (chunk) => (stderr += chunk));
+        child.on('exit', (code) => resolve({ code, stderr }));
+      });
+    const results = await Promise.all(Array.from({ length: 10 }, (_, i) => runOne(i)));
+    for (const r of results) assert.equal(r.code, 0, r.stderr);
+    const names = readRecord(defaultRegistryPath(hub, { CLAUDE_CONFIG_DIR: join(base, 'cfg') })).children.map((c) => c.name);
+    assert.equal(names.length, 10);
   });
 
   test('--file overrides the default path, and a file inside the hub is refused', () => {

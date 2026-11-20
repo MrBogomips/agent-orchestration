@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// The children record of a session-hub master: one JSON file, written whole and atomically on every change.
+// The children record of a session-hub master: one JSON file, written whole and atomically on every change,
+// under an exclusive lock so that concurrent writers lose no entry.
 //
 // Default location: <config dir>/session-hub/children-<hub id>.json, where <config dir> is CLAUDE_CONFIG_DIR or
-// ~/.claude and <hub id> is the first 16 hex digits of the sha256 of the hub's real path. Never inside a hub.
+// ~/.claude and <hub id> is the first 16 hex digits of the sha256 of the hub's real path (NFC). Never inside a hub.
 //
 // Usage:
 //   registry.mjs path      --hub <dir>
@@ -10,20 +11,37 @@
 //   registry.mjs upsert    (--hub <dir> | --file <path>) --entry '<json>'
 //   registry.mjs status    (--hub <dir> | --file <path>) --name <child> --status <status>
 //   registry.mjs request   (--hub <dir> | --file <path>) --name <child> --text <text> [--outcome <text>]
-//   registry.mjs reconcile (--hub <dir> | --file <path>) --live <name,name,...>
+//   registry.mjs reconcile (--hub <dir> | --file <path>) (--live <name,name,...> | --live-none)
 //
 // Exit 0 on success, with JSON on stdout (the path for `path`); exit 1 with a `[session-hub]` message on stderr.
-// A file that cannot be read as a record is reported and never overwritten.
+// A file that cannot be read as a record, or was written by a newer format, is reported and never overwritten.
 
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const STATUSES = Object.freeze(['running', 'waiting-user', 'done', 'abandoned', 'lost']);
 const LIVE_STATUSES = Object.freeze(['running', 'waiting-user']);
+// Fields an upsert never changes on an existing entry: `started` is set once, `requests` grows only by `request`.
+const KEPT_ON_UPSERT = Object.freeze(['started', 'requests']);
 const FORMAT_VERSION = 1;
+const LOCK_TIMEOUT_MS = 5000;
+const LOCK_STALE_MS = 30_000;
+const LOCK_BACKOFF_MAX_MS = 200;
 
 export class RegistryError extends Error {}
 
@@ -33,7 +51,7 @@ export function configDir(env = process.env, home = homedir()) {
 
 function realHub(hub) {
   try {
-    return realpathSync(hub);
+    return realpathSync.native(hub).normalize('NFC');
   } catch {
     throw new RegistryError(`hub folder not found: ${hub}`);
   }
@@ -78,13 +96,68 @@ export function readRecord(file) {
   return validateRecord(parsed, file);
 }
 
+// Synchronous sleep, so the helper stays a plain synchronous command.
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+function removeIfStale(lock) {
+  try {
+    if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmSync(lock, { force: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
+
+function acquireLock(file, timeoutMs) {
+  const lock = `${file}.lock`;
+  const deadline = Date.now() + timeoutMs;
+  let wait = 10;
+  for (;;) {
+    try {
+      const fd = openSync(lock, 'wx', 0o600);
+      writeSync(fd, `${process.pid}\n`);
+      closeSync(fd);
+      return lock;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw new RegistryError(`cannot create the lock ${lock}: ${error.message}`);
+    }
+    removeIfStale(lock);
+    if (Date.now() >= deadline) {
+      throw new RegistryError(
+        `could not take the lock ${lock} within ${timeoutMs} ms: another process is writing the record. ` +
+          `Nothing was written. Retry; if no other process holds it, remove the lock file.`,
+      );
+    }
+    sleep(wait);
+    wait = Math.min(wait * 2, LOCK_BACKOFF_MAX_MS);
+  }
+}
+
+function syncDirectory(dir) {
+  // Makes the rename durable. Some file systems refuse fsync on a directory; the data itself is already synced.
+  let fd;
+  try {
+    fd = openSync(dir, 'r');
+    fsyncSync(fd);
+  } catch (error) {
+    if (!['EINVAL', 'ENOTSUP', 'EPERM', 'EISDIR'].includes(error.code)) throw error;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
 function writeRecord(file, record) {
   const dir = dirname(file);
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
   const temp = join(dir, `.${randomBytes(6).toString('hex')}.tmp`);
   try {
-    writeFileSync(temp, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+    const fd = openSync(temp, 'wx', 0o600);
+    try {
+      writeSync(fd, `${JSON.stringify(record, null, 2)}\n`);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     renameSync(temp, file);
+    syncDirectory(dir);
   } catch (error) {
     rmSync(temp, { force: true });
     throw new RegistryError(`cannot write ${file}: ${error.message}`);
@@ -98,11 +171,25 @@ function checkStatus(status) {
   }
 }
 
+// Reads, changes and writes the record under the lock. `change` returns the new record, or null to write nothing.
 function update(file, options, change) {
-  const record = readRecord(file);
-  const next = change(record);
-  const hub = options.hub ? realHub(options.hub) : record.hub ?? null;
-  return writeRecord(file, { ...next, version: FORMAT_VERSION, hub });
+  mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+  const lock = acquireLock(file, options.lockTimeoutMs ?? LOCK_TIMEOUT_MS);
+  try {
+    const record = readRecord(file);
+    if (typeof record.version === 'number' && record.version > FORMAT_VERSION) {
+      throw new RegistryError(
+        `${file} was written by a newer format (version ${record.version}); this helper writes version ` +
+          `${FORMAT_VERSION} and will not rewrite it. Update the session-hub plugin.`,
+      );
+    }
+    const next = change(record);
+    if (next === null) return record;
+    const hub = options.hub ? realHub(options.hub) : record.hub ?? null;
+    return writeRecord(file, { ...next, version: FORMAT_VERSION, hub });
+  } finally {
+    rmSync(lock, { force: true });
+  }
 }
 
 function findIndex(record, name) {
@@ -112,6 +199,9 @@ function findIndex(record, name) {
 }
 
 const replaceAt = (list, index, item) => list.map((existing, i) => (i === index ? item : existing));
+
+const withoutKept = (entry) =>
+  Object.fromEntries(Object.entries(entry).filter(([key]) => !KEPT_ON_UPSERT.includes(key)));
 
 export function upsertChild(file, entry, options = {}) {
   if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
@@ -123,7 +213,8 @@ export function upsertChild(file, entry, options = {}) {
   return update(file, options, (record) => {
     const index = record.children.findIndex((child) => child.name === entry.name);
     if (index >= 0) {
-      return { ...record, children: replaceAt(record.children, index, { ...record.children[index], ...entry }) };
+      const merged = { ...record.children[index], ...withoutKept(entry) };
+      return { ...record, children: replaceAt(record.children, index, merged) };
     }
     const created = { status: 'running', started: now(), requests: [], ...entry };
     return { ...record, children: [...record.children, created] };
@@ -149,31 +240,46 @@ export function addRequest(file, name, request, options = {}) {
   });
 }
 
+// Marks as `lost` every running or waiting child missing from the live session list. An empty list would mark
+// them all, so it needs `noneLive: true` to say that there really is no live session.
 export function reconcile(file, liveNames, options = {}) {
+  if (liveNames.length === 0 && !options.noneLive) {
+    throw new RegistryError('the live session list is empty; pass --live-none if no session is live');
+  }
   const live = new Set(liveNames);
-  const record = readRecord(file);
-  const changed = record.children
-    .filter((child) => LIVE_STATUSES.includes(child.status) && !live.has(child.name))
-    .map((child) => child.name);
-  if (changed.length === 0) return { record, changed };
-  const written = update(file, options, (current) => ({
-    ...current,
-    children: current.children.map((child) => (changed.includes(child.name) ? { ...child, status: 'lost' } : child)),
-  }));
-  return { record: written, changed };
+  let changed = [];
+  const record = update(file, options, (current) => {
+    changed = current.children
+      .filter((child) => LIVE_STATUSES.includes(child.status) && !live.has(child.name))
+      .map((child) => child.name);
+    if (changed.length === 0) return null;
+    return {
+      ...current,
+      children: current.children.map((child) => (changed.includes(child.name) ? { ...child, status: 'lost' } : child)),
+    };
+  });
+  return { record, changed };
 }
 
 // Command line
 
 const COMMANDS = Object.freeze(['path', 'read', 'upsert', 'status', 'request', 'reconcile']);
+const FLAGS = Object.freeze(['live-none']);
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
   const options = {};
-  for (let i = 0; i < rest.length; i += 2) {
+  for (let i = 0; i < rest.length; i += 1) {
     const key = rest[i];
-    if (!key?.startsWith('--') || i + 1 >= rest.length) throw new RegistryError(`bad argument near "${key}"`);
-    options[key.slice(2)] = rest[i + 1];
+    if (!key?.startsWith('--')) throw new RegistryError(`bad argument "${key}"`);
+    const name = key.slice(2);
+    if (FLAGS.includes(name)) {
+      options[name] = true;
+      continue;
+    }
+    if (i + 1 >= rest.length) throw new RegistryError(`--${name} needs a value`);
+    options[name] = rest[i + 1];
+    i += 1;
   }
   return { command, options };
 }
@@ -195,9 +301,9 @@ function resolveFile(options) {
       const hub = realHub(options.hub);
       let fileDir;
       try {
-        fileDir = realpathSync(dirname(file));
+        fileDir = realpathSync.native(dirname(file)).normalize('NFC');
       } catch {
-        fileDir = dirname(file);
+        fileDir = dirname(file).normalize('NFC');
       }
       if (isInside(fileDir, hub)) throw new RegistryError(`the record may not live inside the hub: ${file}`);
     }
@@ -215,27 +321,38 @@ function parseEntry(text) {
   }
 }
 
+function liveNames(options) {
+  if (options['live-none']) return [];
+  const names = required(options, 'live').split(',').map((s) => s.trim()).filter(Boolean);
+  if (names.length === 0) throw new RegistryError('--live is empty; pass --live-none if no session is live');
+  return names;
+}
+
+// Returns { out, note }: `out` goes to stdout, `note` (if any) to stderr.
 export function runCli(argv) {
   const { command, options } = parseArgs(argv);
   if (!COMMANDS.includes(command)) throw new RegistryError(`unknown command "${command}"; use ${COMMANDS.join(', ')}`);
-  if (command === 'path') return defaultRegistryPath(required(options, 'hub'));
+  if (command === 'path') return { out: defaultRegistryPath(required(options, 'hub')) };
   const file = resolveFile(options);
   const hub = options.hub ? { hub: options.hub } : {};
+  const json = (value) => ({ out: JSON.stringify(value, null, 2) });
   switch (command) {
-    case 'read':
-      return JSON.stringify(readRecord(file), null, 2);
+    case 'read': {
+      const note = existsSync(file) ? undefined : `no record yet at ${file}`;
+      return { ...json(readRecord(file)), note };
+    }
     case 'upsert':
-      return JSON.stringify(upsertChild(file, parseEntry(required(options, 'entry')), hub), null, 2);
+      return json(upsertChild(file, parseEntry(required(options, 'entry')), hub));
     case 'status':
-      return JSON.stringify(setStatus(file, required(options, 'name'), required(options, 'status'), hub), null, 2);
+      return json(setStatus(file, required(options, 'name'), required(options, 'status'), hub));
     case 'request': {
       const request = { text: required(options, 'text'), ...(options.outcome ? { outcome: options.outcome } : {}) };
-      return JSON.stringify(addRequest(file, required(options, 'name'), request, hub), null, 2);
+      return json(addRequest(file, required(options, 'name'), request, hub));
     }
     case 'reconcile': {
-      const live = required(options, 'live').split(',').map((s) => s.trim()).filter(Boolean);
-      const { changed } = reconcile(file, live, hub);
-      return JSON.stringify({ file, changed }, null, 2);
+      const live = liveNames(options);
+      const { changed } = reconcile(file, live, { ...hub, noneLive: options['live-none'] === true });
+      return json({ file, changed });
     }
     default:
       throw new RegistryError(`unhandled command ${command}`);
@@ -244,7 +361,9 @@ export function runCli(argv) {
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
-    process.stdout.write(`${runCli(process.argv.slice(2))}\n`);
+    const { out, note } = runCli(process.argv.slice(2));
+    if (note) process.stderr.write(`[session-hub] registry: ${note}\n`);
+    process.stdout.write(`${out}\n`);
   } catch (error) {
     process.stderr.write(`[session-hub] registry: ${error.message}\n`);
     process.exitCode = 1;

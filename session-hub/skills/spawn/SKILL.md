@@ -115,6 +115,11 @@ node "$R" read --hub <hub>
 - The default path is `<config dir>/session-hub/children-<hub id>.json` (`CLAUDE_CONFIG_DIR`, else `~/.claude`).
   When the hub's *Registry* key gives a path, add `--file <path>` to every call; the script refuses a path inside
   the hub.
+- `reconcile` refuses an empty `--live`. Pass `--live-none` only when the session list was read and shows no
+  live session; if the list could not be read, skip the reconcile and say so.
+- `upsert` merges fields by name but never changes `started` or `requests`; add a request with `request`.
+- Writes take a lock next to the file; if another process holds it for more than a few seconds, the script
+  fails without writing: retry once, then treat it as an error.
 - An entry: `name`, `repo`, `task`, `scope` (`writeRoot`, `external`), `model`, `effort`, `status`, `started`,
   `lastMessage` (`type`, `at`, `text`), `requests`. Status is one of `running`, `waiting-user`, `done`,
   `abandoned`, `lost`. The record holds names, paths and URLs only, never project content.
