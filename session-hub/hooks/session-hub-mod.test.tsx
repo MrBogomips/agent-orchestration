@@ -79,16 +79,27 @@ test('a shell write outside the write root is denied; inside it runs', async ($,
   engine(on, CHILD_ENV)
   on('tool.call', () => ({ result: {} }))
   const outside = await $.tool.call({ tool: 'Bash', command: 'echo x >> /w/other.txt' })
-  expect('deny' in outside && outside.deny).toMatch(/outside this child's write root/)
+  expect('deny' in outside && outside.deny).toMatch(/outside the write root \/w\/repo/)
   const inside = await $.tool.call({ tool: 'Bash', command: 'echo x > /w/repo/a.txt' })
   expect('deny' in inside).toBe(false)
+})
+
+test('a write through a link out of the root after a cd names the path and where it lands', async ($, on) => {
+  const stat = (_: unknown, e: { path: string }) =>
+    e.path === '/w/repo/design-link' ? { value: { realPath: '/w/design', kind: 'dir' } } : { deny: 'ENOENT' }
+  engine(on, CHILD_ENV, '/w/repo', false, [], { stat } as never)
+  on('tool.call', () => ({ result: {} }))
+  const verdict = await $.tool.call({ tool: 'Bash', command: 'cd /w/repo && echo x >> design-link/docs/notes.md; echo done' })
+  expect('deny' in verdict && verdict.deny).toMatch(
+    /writes \/w\/repo\/design-link\/docs\/notes\.md \(resolves to \/w\/design\/docs\/notes\.md\), outside the write root \/w\/repo/,
+  )
 })
 
 test('a Monitor command is checked like a Bash command; a Monitor socket is left alone', async ($, on) => {
   engine(on, CHILD_ENV)
   on('tool.call', () => ({ result: {} }))
   const outside = await $.tool.call({ tool: 'Monitor', command: 'tail -f x > /w/other.log', description: 'd', timeout_ms: 1000 })
-  expect('deny' in outside && outside.deny).toMatch(/outside this child's write root/)
+  expect('deny' in outside && outside.deny).toMatch(/outside the write root \/w\/repo/)
   const inside = await $.tool.call({ tool: 'Monitor', command: 'tail -f /w/repo/x', description: 'd', timeout_ms: 1000 })
   expect('deny' in inside).toBe(false)
   const socket = await $.tool.call({ tool: 'Monitor', ws: { url: 'wss://x' }, description: 'd', timeout_ms: 1000 })

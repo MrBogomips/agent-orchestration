@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.2.2, `model-router` 0.3):
+This document describes the two plugins in this repository as built (`session-hub` 0.2.3, `model-router` 0.3):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.2.2 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `session-hub` | 0.2.3 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
 | `model-router` | 0.3.2 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
@@ -480,7 +480,7 @@ flowchart LR
 | Function | Where | Event | Behaviour |
 |---|---|---|---|
 | Send guard | child | `session.send` | Delivers only to the master, by name with or without ` [<ref>]` (sent on to the bare name), and to the session's own subagents and teammates (a subagent's `main` too). Any other recipient, a `uds:` or `bridge:` address included, is refused; the reason names the master and the `out-of-scope` route. |
-| Shell check | child | `tool.call` on `Bash` | Best effort. Reads redirections and the targets of `tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install` and `sed -i`, resolves them (relative ones against the session's folder, symbolic links through the file system) and denies a target outside the write root. `/dev` and the system temporary folders are allowed. Targets in variables, substitutions or globs, and relative targets after a `cd`, are not judged. |
+| Shell check | child | `tool.call` on `Bash` | Best effort. Reads redirections and the targets of `tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install` and `sed -i`, resolves them (relative ones against the session's folder, symbolic links through the file system) and denies a target outside the write root. `/dev` and the system temporary folders are allowed. It follows `cd` and `pushd` to a literal folder through the rest of the list (not out of a subshell, a pipeline or a background job), so `cd <root> && echo x >> link/f` is judged where `link` lands; a `cd` that may fail leaves both folders possible. A denial names the path as written and, when a link moves it, where it lands. Targets in variables, substitutions or globs, and relative targets after a `cd` whose target is one of those (or `cd -`, `popd`), are not judged. |
 | Origin marking | child | `session.receive`, `prompt.submit` | A delivery from another session gets a line in front of its text, information and not authorization; a prompt from another session gets the line as context if its text lacks it. The person's prompts and the session's own (`composer`, `bridge`, `sdk`, `auto-continuation`, `plugin`, `task-notification`, `scheduled-trigger`) are not marked; any other kind is. |
 | Scope line | child, master | `prompt.compose`, `prompt.submit` | A `session`-scoped section `session-hub:scope` with the role and the scope (child) or the record (master). The same text rides the first prompt after the start, after a compaction and after `/clear` as context. |
 | Children panel | master | `ui.render` (`Pane`), `command.run` | One row per child of the record with the live status from `ListAgents`, model and effort, last message; refreshed on `/session-hub` and every 30 seconds. |
@@ -501,7 +501,8 @@ record says so in the panel.
 also sends the scope line as context after the start, a compaction or `/clear`, and takes as a compaction a context
 size that is unknown, or smaller than at the previous prompt.
 
-**Limits.** The shell check reads the command line only; a program that writes files on its own is not seen. A
+**Limits.** The shell check reads the command line only; a program that writes files on its own is not seen, and
+`CDPATH` is not applied to a relative `cd`. A
 child replies to the master by its name; a reply to the `from` address is refused. A child resumed without its
 variables is no longer a child. In the desktop app, which passes no variables, the mod is inactive like the hook.
 

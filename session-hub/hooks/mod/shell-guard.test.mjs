@@ -89,8 +89,8 @@ test('a symbolic link out of the root is caught through realpath', async () => {
   assert.equal(verdict.allow, false);
 });
 
-test('relative targets after a cd, and targets with variables, are not judged (best effort)', async () => {
-  for (const command of ['cd /etc && touch x', 'touch "$OUT"', 'echo > `pwd`/x', 'touch /a/*']) {
+test('targets with variables, substitutions or globs are not judged (best effort)', async () => {
+  for (const command of ['touch "$OUT"', 'echo > `pwd`/x', 'touch /a/*']) {
     assert.deepEqual(await judgeShell({ role: child, command, cwd: '/w/repo', realpath: identity }), { allow: true }, command);
   }
 });
@@ -185,9 +185,9 @@ test('commands after reserved words and inside braces and function bodies are ju
   assert.deepEqual(shellWriteTargets('function g() { rm /a/3; }'), ['/a/3']);
 });
 
-test('a cd after a reserved word still counts as a change of directory', async () => {
-  for (const command of ['if true; then cd /etc; fi; touch ../x', '{ cd /etc; }; touch ../x', 'f() { cd /etc; }; touch ../x']) {
-    assert.deepEqual(await judgeShell({ role: child, command, cwd: '/w/repo', realpath: identity }), { allow: true }, command);
+test('a cd after a reserved word is followed too', async () => {
+  for (const command of ['if true; then cd /etc; fi; touch x', '{ cd /etc; }; touch x', 'f() { cd /etc; }; touch x']) {
+    assert.equal((await judgeShell({ role: child, command, cwd: '/w/repo', realpath: identity })).allow, false, command);
   }
   const verdict = await judgeShell({ role: child, command: 'if true; then cd /etc; touch /w/x; fi', cwd: '/w/repo', realpath: identity });
   assert.equal(verdict.allow, false);
@@ -256,4 +256,65 @@ test('a wrapper that changes the folder counts as a change of directory', async 
   for (const command of ['env -C /etc touch ../x', 'sudo --chdir=/etc touch ../x']) {
     assert.deepEqual(await judgeShell({ role: child, command, cwd: '/w/repo', realpath: identity }), { allow: true }, command);
   }
+});
+
+// Live scenarios: relative targets after a cd
+
+const judge = (command, extra = {}) => judgeShell({ role: child, command, cwd: '/w/repo', home: '/Users/me', realpath: identity, ...extra });
+
+test('a cd to a literal folder is followed: later relative targets are judged from there', async () => {
+  for (const command of ['cd /etc && touch x', 'cd /etc; echo x >> y', 'cd ~ && touch x', 'cd ~/notes && touch x', 'cd .. && touch x',
+    'cd sub && cd ../.. && touch x', 'cd; touch x', 'pushd /etc && touch x', 'cd -P /etc && touch x', 'cd -- /etc && touch x']) {
+    const verdict = await judge(command);
+    assert.equal(verdict.allow, false, command);
+    assert.match(verdict.reason, /outside the write root/, command);
+  }
+  for (const command of ['cd /w/repo/sub && touch x', 'cd sub; echo x > y', 'cd /etc && cd /w/repo && touch x', 'cd /tmp && touch x']) {
+    assert.deepEqual(await judge(command), { allow: true }, command);
+  }
+});
+
+test('the live case: a link inside the root that leads to a sibling repository is caught after a cd', async () => {
+  const realpath = async (path) => path.replace(/^\/w\/repo\/design-link(?=\/|$)/, '/w/design');
+  const verdict = await judge('cd /w/repo && echo x >> design-link/docs/notes.md; echo done', { realpath });
+  assert.equal(verdict.allow, false);
+  assert.match(verdict.reason, /writes \/w\/repo\/design-link\/docs\/notes\.md \(resolves to \/w\/design\/docs\/notes\.md\), outside the write root \/w\/repo/);
+});
+
+test('a target that lands where it is written is named once', async () => {
+  const verdict = await judge('echo x >> /w/other.txt');
+  assert.match(verdict.reason, /writes \/w\/other\.txt, outside the write root \/w\/repo/);
+  assert.doesNotMatch(verdict.reason, /resolves to/);
+});
+
+test('a cd that may fail leaves both folders possible', async () => {
+  // If `cd sub` fails, `touch x` runs in the folder before it; both are judged.
+  assert.equal((await judge('cd /w/repo/sub; touch x', { cwd: '/w' })).allow, false);
+  assert.equal((await judge('cd /w/repo/sub && touch x || touch y', { cwd: '/w' })).allow, false);
+  assert.deepEqual(await judge('cd /w/repo/sub && touch x', { cwd: '/w' }), { allow: true });
+  assert.deepEqual(await judge('cd /w/repo/sub && touch x && touch y', { cwd: '/w' }), { allow: true });
+});
+
+test('after a cd that cannot be resolved, relative targets are not judged; absolute ones are', async () => {
+  for (const command of ['cd "$DIR" && touch ../x', 'cd - && touch ../x', 'cd /e* && touch ../x', 'cd $(mktemp -d) && touch ../x',
+    'cd `pwd` && touch ../x', 'popd && touch ../x', 'pushd && touch ../x', 'cd ~root && touch ../x', 'cd a b && touch ../x']) {
+    assert.deepEqual(await judge(command), { allow: true }, command);
+  }
+  assert.equal((await judge('cd "$DIR" && touch /etc/x')).allow, false);
+  assert.equal((await judge('cd ~ && touch x', { home: undefined })).allow, true);
+});
+
+test('a cd in a subshell, a pipeline or the background does not change the folder after it', async () => {
+  for (const command of ['( cd /etc ); touch ../x', 'cd /etc | cat; touch ../x', 'cd /etc & touch ../x', 'echo $(cd /etc) && touch ../x']) {
+    const verdict = await judge(command, { cwd: '/w/repo/sub' });
+    assert.deepEqual(verdict, { allow: true }, command);
+  }
+  assert.equal((await judge('( cd /etc; touch x )')).allow, false);
+  assert.equal((await judge('( cd /etc && touch x ) | cat')).allow, false);
+});
+
+test('a relative cd without a known working folder makes later relative targets unresolvable', async () => {
+  const verdict = await judge('cd sub && touch x', { cwd: undefined });
+  assert.equal(verdict.allow, false);
+  assert.match(verdict.reason, /could not evaluate/);
 });
