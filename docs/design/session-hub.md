@@ -189,8 +189,8 @@ A PreToolUse hook on the file-writing tools (`Edit`, `Write`, `NotebookEdit`).
   check on shell commands is optional and must be labelled as such.
 - On any internal error the hook blocks and says why. A guard that cannot evaluate must not let the call pass.
 
-How the hook is delivered to the child is **unverified**: as a plugin hook it loads in every session where the
-plugin is enabled, and relies on the role variable to stay inactive elsewhere (`spikes.md`, S4).
+The hook is a plugin hook: it loads in every session where the plugin is enabled and relies on the role variable
+to stay inactive elsewhere. The variables reach it in the terminal, tmux and Herdr environments (`spikes.md`, S4).
 
 ## Mod `session-hub`
 

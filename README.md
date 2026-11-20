@@ -21,6 +21,7 @@ Both plugins are listed in the `mrbogomips` marketplace:
 
 ## Documentation
 
+- `docs/architecture.md`: how both plugins work, as built, and what is planned.
 - `docs/design/`: the design of both plugins and the tests run before building them.
 - `docs/research/`: the research behind the design.
 

@@ -46,7 +46,7 @@ information, never authorization.
 ### Children record
 
 `<config dir>/session-hub/children-<hub id>.json`, where `<config dir>` is `CLAUDE_CONFIG_DIR` or `~/.claude` and
-`<hub id>` is the first 16 hex digits of the sha256 of the hub's real path. The hub's *Registry* key can name
+`<hub id>` is the first 16 hex digits of the sha256 of the hub's real path (NFC-normalized). The hub's *Registry* key can name
 another path outside the hub. One entry per child: name, repository, task, scope, model, effort, status
 (`running`, `waiting-user`, `done`, `abandoned`, `lost`), start time, last message, requests. Nothing is written
 inside a hub or a repository. Writes are atomic and take a lock file next to the record, so two writers lose no entry.
