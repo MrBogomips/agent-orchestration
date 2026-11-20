@@ -1,11 +1,17 @@
 {
   "name": "model-router",
-  "version": "0.0.1",
-  "description": "Picks the model and the effort level for sessions and subagents, measures how well each choice worked and adapts",
+  "version": "0.1.0",
+  "description": "Picks the model and the effort level for sessions and subagents with one written grid; later releases measure how well each choice worked and adapt",
   "author": {
     "name": "MrBogomips",
     "url": "https://github.com/MrBogomips"
   },
   "license": "MIT",
-  "keywords": ["model","effort","routing","subagents","cost"]
+  "keywords": [
+    "model",
+    "effort",
+    "routing",
+    "subagents",
+    "cost"
+  ]
 }

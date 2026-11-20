@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "about": "Model and effort grid of model-router. skills/choose-model/SKILL.md states the same grid in prose; grid.test.mjs fails when the two drift apart.",
+  "tiers": [
+    {
+      "name": "haiku",
+      "fitsWhen": "Simple, repetitive work whose result is easy to check, with no judgment calls.",
+      "examples": [
+        "list or summarize files",
+        "run a single command",
+        "rename a symbol",
+        "apply the same edit in many places"
+      ]
+    },
+    {
+      "name": "sonnet",
+      "fitsWhen": "What done looks like fits in one sentence.",
+      "examples": [
+        "a well-specified change across a few files",
+        "tests for existing code",
+        "a bug whose cause is described"
+      ]
+    },
+    {
+      "name": "fable",
+      "fitsWhen": "Large and open-ended work where judgment and accuracy really matter. Both conditions must hold.",
+      "examples": [
+        "a complex design",
+        "an architecture decision with long-lasting consequences"
+      ]
+    },
+    {
+      "name": "opus",
+      "fitsWhen": "Everything else, and any time you hesitate between two tiers.",
+      "examples": [
+        "a review",
+        "debugging when the cause is unknown",
+        "most coordination work"
+      ]
+    }
+  ],
+  "priceOrder": ["haiku", "sonnet", "opus", "fable"],
+  "effort": {
+    "levels": ["low", "medium", "high", "xhigh"],
+    "never": ["max"],
+    "questions": [
+      { "ask": "Is it a simple task or a quick exchange?", "level": "low" },
+      { "ask": "Would an unnoticed mistake cost money, a client or a wrong decision?", "level": "high" },
+      { "ask": "Is it long, hard and critical, and does it run unattended? All three must hold.", "level": "xhigh" },
+      { "ask": "None of the above.", "level": "medium", "otherwise": true }
+    ]
+  },
+  "classes": [
+    { "name": "read-search", "covers": "find files, symbols or facts", "neverBelowGrid": false },
+    { "name": "read-analyze", "covers": "read and conclude: explain, compare, summarize", "neverBelowGrid": false },
+    { "name": "edit-mechanical", "covers": "repetitive edits that are easy to check", "neverBelowGrid": false },
+    { "name": "edit-specified", "covers": "a change whose done-state fits in one sentence", "neverBelowGrid": false },
+    { "name": "review-debug", "covers": "review, or debugging with an unknown cause", "neverBelowGrid": true },
+    { "name": "design-open", "covers": "open-ended design where judgment matters", "neverBelowGrid": true }
+  ],
+  "tag": {
+    "format": "[mr:<class>]",
+    "riskyMarker": "!",
+    "riskyExample": "[mr:edit-specified!]"
+  },
+  "judge": {
+    "fast": "haiku",
+    "balanced": "sonnet",
+    "deep": "opus"
+  }
+}

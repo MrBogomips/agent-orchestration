@@ -147,8 +147,9 @@ For a subagent start that carries no model, after the judge (`model-router.md`):
 Starts with an explicit model, agents with a fixed model and forks are never changed, but they are measured, so
 their outcomes feed the cells.
 
-`choose-model` also reads a short per-class recommendation (`quality/recommendations.json`, written by compaction)
-so that explicit choices benefit from the data. The skill must work when the file is missing.
+`choose-model` also reads a short per-class recommendation (`quality/recommendations.json`, written by compaction
+from release 0.3, so absent before it) so that explicit choices benefit from the data. The skill must work when
+the file is missing. Its shape is fixed in 0.3; the 0.1 skill only reads the entry for the task's class as a hint.
 
 Everything here fails open: an error leaves the start unchanged and logs `error`.
 
