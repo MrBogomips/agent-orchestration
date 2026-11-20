@@ -30,14 +30,14 @@ const GRID = {
 
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
 
-type World = { appended: any[]; agentCalls: any[]; spawns: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[] }
+type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
 function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, text: FAST_ANSWER, usage: {} } }), answers: Answers = {}): World {
-  const w: World = { appended: [], agentCalls: [], spawns: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [] }
+  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [] }
   on('ui.open', ($, e) => {
     w.opens.push(e)
     return { value: answers.isPlaced === false ? { isPlaced: false, reason: 'no surface' } : { isPlaced: true } }
@@ -82,7 +82,12 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
   })
   on('agent.spawn', ($, e) => {
     w.spawns.push(e)
+    if (answers.denySpawn) return { deny: answers.denySpawn } as any
     return { model: e.model ?? e.parentModel, agentId: 'ag1' }
+  })
+  on('turn.step', async function* ($, e) {
+    w.steps.push(e)
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: {} } as any
   })
   on('agent.report', ($, e) => ({ text: e.text }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -95,6 +100,13 @@ const SPAWN = {
   provider: { plugin: 'engine', tier: 'core' }, parentModel: 'claude-opus-5-5', background: false, fork: false,
 } as const
 
+/** Raises one model request of a loop (a subagent's with `agentId`) and reads its stream to the end. */
+async function step($: any, agentId: string | undefined, effort: string | undefined = 'medium') {
+  const stream = $.turn.step({ turnId: 't1', index: 0, model: 'claude-haiku-5-5', effort, messageCount: 1, ...(agentId ? { agentId } : {}) })
+  for await (const _ of stream) void _
+  return stream.result
+}
+
 async function start($: any, call: Record<string, unknown> = {}, spawn: Record<string, unknown> = {}) {
   await $.tool.call({ tool: 'Agent', tool_use_id: 'tu1', description: 'list src files', prompt: 'List the files under src.', subagent_type: 'general-purpose', ...call })
   return $.agent.spawn({ ...SPAWN, ...spawn })
@@ -105,7 +117,10 @@ describe('routing a start that carries no model', () => {
     const w = world(on)
     await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: false })
     const started = await start($)
-    expect(w.agentCalls[0].effort).toBe('low')
+    expect(w.agentCalls[0].effort).toBe(undefined)
+    await step($, 'ag1')
+    await step($, 'ag1', 'high')
+    expect(w.steps.map((s) => s.effort)).toEqual(['low', 'low'])
     expect(w.spawns[0].model).toBe('haiku')
     expect(started.model).toBe('haiku')
     expect(w.judgeCalls[0].model).toBe('haiku')
@@ -143,6 +158,8 @@ describe('routing a start that carries no model', () => {
     const w = world(on, () => ({ value: { isAnswered: false, reason: 'aborted', usage: {} } }))
     await start($)
     expect(w.agentCalls[0].effort).toBe(undefined)
+    await step($, 'ag1')
+    expect(w.steps[0].effort).toBe('medium')
     expect(w.spawns[0].model).toBe(undefined)
     expect(w.appended.find((r) => r.type === 'decision').action).toBe('error')
   })
@@ -159,9 +176,42 @@ describe('routing a start that carries no model', () => {
   test('risky work goes to the deep tier with at least high effort', async ($, on) => {
     const w = world(on, () => ({ value: { isAnswered: true, text: '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.9}', usage: {} } }))
     await start($, {}, { parentModel: 'claude-haiku-5-5' })
-    expect(w.agentCalls[0].effort).toBe('high')
+    await step($, 'ag1')
+    expect(w.steps[0].effort).toBe('high')
     expect(w.spawns[0].model).toBe('opus')
     expect(w.appended.find((r) => r.type === 'decision').action).toBe('forced-risk')
+  })
+})
+
+describe('effort without rewriting the tool call', () => {
+  test('the Agent call reaches the engine unchanged, so an auto mode review still covers it', async ($, on) => {
+    const w = world(on)
+    await start($)
+    expect(w.agentCalls[0]).toEqual(expect.objectContaining({ description: 'list src files', prompt: 'List the files under src.', subagent_type: 'general-purpose' }))
+    expect('effort' in w.agentCalls[0]).toBe(false)
+  })
+
+  test("the main loop's steps and another agent's steps are left unchanged", async ($, on) => {
+    const w = world(on)
+    await start($)
+    await step($, undefined)
+    await step($, 'other')
+    expect(w.steps.map((s) => s.effort)).toEqual(['medium', 'medium'])
+  })
+
+  test('an effort the call carries is kept: no step is rewritten', async ($, on) => {
+    const w = world(on)
+    await start($, { effort: 'high' })
+    await step($, 'ag1', 'high')
+    expect(w.steps[0].effort).toBe('high')
+    expect(w.appended.find((r) => r.type === 'decision').effort).toBe('high')
+  })
+
+  test('a denied start sets no effort', async ($, on) => {
+    const w = world(on, undefined, { denySpawn: 'no' })
+    await start($).catch(() => undefined)
+    await step($, 'ag1')
+    expect(w.steps[0].effort).toBe('medium')
   })
 })
 

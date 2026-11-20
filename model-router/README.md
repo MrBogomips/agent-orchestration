@@ -33,7 +33,9 @@ task cost, so the grid can be checked against real work.
 | runs with routing off, or under a session-wide subagent model (`CLAUDE_CODE_SUBAGENT_MODEL`) | keeps it |
 | carries no model | asks the judge (one call to the fast tier, 8 s limit), then lowers the model only at confidence ≥ 0.6, raises it at ≥ 0.3, and sends risky work (risk > 0.7, or a `!` tag) to the deep tier with at least high effort |
 
-The effort is set on the start call itself; an effort the call already carries is kept.
+The model is set when the subagent starts, the effort on each of the subagent's model requests; the start call
+itself is never changed, so the routing works in every permission mode, auto mode included. An effort the call
+already carries is kept.
 
 ### What is measured
 
