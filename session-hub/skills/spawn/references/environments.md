@@ -42,7 +42,9 @@ an alias or a wrapper; its effect is visible from inside the session, and that i
    environment: it holds tokens, which would end up on command lines and in pane scrollback.
 4. **Child flags**, after the carried ones: `-n <name>`, `--model <model>` and `--effort <level>` when step 9
    chose them (`low`, `medium`, `high`, `xhigh`, `max`), `--permission-mode <mode>`, `--add-dir <handoff-dir>`.
-   Leave out `--model` or `--effort` only when the child inherits and the master set none.
+   Leave out `--model` or `--effort` only when the child inherits and the master set none. `--add-dir` takes
+   every argument after it, so a prompt on the same command line goes after `--`:
+   `… --add-dir <handoff-dir> -- "Read and follow <file>"`.
 5. **Role variables** (`SESSION_HUB_*`, below). Each environment's file says where they go, with the identity
    variables.
 

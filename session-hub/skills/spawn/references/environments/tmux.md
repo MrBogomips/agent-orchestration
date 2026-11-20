@@ -18,7 +18,7 @@ Then label the pane and type the start command into it:
 
 ```bash
 tmux select-pane -t <pane-id> -T <name>
-tmux send-keys -t <pane-id> -l "env <identity variables> SESSION_HUB_ROLE=child SESSION_HUB_MASTER=<master> SESSION_HUB_SCOPE_ROOT=<root> SESSION_HUB_HANDOFF=<file> SESSION_HUB_REGISTRY=<record> SESSION_HUB_GUARDS=<on|off> claude <carried flags> <child flags> 'Read and follow <file>'"
+tmux send-keys -t <pane-id> -l "env <identity variables> SESSION_HUB_ROLE=child SESSION_HUB_MASTER=<master> SESSION_HUB_SCOPE_ROOT=<root> SESSION_HUB_HANDOFF=<file> SESSION_HUB_REGISTRY=<record> SESSION_HUB_GUARDS=<on|off> claude <carried flags> <child flags> -- 'Read and follow <file>'"
 tmux send-keys -t <pane-id> Enter
 ```
 
