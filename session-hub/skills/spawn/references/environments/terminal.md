@@ -20,4 +20,5 @@ cd <dir> && env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=<master> SESSION_HUB_S
   [hub-config.md](../hub-config.md).
 
 **Channel.** `SendMessage` in both directions: child to the master's name, master to `<name>`. To hear when a
-child finishes its turn, the master sends `SendMessage` with `notify_when_idle` once. Never poll.
+child finishes its turn, the master sends `SendMessage` with `notify_when_idle: true`. It sends one notice, then
+ends: subscribe again after each notice while the child is still `running`. Never poll.

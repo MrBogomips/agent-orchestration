@@ -42,5 +42,6 @@ herdr agent prompt <name> "Read and follow <file>"
 outside. If the user asks to verify the guard, the child can run `printenv SESSION_HUB_ROLE`.
 
 **Channel.** `SendMessage` in both directions: child to the master's name, master to `<name>`. To hear when a
-child finishes its turn, the master sends `SendMessage` with `notify_when_idle` once. Never poll. The user types
+child finishes its turn, the master sends `SendMessage` with `notify_when_idle: true`. It sends one notice, then
+ends: subscribe again after each notice while the child is still `running`. Never poll. The user types
 in the child's pane, switches to its tab, or asks the master to bring it forward.

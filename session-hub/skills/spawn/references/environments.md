@@ -96,3 +96,9 @@ Say the ones that apply in the report. Change no setting yourself: the choice is
   mode. The `crossSessionInbound` setting (`accept`, `hold`, `refuse`) overrides this; for one background child
   the user can choose `--settings '{"crossSessionInbound":"accept"}'`.
 - A send to a desktop app session reports nothing back when the message is held: silence is not an answer.
+
+## Report caveats
+
+- When the `session-hub` mod is loaded (mods on), say in one line that it also guards each child's messages
+  (master only) and shell writes, marks messages from other sessions and keeps the scope in the child's context,
+  and that `/session-hub` shows the children panel here; with mods off, only the hook guards writes.
