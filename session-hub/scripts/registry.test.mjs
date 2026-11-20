@@ -203,7 +203,8 @@ describe('hub id normalization', () => {
     const nfc = join(base, 'café');
     mkdirSync(nfc);
     const nfd = join(base, 'café');
-    assert.equal(hubId(nfd), hubId(nfc));
+    // A byte-exact filesystem (Linux) has no folder under the other Unicode form; only compare where it resolves.
+    if (existsSync(nfd)) assert.equal(hubId(nfd), hubId(nfc));
     const upper = join(base, 'HUB');
     let caseInsensitive = true;
     try {
