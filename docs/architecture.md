@@ -33,7 +33,7 @@ that are planned for later releases are marked **Planned** with their release; t
 | Master | The session opened in the hub. It coordinates and never writes in a child repository. |
 | Child | A Claude Code session started by the master with a repository (or a worktree of it) as working directory, so it loads that repository's own rules. |
 | Write root | The one folder where a child may create and change files. |
-| Handoff | A file the master writes for each child: role, goal, scope, references, siblings, message rules, first step. |
+| Handoff | What the master writes for each child: role, goal, scope, references, siblings, message rules, first step. A file in every environment except the desktop app, where it is passed inline to the start tool. |
 | Children record | A JSON file, kept by the master outside the hub, with one entry per child. |
 | Grid | The rules `model-router` uses to choose a model tier and an effort level. |
 | Task class | One of six fixed labels for the kind of work a subagent does, such as `read-search` or `review-debug`. |
@@ -57,9 +57,11 @@ Each plugin works without the other. Where they meet, a skill names the other pl
 
 `session-hub` holds no copy of the grid. `model-router` knows nothing about hubs.
 
-Everything visible outside a plugin carries the plugin's name: the `session-hub-scope-guard` hook, the
-`[session-hub]` prefix of its messages, the `SESSION_HUB_*` variables, and the `session-hub/` and `model-router/`
-state folders.
+The hook, the messages, the variables and the state folders carry the plugin's name: the
+`session-hub-scope-guard` hook, the `[session-hub]` prefix of the guard's and the record script's messages, the
+`SESSION_HUB_*` variables, and the `session-hub/` and `model-router/` state folders. Two other markers are short
+on purpose: `mr` in the router's task-class tag (`[mr:<class>]`), and the message prefixes between sessions,
+`[master]` and `[<task> <repo>]`.
 
 ## Components
 
@@ -84,13 +86,14 @@ flowchart LR
   hints[("recommendations.json<br/>config dir/model-router/quality/<br/>read only if present")]
 
   dispatch -->|decides a child is needed| spawn
-  dispatch -->|reconcile, status, request| registry
+  dispatch -->|reconcile, read, upsert, status, request| registry
   spawn -->|reconcile, upsert| registry
   registry --> record
   spawn -.->|if installed| choose
   spawn -->|reads| hubfile
   dispatch -->|reads| hubfile
   shsetup -->|writes after an explicit yes| hubfile
+  spawn -->|writes Layout after an explicit yes| hubfile
   choose -->|reads| projfile
   choose -.->|hint| hints
   mrsetup -->|writes after an explicit yes| projfile
@@ -132,11 +135,12 @@ conversation.
 | Role | How a session gets it | What the plugins do in it |
 |---|---|---|
 | Child | Its launch command sets `SESSION_HUB_ROLE=child`. `spawn` does this. | The scope guard checks every `Edit`, `Write` and `NotebookEdit`. The handoff gives the scope and the message rules. |
-| Master | No variable. A session in the hub that runs `dispatch` or `spawn` acts as master. | The skills read the hub configuration, start children and keep the record. The guard does nothing. |
+| Master | No variable is needed. A session in the hub that runs `dispatch` or `spawn` acts as master. `SESSION_HUB_ROLE=master` is accepted and treated by the guard like no variable. | The skills read the hub configuration, start children and keep the record. The guard does nothing. |
 | Neither | No `SESSION_HUB_ROLE`, or the value `none` or `master`. | The guard exits at once without reading its input. |
 
 `SESSION_HUB_ROLE` is read without regard to case or surrounding spaces. Any value other than empty, `none`,
-`master` or `child` makes the guard block every write, so that a typo cannot switch the guard off.
+`master` or `child` makes the guard block every write, so that a typo cannot switch the guard off, unless
+`SESSION_HUB_GUARDS` is `off`, which turns the guard off whatever the role.
 
 ### Role variables
 
@@ -182,6 +186,11 @@ which mode the children get.
 | tmux | `TMUX` is set and `tmux` is on `PATH` | an `env …` prefix on the command typed into the new pane | active |
 | Terminal | `claude --help` lists `--bg` | an `env …` prefix on `claude --bg`, run from the repository | active |
 | Manual | none of the above, or a start failed | an `env …` prefix in the command block handed to the user | active only if the user runs the command as given |
+
+The desktop app does not use the master's launch command either: it starts the child with the app's own account
+and settings, and the handoff goes inline to the start tool. When the master runs with another identity
+(`CLAUDE_CONFIG_DIR` or `HOME` set by its launch), the child may use another account and may not reach the master
+by message; `spawn` says so in its report.
 
 ## Main flows
 
@@ -229,9 +238,9 @@ sequenceDiagram
   else
     M->>M: inherit the master's model and effort
   end
-  M->>M: write the handoff file outside the hub
+  M->>M: write the handoff outside the hub<br/>(a file, or inline for the desktop app)
   M->>E: launch command with carried flags, child flags<br/>and SESSION_HUB_* variables
-  E->>C: claude in the repository, told to read the handoff file
+  E->>C: claude in the repository, given the handoff
   M->>R: upsert entry, status running
   M-->>User: report per child: repository, write root,<br/>model and effort, environment, caveats
   C->>G: every Edit, Write, NotebookEdit
@@ -248,9 +257,10 @@ Details that shape the flow:
   stays the write root. A worktree in a sibling folder is made by the master before the start
   (`git -C <repo> worktree add …`), and becomes the write root. That is the only thing the master does in a
   repository.
-- **Handoff file.** Written in the harness's scratchpad folder or a new `mktemp -d` folder, as
-  `<name>-handoff.md`, never inside the hub or a repository. The child gets read access to its folder through
-  `--add-dir`.
+- **Handoff.** In Herdr, tmux, the terminal and the manual case it is a file, written in the harness's
+  scratchpad folder or a new `mktemp -d` folder as `<name>-handoff.md`, never inside the hub or a repository; the
+  child gets read access to its folder through `--add-dir`. In the desktop app it is passed inline to the start
+  tool: there is no file and no `--add-dir`.
 - **Names.** Built from the hub's *Session name* pattern (default `<task>-<repo>`), lowercased, limited to
   `a-z0-9_-`, starting with a letter, at most 24 characters, with `-2`, `-3`… when taken.
 - **First run in a repository.** Folder trust is not inherited by a repository nested in a trusted hub. The
@@ -355,13 +365,17 @@ flowchart TD
   run -->|yes| mode{"Role empty, none or master,<br/>or SESSION_HUB_GUARDS=off?"}
   mode -->|yes| allow2["Allow at once, without reading input"]
   mode -->|no| dog["Start a 7 s watchdog"]
-  dog --> role{"Role is child?"}
+  dog --> json{"Input is valid JSON?"}
+  json -->|no| b0["Block"]
+  json -->|yes| role{"Role is child?"}
   role -->|"no (unknown value)"| b1["Block"]
   role -->|yes| root{"Scope root set, absolute, existing,<br/>a directory, not / and not home?"}
   root -->|no| b2["Block"]
-  root -->|yes| input{"Input is JSON with a tool name?"}
+  root -->|yes| input{"Tool name present?"}
   input -->|no| b3["Block"]
-  input -->|yes| path{"Target path present and absolute?<br/>(notebook_path, then file_path)"}
+  input -->|yes| tool{"Edit, Write or NotebookEdit?"}
+  tool -->|no| allow4["Allow"]
+  tool -->|yes| path{"Target path present and absolute?<br/>(notebook_path, then file_path)"}
   path -->|no| b4["Block"]
   path -->|yes| res{"Real path resolved?<br/>(dangling link fails)"}
   res -->|no| b5["Block"]
@@ -421,8 +435,8 @@ The default path is:
 - `<config dir>` is `CLAUDE_CONFIG_DIR` when set, else `~/.claude`.
 - `<hub id>` is the first 16 hexadecimal digits of the SHA-256 of the hub's real path, in Unicode NFC form. The
   same hub reached through a link or spelled in another case on a case-insensitive file system gets the same id.
-- The hub's *Registry* key can name another path. The script refuses a path inside the hub, and the skills pass it
-  with `--file` on every call.
+- The hub's *Registry* key can name another path, which the skills pass with `--file` on every call, together
+  with `--hub`. The script refuses a `--file` inside the hub when `--hub` is given too, as the skills always do.
 
 The folder is created with mode `0700`, and the record and its lock with mode `0600`.
 
@@ -452,7 +466,8 @@ The folder is created with mode `0700`, and the record and its lock with mode `0
 - `version` is the format version, `1`. The script refuses to rewrite a file with a higher version and asks for
   a plugin update.
 - `hub` is the hub's real path, set when the script is called with `--hub`.
-- An entry is identified by `name`. The record holds names, paths and URLs only, never project content.
+- An entry is identified by `name`. The skills keep the record to names, paths, URLs and one-line request
+  summaries, never project content; the script does not enforce this.
 
 ### Commands
 
@@ -463,13 +478,13 @@ or `--file <path>` (absolute):
 |---|---|
 | `path --hub <dir>` | prints the default path |
 | `read` | prints the record; a missing file reads as an empty record, with a note on stderr |
-| `upsert --entry '<json>'` | creates the entry with status `running`, the start time and no requests, or merges the fields into the entry of the same name; an existing entry keeps `started` and `requests` |
+| `upsert --entry '<json>'` | creates the entry, by default with status `running`, the start time and no requests, which values in `--entry` replace; or merges the fields into the entry of the same name, where `started` and `requests` are kept |
 | `status --name <child> --status <status>` | sets one entry's status |
 | `request --name <child> --text <text> [--outcome <text>]` | appends a request with its time |
 | `reconcile (--live <name,…> \| --live-none)` | marks as `lost` every `running` or `waiting-user` entry missing from the live list, and prints which changed |
 
-The script exits with status 0 and JSON on stdout, or with status 1 and a message starting with
-`[session-hub] registry:` on stderr.
+The script exits with status 0 and its result on stdout (a plain path for `path`, JSON for the other commands),
+or with status 1 and a message starting with `[session-hub] registry:` on stderr.
 
 ### Locking and atomic writes
 
@@ -511,7 +526,8 @@ stateDiagram-v2
 ```
 
 The `status` command accepts any of the five statuses on any entry; the diagram shows the transitions the skills
-make.
+make. In 0.1, `waiting-user` holds until the child is `done`, `abandoned` or `lost`: no skill sets it back to
+`running`.
 
 ### Reconcile
 
@@ -598,7 +614,7 @@ No plugin keeps state inside a hub or a repository. State lives under the active
 | `<config dir>/session-hub/children-<hub id>.json` | session-hub | the master, through `registry.mjs` | the children record | 0.1 |
 | `<config dir>/session-hub/children-<hub id>.json.lock` | session-hub | `registry.mjs`, during a write | the lock | 0.1 |
 | a path named by the hub's *Registry* key | session-hub | the master, through `registry.mjs` | the children record, when the hub moves it; never inside the hub | 0.1 |
-| `<scratchpad or mktemp -d>/<name>-handoff.md` | session-hub | `spawn` | one handoff per child | 0.1 |
+| `<scratchpad or mktemp -d>/<name>-handoff.md` | session-hub | `spawn` | one handoff per child; none for a desktop app child, whose handoff is passed inline | 0.1 |
 | `<config dir>/model-router/quality/recommendations.json` | model-router | nothing in 0.1 (read only, if present) | per-class model and effort hints | written from 0.3 |
 | `<config dir>/model-router/events.jsonl` | model-router | the router mod, append only | spawns, signals, outcomes and routing decisions | **Planned 0.2** |
 | `<config dir>/model-router/quality/user.json`, `quality/projects/<project id>.json`, `quality/.lock` | model-router | compaction | quality aggregates per user and per project, and their lock | **Planned 0.2** |
@@ -629,10 +645,10 @@ router mod keeps this rule: an error, a timeout or an unreadable judge answer le
 | Requirement | Value |
 |---|---|
 | Claude Code version tested | 2.1.329 |
-| Cross-session messaging (needed by `session-hub`) | Claude Code 2.1.224 or later on macOS and Linux, 2.1.234 or later on Windows |
+| Cross-session messaging (needed by `session-hub`) | Claude Code 2.1.224 or later |
 | Mods (planned 0.2 components) | exist from Claude Code 2.1.287; each mod will declare its minimum version in `engines["claude-code"]` |
 | `node` | on `PATH`, for the scope guard and the record script; no dependencies |
-| Operating system | macOS and Linux |
+| Operating system | macOS and Linux only: the hook wrapper in `hooks.json` is a POSIX `sh` command |
 
 What was verified on 2.1.329:
 

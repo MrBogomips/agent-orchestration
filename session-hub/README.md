@@ -65,7 +65,8 @@ inside a hub or a repository. Writes are atomic and take a lock file next to the
   non-blocking error. The guard blocks on its own after about 7 s to stay ahead of that, but a hook killed
   from outside before it answers cannot block.
 - The guard accepts only absolute paths, and refuses `/` or the home folder as a write root. The role value is
-  read without regard to case or surrounding spaces; an unknown value blocks every write.
+  read without regard to case or surrounding spaces; an unknown value blocks every write unless
+  `SESSION_HUB_GUARDS` is `off`.
 - Model and effort on the desktop app's start tool are unverified.
 - A sibling session can still be messaged; the master-only rule is prose until the 0.2 mod adds a send guard.
 
