@@ -1,8 +1,8 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,9 +46,56 @@ describe('evaluate', () => {
     assert.equal(evaluate(edit(join(root, 'src', 'a.txt')), childEnv()).allow, true);
   });
 
-  test('allows the root itself and a relative path resolved against cwd', () => {
+  test('allows the root itself', () => {
     assert.equal(evaluate(edit(root), childEnv()).allow, true);
-    assert.equal(evaluate(edit('src/a.txt', root), childEnv()).allow, true);
+  });
+
+  test('blocks every path that is not absolute, ~ included', () => {
+    for (const path of ['src/a.txt', './src/a.txt', '~/x.txt', '~', '../other/b.txt']) {
+      const result = evaluate(edit(path, root), childEnv());
+      assert.equal(result.allow, false, path);
+      assert.match(result.reason, /not an absolute path/, path);
+    }
+  });
+
+  test('refuses / and the home folder as a scope root', () => {
+    for (const value of ['/', homedir(), `${homedir()}/`]) {
+      const result = evaluate(edit(join(root, 'src', 'a.txt')), childEnv({ SESSION_HUB_SCOPE_ROOT: value }));
+      assert.equal(result.allow, false, value);
+      assert.match(result.reason, /too wide/, value);
+    }
+  });
+
+  test('normalizes the role: case and spaces do not turn the guard off', () => {
+    for (const role of ['Child', ' child ', 'CHILD']) {
+      assert.equal(evaluate(edit(join(outside, 'b.txt')), childEnv({ SESSION_HUB_ROLE: role })).allow, false, role);
+    }
+  });
+
+  test('blocks an unknown role value', () => {
+    const result = evaluate(edit(join(root, 'src', 'a.txt')), childEnv({ SESSION_HUB_ROLE: 'kid' }));
+    assert.equal(result.allow, false);
+    assert.match(result.reason, /SESSION_HUB_ROLE/);
+  });
+
+  test('a known non-child role or an empty role stays inactive', () => {
+    for (const role of ['', '  ', 'master', 'none']) {
+      assert.equal(evaluate(edit(join(outside, 'b.txt')), { SESSION_HUB_ROLE: role }).allow, true, `"${role}"`);
+    }
+  });
+
+  test('does not block a path that differs only in case on a case-insensitive file system', () => {
+    const probe = join(root, 'SRC');
+    let caseInsensitive = false;
+    try {
+      caseInsensitive = realpathSync(probe) !== undefined;
+    } catch {
+      caseInsensitive = false;
+    }
+    if (!caseInsensitive) return;
+    assert.equal(evaluate(edit(join(root, 'SRC', 'a.txt')), childEnv()).allow, true);
+    const upperRoot = root.replace(/repo$/, 'REPO');
+    assert.equal(evaluate(edit(join(root, 'src', 'a.txt')), childEnv({ SESSION_HUB_SCOPE_ROOT: upperRoot })).allow, true);
   });
 
   test('blocks a write outside the root', () => {
@@ -193,5 +240,42 @@ describe('hook process', () => {
     const r = run(edit(join(root, 'src', 'a.txt')), { SESSION_HUB_ROLE: 'child' });
     assert.equal(r.status, 2);
     assert.match(r.stderr, /SESSION_HUB_SCOPE_ROOT/);
+  });
+
+  // Starts the hook with stdin left open, as a stuck caller would, and resolves with its exit code and stderr.
+  function runWithOpenStdin(env, limitMs = 5000) {
+    const cleanEnv = { ...process.env };
+    for (const key of Object.keys(cleanEnv)) if (key.startsWith('SESSION_HUB_')) delete cleanEnv[key];
+    return new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [HOOK], { env: { ...cleanEnv, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
+      let stderr = '';
+      child.stderr.on('data', (chunk) => (stderr += chunk));
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error(`the hook did not exit within ${limitMs} ms`));
+      }, limitMs);
+      child.on('exit', (code) => {
+        clearTimeout(timer);
+        child.stdin.destroy();
+        resolve({ code, stderr });
+      });
+    });
+  }
+
+  test('a session that is not a child exits at once without reading stdin', async () => {
+    const r = await runWithOpenStdin({}, 2000);
+    assert.equal(r.code, 0);
+  });
+
+  test('a child whose input never arrives is blocked by the watchdog', async () => {
+    const r = await runWithOpenStdin(childEnv({ SESSION_HUB_GUARD_WATCHDOG_MS: '200' }), 3000);
+    assert.equal(r.code, 2);
+    assert.match(r.stderr, /^\[session-hub\].*did not finish/);
+  });
+
+  test('blocks an unknown role value', () => {
+    const r = run(edit(join(root, 'src', 'a.txt')), childEnv({ SESSION_HUB_ROLE: 'kid' }));
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /SESSION_HUB_ROLE/);
   });
 });

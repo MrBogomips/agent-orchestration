@@ -47,4 +47,18 @@ test('a guard that cannot run stays out of the way outside a child', () => {
   assert.equal(runCommand('/nonexistent-plugin-root', {}, '{}').status, 0);
   const off = { SESSION_HUB_ROLE: 'child', SESSION_HUB_GUARDS: 'off' };
   assert.equal(runCommand('/nonexistent-plugin-root', off, '{}').status, 0);
+  const offLoud = { SESSION_HUB_ROLE: 'child', SESSION_HUB_GUARDS: ' OFF ' };
+  assert.equal(runCommand('/nonexistent-plugin-root', offLoud, '{}').status, 0);
+  assert.equal(runCommand('/nonexistent-plugin-root', { SESSION_HUB_ROLE: 'master' }, '{}').status, 0);
+});
+
+test('the wrapper normalizes the role like the guard does', () => {
+  for (const role of ['Child', ' child ', 'CHILD', 'kid']) {
+    const r = runCommand('/nonexistent-plugin-root', { SESSION_HUB_ROLE: role }, '{}');
+    assert.equal(r.status, 2, `"${role}"`);
+  }
+});
+
+test('the guard has a watchdog shorter than the hook timeout', () => {
+  assert.ok(entry.hooks[0].timeout >= 10, 'timeout of at least 10 s');
 });

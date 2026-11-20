@@ -61,6 +61,11 @@ inside a hub or a repository.
 - **Trust is per repository.** `claude --bg` in a repository nested in a trusted hub fails with
   `Workspace not trusted` until the user has opened that repository once and accepted the prompt.
 - The guard needs `node` on `PATH`. If it cannot run in a child, the hook blocks the write.
+- **A killed hook lets the write through.** Claude Code treats a hook that exceeds its timeout (10 s) as a
+  non-blocking error. The guard blocks on its own after about 7 s to stay ahead of that, but a hook killed
+  from outside before it answers cannot block.
+- The guard accepts only absolute paths, and refuses `/` or the home folder as a write root. The role value is
+  read without regard to case or surrounding spaces; an unknown value blocks every write.
 - Model and effort on the desktop app's start tool are unverified.
 - A sibling session can still be messaged; the master-only rule is prose until the 0.2 mod adds a send guard.
 
