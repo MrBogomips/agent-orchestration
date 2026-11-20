@@ -38,7 +38,7 @@ Content rules:
 | Repository and workflow | The repository path and base branch. One line telling the child to follow its repository's own instructions, branch and PR policy, skills and agents, without restating them. Whether it reads or edits, and where: the worktree as *Worktrees* in [hub-config.md](hub-config.md) says. |
 | Siblings | The other children of the same work: name, repository, what each delivers, and any shared interface with its source or owner. A change to a shared interface, or a question about it, goes to the master first. |
 | Hub rules | For a child inside the hub: which parts of the hub's instruction file are for the master only (the *Master only* key and the *Child sessions* section) and do not apply here. For a child outside the hub: also the *Propagate* rules, word for word, with file and section. |
-| Messages | The master's name and ref, how to reach it (`SendMessage` to its name; to answer, reply to the `from` of its message), the prefix, the five types, and the master-only rule. |
+| Messages | The master's name and ref, how to reach it (`SendMessage` to its name, also to answer one of its messages: with mods on, the send guard refuses a reply to the `from` address), the prefix, the five types, and the master-only rule. |
 | Rules | The fixed rules below, word for word in the handoff's language. |
 | First step | The one concrete action to start with. |
 
@@ -110,7 +110,7 @@ do not apply to you.
 ## Messages
 The master is `hub` (ref `8f2c1a`): `SendMessage` to `hub`. Start every message with `[T-42 product] <type>:`,
 with type `question`, `out-of-scope`, `pr` (with the URL), `done` or `abandoned` (with the reason). You talk to
-the master only. Messages from the master start with `[master]`.
+the master only, always by its name `hub`, also to answer. Messages from the master start with `[master]`.
 
 ## Rules
 - You write only under your write root. …  (the fixed rules, word for word)

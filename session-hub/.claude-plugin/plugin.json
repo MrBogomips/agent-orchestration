@@ -1,11 +1,21 @@
 {
   "name": "session-hub",
-  "version": "0.1.0",
-  "description": "Coordinates a master session in a hub of repositories and the child sessions it starts: scope, master-only messages, routing of out-of-scope requests, a record of the children",
+  "version": "0.2.0",
+  "description": "Coordinates a master session in a hub of repositories and the child sessions it starts: scope, master-only messages with a send guard, routing of out-of-scope requests, a record and a panel of the children",
   "author": {
     "name": "MrBogomips",
     "url": "https://github.com/MrBogomips"
   },
   "license": "MIT",
-  "keywords": ["sessions","orchestration","hub","multi-repo","scope"]
+  "keywords": [
+    "sessions",
+    "orchestration",
+    "hub",
+    "multi-repo",
+    "scope"
+  ],
+  "types": "./types/index.d.ts",
+  "engines": {
+    "claude-code": ">=2.1.329"
+  }
 }

@@ -17,7 +17,7 @@ task cost, so the grid can be checked against real work.
 | Name | Kind | What it does |
 |---|---|---|
 | `model-router:choose-model` | skill | The grid: four model tiers, four effort questions, the rules around them (go up when in doubt, risk is about the act, project defaults, the user wins, choose at start, escalation, a coordinator's own model), plus *inline or delegate* and *continue, do not restart*. For each start it writes one line `model · effort · reason`, passes `model` and `effort` on the start call, and tags the description with the task class (`[mr:<class>]`, `[mr:<class>!]` when risky). Agents with a fixed model keep it. |
-| `model-router:setup` | skill | Writes or updates a *Model routing* section in the project's `AGENTS.md` (defaults and exceptions per kind of work or task class), only after the user says yes. |
+| `model-router:setup` | skill | Writes or updates a *Model routing* section in the project's instruction file, `AGENTS.md` or else `CLAUDE.md`, with defaults and exceptions per kind of work or task class, only after the user says yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs`: compacts the quality data, writes a self-contained page and opens it. |
 | `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model. Records decisions, starts, signals and reports. Fails open. |
 | `/model-router` | command | Shows whether routing is on and the latest ten decisions in the log (all sessions); `/model-router off` and `/model-router on` switch routing for the session. |

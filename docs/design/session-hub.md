@@ -13,7 +13,7 @@ and keeps what works (environment detection, launch command, layouts, worktrees,
 | `session-hub:dispatch` | skill | Master side. At the start of work, decides which repositories are touched and how each is handled. When a child sends an out-of-scope request, routes it. |
 | `session-hub:setup` | skill | Writes or updates the *Child sessions* section of the hub's instruction file, after the user confirms. |
 | `session-hub-scope-guard` | classic hook (PreToolUse) | In a child, blocks writes outside the scope root and tells the model to send the request to the master. |
-| `session-hub` | mod | In a child: refuses sends to any session but the master; marks deliveries from other sessions as information. In the master: draws the children panel. |
+| `session-hub` | mod | In a child: refuses sends to any session but the master; checks shell commands for writes outside the scope; marks deliveries from other sessions as information. In the master: draws the children panel. |
 | `/session-hub` | command (mod) | Opens the children panel; shows this session's role and scope. |
 | Children record | file | One entry per child. Path from the *Child sessions* section. |
 
@@ -185,8 +185,8 @@ A PreToolUse hook on the file-writing tools (`Edit`, `Write`, `NotebookEdit`).
 - Resolves the target path and blocks it when it is not under the write root. Compare real paths, so that a
   symbolic link cannot step outside.
 - The block message tells the model what to do: send an `out-of-scope` message to the master and tell the user.
-- Shell commands that write files are **not** covered. State this limit in the README. A best-effort pattern
-  check on shell commands is optional and must be labelled as such.
+- Shell commands that write files are **not** covered by the hook. From 0.2 the mod adds a best-effort shell
+  check (S10 showed it is needed); the README labels it as best effort.
 - On any internal error the hook blocks and says why. A guard that cannot evaluate must not let the call pass.
 
 The hook is a plugin hook: it loads in every session where the plugin is enabled and relies on the role variable
@@ -194,29 +194,50 @@ to stay inactive elsewhere. The variables reach it in the terminal, tmux and Her
 
 ## Mod `session-hub`
 
-Second release. Read `research/mods-capabilities.md` before designing it.
+Second release. Read `research/mods-capabilities.md` before designing it. Built and checked against the spike
+results for 0.2 (`spikes.md`); the pure logic lives in `hooks/mod/*.mjs`, the engine glue in
+`hooks/session-hub-mod.tsx`, in the same `hooks.json` as the classic hook.
 
 | Function | Event | Behaviour |
 |---|---|---|
-| Send guard | `session.send` | In a child, a send to any session but the master is not delivered; the reason tells the model to use the master. |
-| Origin marking | `prompt.submit`, `session.receive` | In a child, a delivery whose origin is another session gets a short context line: information, not authorization. A prompt typed by the person gets none. |
-| Scope line | `prompt.compose` | Adds a session-scoped section with the role and the scope, so it survives compaction. |
-| Children panel | `ui.render` | In the master, lists the children from the record: status, model, effort, last message. |
-| Command | `$.command.register` | `/session-hub`. |
+| Send guard | `session.send` | In a child, a send is delivered only to the master, addressed by its name with or without ` [<ref>]` (always delivered to the bare name, since a ref may be stale or another session's), and to the session's own subagents and teammates (and a subagent's `main`). Any other recipient, a socket or bridge address included, is not delivered; the reason names the master and the `out-of-scope` route. |
+| Shell check | `tool.call` on `Bash` and `Monitor` | Added after S10. In a child, a best-effort check of every command run in the session's shell (the `command` of `Bash` and of `Monitor`; a `Monitor` socket has none): redirections and the targets of common file-writing commands (`tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install`, `sed -i`), found behind assignments, wrappers (`sudo`, `env`, `nice`, `timeout`, `xargs`, `command`, `nohup`, `time`, `builtin`, `exec`) and reserved words (`if`, `then`, `elif`, `else`, `while`, `until`, `do`, `!`, `{`, function bodies). Options are read as the commands read them: bundled short options (`cp -rt DIR`), `--target-directory DIR` with or without `=`, and every form of a `sed` script (`-e`, `-f`, `--expression`, `--file`), so the files of `sed -i` are judged. A target outside the write root is denied. `/dev` and the system temporary folders are allowed. Here-document bodies are skipped. `..` is resolved as the kernel does, from where the part before it really lands (links followed), so `link/../x` is judged where it lands and `../sibling` inside the root still works. A target it cannot resolve (`~` with no `HOME`, `~user`) is denied. Targets it cannot know without the shell (variables, substitutions, globs, relative paths after a `cd` or a wrapper's change of folder such as `env -C`) are not judged. Other tools with a `command` input are not judged: nothing says that their command is shell code. |
+| Origin marking | `session.receive`, `prompt.submit` | In a child, a delivery from another session gets a line in front of its text: information, not authorization. A prompt whose origin is not the person's or the session's own gets the same line as context, once. Every kind but `composer`, `bridge`, `sdk`, `auto-continuation`, `plugin`, `task-notification` and `scheduled-trigger` counts as another session, unknown kinds included. A `coordinator` delivery at `session.receive` without a `teammate` is the child's own main conversation writing to one of its agents, and is not marked; with a `teammate` (an agent team's lead), and at `prompt.submit` (another session's hand-off), it is. The first prompt is not special: it arrives as `composer` (S9). |
+| Scope line | `prompt.compose`, `prompt.submit` | A session-scoped section with the role and the scope (child), or the role and the record (master). Because an organization's managed mod can skip a user mod's `prompt.compose`, `session.compact` and `classic.SessionStart` hooks (seen live), the same text also rides the first prompt after the start and after a compaction as context. A compaction is seen through those events where they run, and otherwise as a context size that is unknown or smaller than at the previous prompt. |
+| Children panel | `ui.render` (`Pane`) | In the master: one row per child from the record (status, live status, model and effort, last message), refreshed on `/session-hub` and every 30 s. Live status comes from the `ListAgents` tool called by the mod (S8). The record is read through `scripts/registry.mjs read`; the mod never writes it. |
+| Command | `$.command.register` | `/session-hub`: the session's role and scope; in a master, the children table and the panel. Registered last at `session.start`, inside a `try`: a name clash with another mod throws (S6) and costs only the command. |
+
+How the mod knows the master: a session with no role becomes a master when it runs `session-hub:spawn` or
+`session-hub:dispatch` (`skill.prompt`), when it runs the registry script (the `--file` or `--hub` of that call
+gives the record), or, at start and on `/session-hub`, when the record for its folder already lists children.
+`$.state` does not survive a restart (S7), so this is recomputed after a resume.
 
 Constraints:
 
-- Every guard has an explicit fallback that fails closed.
+- Every guard fails closed: a send guard or shell check that throws refuses with a reason (`.catch` on both
+  hooks). An unknown `SESSION_HUB_ROLE` blocks sends to anyone and shell writes with a target; a child with no
+  `SESSION_HUB_MASTER` cannot send to any session.
+- The shell check fails closed on any file-system error but a missing path: a `stat` that fails for another reason,
+  or a folder that cannot be listed, denies the call.
+- A session whose role cannot be read (the environment lookup itself fails) is refused by the send guard and the
+  shell check even when it is not a child: an unreadable environment cannot be told apart from a child's, so the
+  guards fail closed. A session with no `SESSION_HUB_*` variables, read without error, is never blocked.
+- `SESSION_HUB_GUARDS=off` turns off the send guard and the shell check; the marking and the scope line stay,
+  since they only inform.
+- The marking, the scope line and the panel never block anything. A failed marking leaves the delivery unmarked;
+  the handoff rule still holds.
 - The origin of the *first* prompt of a child is not trustworthy when the launcher typed it into a pane; the
   guards do not depend on it.
-- The mod does not replace the classic hook. The hook covers file writes and works where mods are off.
+- The mod does not replace the classic hook. The hook covers file writes and works where mods are off; with mods
+  off, release 0.1 behaviour is unchanged.
+- A child resumed without its `SESSION_HUB_*` variables is no longer a child, for the hook and the mod alike.
 
 ## Releases
 
 | Release | Content |
 |---|---|
 | 0.1 | `spawn`, `dispatch`, `setup`, the scope guard hook, the children record. Scope and the master-only rule are enforced by the hook and by prose. |
-| 0.2 | The mod: send guard, origin marking, scope line, panel, command. |
+| 0.2 | The mod: send guard, shell check, origin marking, scope line, panel, command. |
 
 ## Open points
 

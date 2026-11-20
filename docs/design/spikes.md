@@ -60,3 +60,33 @@ Side findings:
   were seen to inherit (`general-purpose`, `Explore`) and project or user agents whose definition file it can read and
   that name no model (or `inherit`). Any other type (`Plan` included, not tested) is kept: the decision is logged as
   `keep`, the spawn record with route `fixed`.
+
+## Results for session-hub 0.2
+
+All on 2026-11-20 with Claude Code 2.1.329, `--model haiku`, throwaway probe mods loaded with `--plugin-dir`, in a
+scratch folder under the home folder.
+
+| ID | Date | Claude Code | Setup | Outcome |
+|---|---|---|---|---|
+| S2 | 2026-11-20 | 2.1.329 | `claude --bg --plugin-dir <probe>` with the `SESSION_HUB_*` variables and a prompt argument | **Yes.** The mod loads in a `--bg` session: `session.start` fires (`surface` `terminal`, `isInteractive` true), `$.env.get` reads the `SESSION_HUB_*` variables set on the launch command, and `prompt.submit`, `$.tool.call` and `$.agent.list` work. This also closes the mod side of S4 for `--bg` and tmux. |
+| S6 | 2026-11-20 | 2.1.329 | Two probe mods, both registering `/probe` at `session.start`, in one tmux session | **Not namespaced.** The typeahead lists one `/probe`, the first registration's. The second `$.command.register` throws (`"/probe" refused: the plugin shprobe-b registered it already`), and the throw skips the rest of that mod's `session.start` hook. The mod's command keeps the plugin's name (`/session-hub`) and is registered last, inside a `try`, so a clash costs only the command. |
+| S7 | 2026-11-20 | 2.1.329 | A value set with `$.state.set`; the session stopped, then resumed with `claude -p --resume` and with an interactive `claude --resume` in tmux | **No.** After a restart and a resume, `$.state.get` reads version 0 (never written) in both cases. The session's `ref` in `ListAgents` also changes across the restart (`604bd7` → `9e5749`); its name stays. The mod keeps nothing in `$.state` that it cannot rebuild: the role comes from the environment at every load, the master's record path from the record or the next registry call. A child resumed without its `SESSION_HUB_*` variables is no longer a child. |
+| S8 | 2026-11-20 | 2.1.329 | `$.tool.call({ tool: 'ListAgents' })` from a `$.clock.after` timer, `--bg` and tmux sessions | **Yes.** The call returns the listing text and structured `sections[].rows[]` with `name`, `ref`, `type` and `status` (`busy`, `idle`) for every peer session, the calling session excepted. No model call, no transcript row. The children panel shows live status from it. `$.agent.list()` lists only the session's own subagents (empty here). |
+| S9 | 2026-11-20 | 2.1.329 | `prompt.submit` logged for a first prompt given as a launch argument (`--bg` and interactive in a tmux pane), typed with `tmux send-keys`, and for messages from other sessions; Herdr not run (the tmux result covers keystrokes into a pane); desktop app **not testable here** | A launch-argument prompt (`--bg` or interactive) and keystrokes sent by tmux arrive as `origin.kind` `composer`, exactly like the person's Enter. A message from another session arrives as `peer` at `session.receive` (text in a `<cross-session-message from="uds:…" from-name="…">` envelope) and then at `prompt.submit` (`isMeta` true). The first prompt cannot be told from the person's; peer deliveries can. |
+| S10 | 2026-11-20 | 2.1.329 | A child with the 0.1 scope guard (`SESSION_HUB_ROLE=child`, write root a folder under the scratch folder), asked to append a line to a file outside the write root; once with a handoff, once with no handoff | With the handoff, the model refused before any tool call and sent an `out-of-scope` message to the master, which answered; the guard's message was never needed. Without a handoff, the model appended the line **through the shell** (`echo … >>`) at once, and the classic guard, which sees only `Edit`, `Write` and `NotebookEdit`, never ran. **A shell-command check is needed**: the 0.2 mod adds a best-effort one on `Bash`. |
+
+Side findings for the send guard (from the S8 and S9 setups):
+
+- At `session.send`, `e.to` is what the model wrote: the bare name (`spike-master`), or the name with the ref
+  (`spike-master [22c822]`). A reply to a received message could also use its `from` address (`uds:<socket>`),
+  which the guard cannot tie to a name. The guard accepts the master's name with or without a ref and refuses
+  every other address, so a child replies to the master by its name.
+- A refused send reads well: the tool result is `Not sent: a plugin hook refused it (<reason>)`, and the model
+  reported it without trying another route.
+- The `SendFile` tool, which also reaches peer sessions, is not offered in this build's terminal sessions.
+- An organization's managed mod (here `cc-plugin-sec-default`) runs first and can send an event on past a user
+  mod's hook. Seen live for `prompt.compose`, `session.compact` and `classic.SessionStart`: the session shows
+  `session-hub: its <event> hook was skipped`. `session.send`, `session.receive`, `prompt.submit`, `tool.call`,
+  `skill.prompt`, `command.run` and `ui.render` ran. The scope line therefore also rides a prompt as context.
+- After a compaction, `$.session.usage().context.tokens` is undefined until the next request measures it; the mod
+  uses that, or a smaller size than at the previous prompt, as its compaction signal.

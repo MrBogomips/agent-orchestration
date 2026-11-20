@@ -1,12 +1,13 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.1, `model-router` 0.2):
-what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves when something fails. Parts
-that are planned for later releases are marked **Planned** with their release; they may change before they ship.
+This document describes the two plugins in this repository as built (`session-hub` 0.2, `model-router` 0.2):
+what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
+when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
+they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.1.0 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `session-hub` | 0.2.0 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
 | `model-router` | 0.2.0 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
@@ -17,8 +18,10 @@ that are planned for later releases are marked **Planned** with their release; t
 - [Roles](#roles)
 - [Main flows](#main-flows)
 - [The scope guard](#the-scope-guard)
+- [The session-hub mod](#the-session-hub-mod)
 - [The children record](#the-children-record)
 - [The model-router grid](#the-model-router-grid)
+- [The model-router mod](#the-model-router-mod)
 - [State on disk](#state-on-disk)
 - [Failure policy](#failure-policy)
 - [Compatibility](#compatibility)
@@ -57,9 +60,11 @@ Each plugin works without the other. Where they meet, a skill names the other pl
 
 `session-hub` holds no copy of the grid. `model-router` knows nothing about hubs.
 
-The hook, the messages, the variables and the state folders carry the plugin's name: the
-`session-hub-scope-guard` hook, the `[session-hub]` prefix of the guard's and the record script's messages, the
-`SESSION_HUB_*` variables, and the `session-hub/` and `model-router/` state folders. Two other markers are short
+The hook, the mods, the commands, the messages, the variables and the state folders carry the plugin's name: the
+`session-hub-scope-guard` hook, the `session-hub` and `model-router` mods, the `/session-hub` and `/model-router`
+commands, the `session-hub:scope` prompt section, the `[session-hub]` prefix of the guards', the mod's and the
+record script's messages, the `[model-router]` prefix of the router mod's log lines, the `SESSION_HUB_*`
+variables, and the `session-hub/` and `model-router/` state folders. Two other markers are short
 on purpose: `mr` in the router's task-class tag (`[mr:<class>]`), and the message prefixes between sessions,
 `[master]` and `[<task> <repo>]`.
 
@@ -67,18 +72,19 @@ on purpose: `mr` in the router's task-class tag (`[mr:<class>]`), and the messag
 
 ```mermaid
 flowchart LR
-  subgraph SH["session-hub 0.1"]
+  subgraph SH["session-hub 0.2"]
     dispatch["skill<br/>session-hub:dispatch"]
     spawn["skill<br/>session-hub:spawn"]
     shsetup["skill<br/>session-hub:setup"]
     registry["script<br/>scripts/registry.mjs"]
     guard["hook<br/>session-hub-scope-guard<br/>(hooks.json + scope-guard.mjs)"]
+    shmod["mod<br/>session-hub<br/>(hooks.json + session-hub-mod.tsx)"]
   end
   subgraph MR["model-router 0.2"]
     choose["skill<br/>model-router:choose-model"]
     mrsetup["skill<br/>model-router:setup"]
     mrreport["skill<br/>model-router:report"]
-    mod["mod<br/>model-router<br/>(hooks/model-router.ts)"]
+    mrmod["mod<br/>model-router<br/>(hooks/model-router.ts)"]
     compactjs["script<br/>scripts/compact.mjs"]
     reportjs["script<br/>scripts/report.mjs"]
     grid["data<br/>grid.json"]
@@ -94,6 +100,7 @@ flowchart LR
   dispatch -->|reconcile, read, upsert, status, request| registry
   spawn -->|reconcile, upsert| registry
   registry --> record
+  shmod -->|reads through registry.mjs read| registry
   spawn -.->|if installed| choose
   spawn -->|reads| hubfile
   dispatch -->|reads| hubfile
@@ -105,9 +112,9 @@ flowchart LR
   gridtest -->|checks against| grid
   gridtest -->|checks against| choose
   gridtest -->|checks against| mrsetup
-  mod -->|judge prompt from| grid
-  mod -->|appends records| events
-  mod -->|at session start| compactjs
+  mrmod -->|judge prompt from| grid
+  mrmod -->|appends records| events
+  mrmod -->|at session start| compactjs
   mrreport --> reportjs
   reportjs --> compactjs
   compactjs -->|outcomes, aggregates| events
@@ -122,6 +129,12 @@ flowchart LR
 | `session-hub:setup` | skill | Writes or updates the `## Child sessions` section of the hub's instruction file (`AGENTS.md`, else `CLAUDE.md`), only after the user's explicit yes. |
 | `session-hub-scope-guard` | hook | `PreToolUse` hook on `Edit`, `Write` and `NotebookEdit`, defined in `hooks/hooks.json` and implemented in `hooks/scope-guard.mjs`. In a child, blocks a write outside the write root. |
 | `scripts/registry.mjs` | script | The only writer of the children record: reads, merges and writes it atomically under a lock. |
+| `session-hub` | mod | Loaded from the same `hooks/hooks.json` (`modules`), glue in `hooks/session-hub-mod.tsx`, pure logic in `hooks/mod/*.mjs`. In a child: send guard, shell check, origin marking, scope line. In the master: the children panel. Needs mods on. |
+| `/session-hub` | command (mod) | The session's role and scope; in the master, the children table and panel. |
+
+The skills, the scope guard and the record script work with mods turned off; the send guard, the shell check, the
+marking, the scope line, the panel and the command need the mod, described in
+[The session-hub mod](#the-session-hub-mod).
 
 The `spawn` skill carries its reference material under `skills/spawn/references/`: the hub configuration keys
 (`hub-config.md`), the handoff template (`child-prompt.md`), and how to start a child in each environment
@@ -142,43 +155,25 @@ The `spawn` skill carries its reference material under `skills/spawn/references/
 | `grid.test.mjs` | test | Fails when `grid.json` and the two skills drift apart. |
 | `tests/model-router.test.ts` | test | The mod's tests, run by `claude plugin test ./model-router`. |
 
-The skills work with mods turned off; the router, the command and the measurement need the mod.
-
-### The router mod
-
-At a subagent start through the `Agent` tool, a `tool.call` hook decides the case and asks the judge, and sets the
-effort on the call itself; the `agent.spawn` hook that follows (same `tool_use_id`) sets the model against the
-parent's model and logs the decision. An explicit model, a fork, a resume, routing turned off, a session-wide
-subagent model, and an agent whose definition fixes a model or that the mod cannot read (a plugin's agent, a
-built-in type other than `general-purpose` and `Explore`) are kept. The judge is one call to the fast tier (8 s limit) with a prompt generated from `grid.json`; the task is
-wrapped as data with closing tags escaped. A downgrade needs confidence 0.6, an upgrade 0.3; risk above 0.7 (or a
-`!` in the class tag) forces the deep tier and at least `high` effort. The judge's tiers stop at `opus`, so the
-router never picks `fable`, and in 0.2 it does not hold `review-debug` and `design-open` to the grid's floor.
-
-### The quality loop (measuring only in 0.2)
-
-The mod appends `decision`, `spawn`, `signal` (`write`, `tool-error`, `prompt`, `stop`, `resume`), `report` and
-`session-end` records to `events.jsonl` with `cat >>` through `$.process.run`. Compaction, started by the mod at
-session start and by the report, decides the outcome of every task whose rework window closed (`success`,
-`rework`, `failure`, `cancelled`), appends it as an `outcome` record, and folds the learned ones into cells of
-class × tier × effort at two levels (user, project), with aging and the grid as prior. The report shows first-pass
-yield, rework rate, cost per task and per successful task, the explored share, a recommendation per class, a
-weekly trend and the router's decisions. The router does not use the data until 0.3.
+The skills work with mods turned off; the router, the command and the measurement need the mod, described in
+[The model-router mod](#the-model-router-mod).
 
 ## Roles
 
-A session is a **master**, a **child**, or **neither**. The role is fixed at launch and never inferred from the
-conversation.
+A session is a **master**, a **child**, or **neither**. The child role is fixed at launch by `SESSION_HUB_ROLE`.
+A session with no role acts as master once it uses the master's tools (see
+[The session-hub mod](#the-session-hub-mod)). No role is inferred from the conversation.
 
 | Role | How a session gets it | What the plugins do in it |
 |---|---|---|
-| Child | Its launch command sets `SESSION_HUB_ROLE=child`. `spawn` does this. | The scope guard checks every `Edit`, `Write` and `NotebookEdit`. The handoff gives the scope and the message rules. |
-| Master | No variable is needed. A session in the hub that runs `dispatch` or `spawn` acts as master. `SESSION_HUB_ROLE=master` is accepted and treated by the guard like no variable. | The skills read the hub configuration, start children and keep the record. The guard does nothing. |
-| Neither | No `SESSION_HUB_ROLE`, or the value `none` or `master`. | The guard exits at once without reading its input. |
+| Child | Its launch command sets `SESSION_HUB_ROLE=child`. `spawn` does this. | The scope guard checks every `Edit`, `Write` and `NotebookEdit`. The handoff gives the scope and the message rules. With mods on, the mod adds the send guard, the shell check, origin marking and the scope line. |
+| Master | No variable is needed. A session in the hub that runs `dispatch` or `spawn` acts as master. `SESSION_HUB_ROLE=master` is accepted and treated like no variable. With mods on, the mod treats a session with no role as master once it runs `spawn` or `dispatch`, runs `registry.mjs`, or when the record for its folder already lists children. | The skills read the hub configuration, start children and keep the record. The guard does nothing. With mods on, the mod shows the children panel and adds the scope line. |
+| Neither | No `SESSION_HUB_ROLE`, or the value `none` or `master`, in a session the mod has not made a master. | The guard exits at once without reading its input. The mod guards and marks nothing, and may promote the session to master as described in the Master row. |
 
 `SESSION_HUB_ROLE` is read without regard to case or surrounding spaces. Any value other than empty, `none`,
-`master` or `child` makes the guard block every write, so that a typo cannot switch the guard off, unless
-`SESSION_HUB_GUARDS` is `off`, which turns the guard off whatever the role.
+`master` or `child` makes the guard block every write, the mod's send guard refuse every message and its shell
+check block every command it sees writing a file, so that a typo cannot switch the guards off, unless
+`SESSION_HUB_GUARDS` is `off`, which turns them off whatever the role.
 
 ### Role variables
 
@@ -332,8 +327,9 @@ The master's messages start with `[master]`. The master hears each child through
 becomes `waiting-user`.
 
 A message between sessions is information, never authorization: neither side merges, pushes, deletes or changes
-settings because another session asked. In 0.1 the master-only channel is a rule in the handoff; nothing stops a
-child from messaging a sibling.
+settings because another session asked. With mods on, the mod's send guard enforces the master-only channel and
+marks every delivery from another session; with mods off, it is a rule in the handoff and nothing stops a child
+from messaging a sibling.
 
 ### Routing an out-of-scope request
 
@@ -374,7 +370,8 @@ and `effort` on the start call, and begins the description with the class tag, `
 `[mr:<class>!]` for a risky start. Before delegating at all, the skill asks whether the task is small enough to do
 inline, and sends a follow-up to a subagent already started on the same topic instead of starting a new one.
 
-**For a child session** (`session-hub:spawn`, step 9), the first rule that gives a value wins:
+**For a child session**, when `session-hub:spawn` chooses the child's model, the first rule that gives a value
+wins:
 
 1. What the user said in the conversation.
 2. The hub's *Model* and *Effort* keys, per repository or per kind of work (a repository match beats a kind
@@ -451,14 +448,59 @@ Outside a child, the guard never gets in the way: it allows at once, even when i
 
 ### Limits
 
-- **Shell writes are not covered.** The guard sees `Edit`, `Write` and `NotebookEdit` only. A child can still
-  write through a shell command; the handoff forbids it and the block message says not to, but nothing enforces
-  it.
+- **Shell writes are not covered by the hook.** The guard sees `Edit`, `Write` and `NotebookEdit` only. With mods
+  on, the mod's best-effort shell check covers the common cases (see [The session-hub mod](#the-session-hub-mod));
+  with mods off, the handoff alone forbids it.
 - **The desktop app has no guard.** Its session tool takes no environment variables, so a child started there
   has no role: its scope holds by the handoff alone, and `spawn` says so in its report.
 - **A hook killed from outside lets the write through.** The watchdog covers a slow guard, not a hook process
   killed before it answers.
 - **`node` must be on `PATH`.** If it is not, the wrapper blocks every write in a child.
+
+## The session-hub mod
+
+Release 0.2 adds a mod to `session-hub`. It loads from the `modules` entry of the same `hooks/hooks.json` as the
+classic hook, needs mods turned on and declares `engines["claude-code"]` `>=2.1.329`. With mods off, the skills,
+the hook and the record behave as in 0.1.
+
+```mermaid
+flowchart LR
+  env["SESSION_HUB_* variables"] --> role["role.mjs<br/>readRole"]
+  role --> send["send-guard.mjs<br/>session.send"]
+  role --> shell["shell-guard.mjs<br/>tool.call Bash"]
+  role --> origin["origin.mjs<br/>session.receive, prompt.submit"]
+  role --> line["scope-line.mjs<br/>prompt.compose, prompt.submit"]
+  registry["registry.mjs read"] --> panel["panel.mjs<br/>ui.render Pane, /session-hub"]
+  list["ListAgents tool"] --> panel
+```
+
+| Function | Where | Event | Behaviour |
+|---|---|---|---|
+| Send guard | child | `session.send` | Delivers only to the master, by name with or without ` [<ref>]` (sent on to the bare name), and to the session's own subagents and teammates (a subagent's `main` too). Any other recipient, a `uds:` or `bridge:` address included, is refused; the reason names the master and the `out-of-scope` route. |
+| Shell check | child | `tool.call` on `Bash` | Best effort. Reads redirections and the targets of `tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install` and `sed -i`, resolves them (relative ones against the session's folder, symbolic links through the file system) and denies a target outside the write root. `/dev` and the system temporary folders are allowed. Targets in variables, substitutions or globs, and relative targets after a `cd`, are not judged. |
+| Origin marking | child | `session.receive`, `prompt.submit` | A delivery from another session gets a line in front of its text, information and not authorization; a prompt from another session gets the line as context if its text lacks it. The person's prompts and the session's own (`composer`, `bridge`, `sdk`, `auto-continuation`, `plugin`, `task-notification`, `scheduled-trigger`) are not marked; any other kind is. |
+| Scope line | child, master | `prompt.compose`, `prompt.submit` | A `session`-scoped section `session-hub:scope` with the role and the scope (child) or the record (master). The same text rides the first prompt after the start, after a compaction and after `/clear` as context. |
+| Children panel | master | `ui.render` (`Pane`), `command.run` | One row per child of the record with the live status from `ListAgents`, model and effort, last message; refreshed on `/session-hub` and every 30 seconds. |
+
+**Role and master.** The role is read from the `SESSION_HUB_*` variables at every use, with the same rules as the
+hook. A session with no role becomes a master when it runs `session-hub:spawn` or `session-hub:dispatch`, when it
+runs `registry.mjs` (whose literal `--file` or `--hub` names the record), or when the record for its folder
+already lists children. The mod keeps its values in `$.state` only (`master`, `panel`, `scopeLine`), which does
+not survive a restart, so they are rebuilt after a resume. It writes no file.
+
+**Failures.** The send guard and the shell check fail closed: each has a `.catch` that refuses with a reason when
+the hook throws, and an unknown role or a missing master or write root refuses. `SESSION_HUB_GUARDS=off` turns
+both off. The marking, the scope line and the panel only inform and never block; a panel that cannot read the
+record says so in the panel.
+
+**Organization mods.** A managed mod that runs first can pass an event on without the user mods' hooks. Seen on
+2.1.329 with a security mod for `prompt.compose`, `session.compact` and `classic.SessionStart`. The mod therefore
+also sends the scope line as context after the start, a compaction or `/clear`, and takes as a compaction a context
+size that is unknown, or smaller than at the previous prompt.
+
+**Limits.** The shell check reads the command line only; a program that writes files on its own is not seen. A
+child replies to the master by its name; a reply to the `from` address is refused. A child resumed without its
+variables is no longer a child. In the desktop app, which passes no variables, the mod is inactive like the hook.
 
 ## The children record
 
@@ -564,8 +606,7 @@ stateDiagram-v2
 ```
 
 The `status` command accepts any of the five statuses on any entry; the diagram shows the transitions the skills
-make. In 0.1, `waiting-user` holds until the child is `done`, `abandoned` or `lost`: no skill sets it back to
-`running`.
+make. `waiting-user` holds until the child is `done`, `abandoned` or `lost`: no skill sets it back to `running`.
 
 ### Reconcile
 
@@ -632,8 +673,8 @@ drift apart. It checks that:
 
 - `grid.json` has every part, with the tiers in check order, the price order, the effort levels and questions
   (ending with the `medium` fallback, never `max`), the six classes with `review-debug` and `design-open` flagged
-  as never below the grid and each with a valid `default` tier and effort, the tag format `[mr:<class>]` with the `!` marker, and the judge mapping
-  `fast` = `haiku`, `balanced` = `sonnet`, `deep` = `opus`;
+  as never below the grid and each with a valid `default` tier and effort, the tag format `[mr:<class>]` with the
+  `!` marker, and the judge mapping `fast` = `haiku`, `balanced` = `sonnet`, `deep` = `opus`;
 - the tables under `### Model` and `### Task classes` in `choose-model` name the same tiers and classes in the
   same order, the questions under `### Effort` give the same levels in the same order and forbid `max`, every
   `[mr:…]` tag names a known class, and the price order is stated;
@@ -642,6 +683,33 @@ drift apart. It checks that:
 A change to the grid therefore touches `grid.json` and both skills in the same change. The router mod reads the
 judge mapping, the tiers, the effort questions and the classes from `grid.json` to build the judge's prompt, and
 the quality loop reads each class's `default` as its prior.
+
+## The model-router mod
+
+The mod is `hooks/model-router.ts`, loaded from the `modules` entry of `hooks/hooks.json`. It needs mods turned on;
+with mods off, the skills still work, no subagent start is routed and no event is recorded.
+
+### Routing a subagent start
+
+At a subagent start through the `Agent` tool, a `tool.call` hook decides the case and asks the judge, and sets the
+effort on the call itself; the `agent.spawn` hook that follows (same `tool_use_id`) sets the model against the
+parent's model and logs the decision. An explicit model, a fork, a resume, routing turned off, a session-wide
+subagent model, and an agent whose definition fixes a model or that the mod cannot read (a plugin's agent, a
+built-in type other than `general-purpose` and `Explore`) are kept. The judge is one call to the fast tier (8 s
+limit) with a prompt generated from `grid.json`; the task is wrapped as data with closing tags escaped. A
+downgrade needs confidence 0.6, an upgrade 0.3; risk above 0.7 (or a `!` in the class tag) forces the deep tier
+and at least `high` effort. The judge's tiers stop at `opus`, so the router never picks `fable`, and in 0.2 it does
+not hold `review-debug` and `design-open` to the grid's floor.
+
+### The quality loop (measuring only in 0.2)
+
+The mod appends `decision`, `spawn`, `signal` (`write`, `tool-error`, `prompt`, `stop`, `resume`), `report` and
+`session-end` records to `events.jsonl` with `cat >>` through `$.process.run`. Compaction, started by the mod at
+session start and by the report, decides the outcome of every task whose rework window closed (`success`,
+`rework`, `failure`, `cancelled`), appends it as an `outcome` record, and folds the learned ones into cells of
+class × tier × effort at two levels (user, project), with aging and the grid as prior. The report shows first-pass
+yield, rework rate, cost per task and per successful task, the explored share, a recommendation per class, a
+weekly trend and the router's decisions. The router does not use the data until 0.3.
 
 ## State on disk
 
@@ -658,7 +726,7 @@ No plugin keeps state inside a hub or a repository. State lives under the active
 | `<config dir>/model-router/events.jsonl` | model-router | the router mod and compaction, append only | routing decisions, spawns, signals, reports, session ends; outcomes (compaction) | 0.2 |
 | `<config dir>/model-router/quality/user.json`, `quality/projects/<project id>.json` | model-router | compaction, written whole (temporary name, then rename) | quality aggregates per user and per project | 0.2 |
 | `<config dir>/model-router/quality/state.json`, `quality/.lock` | model-router | compaction | the offset of the earliest open task, and the lock (stale after 2 minutes) | 0.2 |
-| `<config dir>/model-router/options.json` | model-router | the mod, at each session start | the options compaction and the report use (window, similarity, half-life) | 0.2 |
+| `<config dir>/model-router/options.json` | model-router | the mod, at each session start | the options compaction and the report use: rework window, similarity threshold, half-life and project prior strength | 0.2 |
 | `<config dir>/model-router/report.html` | model-router | `scripts/report.mjs` | the local quality report | 0.2 |
 
 The plugins also write two kinds of files in a hub or a project, both configuration and both only after the
@@ -675,7 +743,9 @@ The two plugins fail in opposite directions, on purpose.
 [Fail-closed policy](#fail-closed-policy)). The children record is protected the same way: a corrupt record, a
 record from a newer format, or a lock that cannot be taken stops the write and leaves the file as it is. The
 record never stops the work, though: when `registry.mjs` fails, `spawn` and `dispatch` tell the user and carry on
-without recording.
+without recording. The mod's send guard and shell check fail closed in the same way (see
+[The session-hub mod](#the-session-hub-mod)); its origin marking, scope line and panel only inform and never
+block.
 
 **`model-router` fails open.** An error never stops work. In the skills, a missing or unreadable
 `recommendations.json`, or one with no entry for the class, means the grid alone decides, silently. The router mod
@@ -691,9 +761,9 @@ file remembers the tasks it folded.
 |---|---|
 | Claude Code version tested | 2.1.329 |
 | Cross-session messaging (needed by `session-hub`) | Claude Code 2.1.224 or later |
-| Mods | exist from Claude Code 2.1.287; the `model-router` mod declares `engines["claude-code"]: ">=2.1.329"`, the version it was tested on |
-| `node` | on `PATH`, for the scope guard, the record script and the `model-router` scripts; no dependencies |
-| Operating system | macOS and Linux only: the `session-hub` hook wrapper in `hooks.json` is a POSIX `sh` command; the `model-router` mod runs `sh`, `mkdir`, `cat`, `mv` and `tail`, and its report opens the page with `open` (macOS) or `xdg-open` (Linux) |
+| Mods | exist from Claude Code 2.1.287; both mods declare `engines["claude-code"]: ">=2.1.329"`, the version they were tested on |
+| `node` | on `PATH`, for the scope guard, the record script, the `session-hub` mod's panel (it reads the record through `registry.mjs`), the `model-router` scripts and the `model-router` mod (it starts `compact.mjs`); no dependencies |
+| Operating system | macOS and Linux only: the `session-hub` hook wrapper in `hooks.json` is a POSIX `sh` command; the `model-router` mod runs `sh`, `node`, `mkdir`, `dirname`, `cat`, `mv` and `tail`, and its report opens the page with `open` (macOS) or `xdg-open` (Linux) |
 
 What was verified on 2.1.329:
 
@@ -702,11 +772,14 @@ What was verified on 2.1.329:
 - `SESSION_HUB_*` variables set on the launch command reach a `PreToolUse` hook in the same four environments.
 - A session started in a repository nested in the hub, or in a worktree under it, loads the hub's instruction file
   as well as its own. A worktree in a sibling folder outside the hub loads only the repository's file.
+- The `session-hub` mod loads in `--bg` sessions and tmux panes and reads the `SESSION_HUB_*` variables there; a
+  child's message to a session other than its master is not delivered; a mod's `$.state` does not survive a
+  restart and resume; `ListAgents`, called by a mod, lists peer sessions with their status.
 - At `agent.spawn` a model fixed by an agent's definition is not shown, and a hook's model overrides it; a
-  subagent's effort is set by rewriting `effort` on the `Agent` tool call (S3).
-- At `agent.report`, the agent's `$.agent.list()` row carries `usage` and `cost` (S11); a subagent's `Edit` and
-  `Write` calls carry its `agentId` and the file path (S12); continuing a subagent through `SendMessage` cost
-  about a fifth of a fresh start on the same follow-up (S13).
+  subagent's effort is set by rewriting `effort` on the `Agent` tool call.
+- At `agent.report`, the agent's `$.agent.list()` row carries `usage` and `cost`; a subagent's `Edit` and `Write`
+  calls carry its `agentId` and the file path; continuing a subagent through `SendMessage` cost about a fifth of a
+  fresh start on the same follow-up.
 
 Not verified: the desktop app's start tool (role variables, model and effort). A hub under the system temporary
 folder loaded no project instruction file at all, so test hubs belong under the home folder.
@@ -714,20 +787,6 @@ folder loaded no project instruction file at all, so test hubs belong under the 
 ## Planned releases
 
 Everything in this section is provisional: names, defaults and behaviour may change before release.
-
-### session-hub 0.2: the mod
-
-| Function | Behaviour |
-|---|---|
-| Send guard | In a child, a message to any session but the master is not delivered, and the reason tells the model to use the master. The hub's *Guards* key will cover it as well. |
-| Origin marking | In a child, a delivery from another session gets a short line saying it is information, not authorization. A prompt typed by the person gets none. |
-| Scope line | The role and the scope added to the session's context, so they survive compaction. |
-| Children panel | In the master, the children from the record: status, model, effort, last message. |
-| `/session-hub` | Opens the panel and shows the session's role and scope. |
-
-Every guard of the mod will fail closed. The mod does not replace the classic hook, which keeps covering file
-writes where mods are turned off. The first prompt of a child is not treated as coming from the master, because a
-launcher that types into a pane looks like the user.
 
 ### model-router 0.3: adaptive selection
 
@@ -740,11 +799,22 @@ launcher that types into a pane looks like the user.
 
 ## For contributors
 
-- Repository layout: one top-level folder per plugin, each with `.claude-plugin/plugin.json`, `skills/`, and for
-  `session-hub` `hooks/` and `scripts/`; `model-router` also has `hooks/` (the mod), `lib/`, `scripts/`, `types/`
-  and `tests/`. A plugin uses nothing outside its own folder, because only that folder is installed.
+- Repository layout: one top-level folder per plugin, each with `.claude-plugin/plugin.json`, `skills/`,
+  `hooks/`, `scripts/` and `types/`. A plugin uses nothing outside its own folder, because only that folder is
+  installed.
+  - `session-hub/`: `hooks/` holds the classic hook (`hooks.json`, `scope-guard.mjs`) and the mod
+    (`session-hub-mod.tsx`, loaded from the same `hooks.json`); `hooks/mod/` holds the mod's pure logic as plain
+    `.mjs` modules with their `.d.mts` declarations; `scripts/` holds `registry.mjs`; `types/` and `tsconfig.json`
+    type the mod. The mod's tests are `hooks/session-hub-mod.test.tsx` for the glue and `hooks/mod/*.test.mjs` for
+    the logic.
+  - `model-router/`: `hooks/` holds the mod (`model-router.ts`, loaded from `hooks.json`); `lib/` holds the plain
+    modules shared by the mod and the scripts; `scripts/` holds `compact.mjs` and `report.mjs`; `types/` types the
+    mod; `grid.json` and `grid.test.mjs` sit at the plugin's root. The mod's tests are
+    `tests/model-router.test.ts` for the glue and `lib/*.test.mjs` for the logic.
 - Checks: `bash tests/validate.sh` for structure, `node --test` on the `*.test.mjs` files next to the code,
-  `claude plugin validate ./<plugin> --strict`, and `claude plugin test ./model-router` for the mod. Manual
+  `claude plugin validate ./<plugin> --strict`, and `claude plugin test ./<plugin>` for each mod's glue. Manual
   scenarios are under `tests/scenarios/`.
 - The design and the tests run before building are in `docs/design/`; what the two plugins may assume about each
-  other is in `docs/design/shared-contract.md`. Change the design there first, then the code, then this document.
+  other is in `docs/design/shared-contract.md`. The design of the `session-hub` mod and the results of the tests
+  run before building it are in `docs/design/session-hub.md` and `docs/design/spikes.md`. Change the design there
+  first, then the code, then this document.
