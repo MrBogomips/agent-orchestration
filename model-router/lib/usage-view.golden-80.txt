@@ -3,6 +3,20 @@ Usage · last 7 days · user level
 ── Overview ────────────────────────────────────────────────────────────────────
 Status:               routing on · measuring on · adapt off
 
+Last 7 days · user level · 7 tasks scored · vs the one before
+╭─ FPY ───────╮ ╭─ $/success ─╮ ╭─ Rework ────╮ ╭─ Routed ────╮
+│     86%     │ │   $0.087    │ │     0%      │ │  5 starts   │
+│   🟢 good   │ │ ⚪ no prior │ │   🟢 low    │ │  ↓3 ↑0 =1   │
+╰─────────────╯ ╰─────────────╯ ╰─────────────╯ ╰─────────────╯
+
+FPY by day            █████ ▁  50%
+$/success by day      ▂▁▁▁▁ █  $0.407
+
+haiku·low      ████████████████████ 100%   $0.0047    2 tasks
+sonnet·low     ████████████████████ 100%    $0.023    3 tasks
+sonnet·medium  ████████████████████ 100%    $0.025    2 tasks
+opus·high      ░░░░░░░░░░░░░░░░░░░░   0%         –     1 task
+
 Session
 Subagents:            3 · $0.034
 Usage by model:
@@ -17,6 +31,12 @@ Routing · 4 decisions this session
   explicit            █████░░░░░░░░░░░░░░░ 1
 
 ── Models ──────────────────────────────────────────────────────────────────────
+Last 7 days · user level · 7 tasks scored · vs the one before
+╭─ FPY ───────╮ ╭─ $/success ─╮ ╭─ Rework ────╮ ╭─ Routed ────╮
+│     86%     │ │   $0.087    │ │     0%      │ │  5 starts   │
+│   🟢 good   │ │ ⚪ no prior │ │   🟢 low    │ │  ↓3 ↑0 =1   │
+╰─────────────╯ ╰─────────────╯ ╰─────────────╯ ╰─────────────╯
+
 Models · last 7 days · 8 closed tasks · 457.3k tokens · $0.530
                 tasks  tokens    cost  FPY                       $/success
 haiku·low           2  166.3k $0.0095  ████████████████████ 100%   $0.0047
@@ -26,6 +46,12 @@ opus·high           1  210.0k  $0.400  ░░░░░░░░░░░░░�
 Model ids: claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5
 
 ── Classes ─────────────────────────────────────────────────────────────────────
+Last 7 days · user level · 7 tasks scored · vs the one before
+╭─ FPY ───────╮ ╭─ $/success ─╮ ╭─ Rework ────╮ ╭─ Routed ────╮
+│     86%     │ │   $0.087    │ │     0%      │ │  5 starts   │
+│   🟢 good   │ │ ⚪ no prior │ │   🟢 low    │ │  ↓3 ↑0 =1   │
+╰─────────────╯ ╰─────────────╯ ╰─────────────╯ ╰─────────────╯
+
 Classes · user level · last 7 days
                        n  FPY                        rework $/success
 read-search            2  ████████████████████ 100%      0%   $0.0047

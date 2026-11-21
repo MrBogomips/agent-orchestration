@@ -19,6 +19,7 @@ files it affects. None of them was run during the design.
 | S12 | Does `tool.call` carry `agentId` for a subagent's `Edit` and `Write`? | Log `e.agentId` and `file_path` at `tool.call` while a subagent edits a file. | How the quality loop attributes written files to a subagent (rework signal). |
 | S13 | How many tokens does continuing a subagent through the message tool cost compared with a fresh start on the same follow-up? | Same follow-up twice: once continued, once as a new subagent; compare `usage`. | Whether the *continue, do not restart* rule in `choose-model` holds. |
 | S14 | Does a `tool.call` rewrite of the `Agent` call survive auto permission mode, and can a `turn.step` hook set a subagent's effort instead? | Start a routed subagent in auto mode with the 0.3.1 mod, then with a mod that leaves the call unchanged and rewrites `effort` at `turn.step` for the subagent's `agentId`; compare with default mode. | Whether the router sets effort on the tool call or on the subagent's requests. |
+| S15 | Which keys reach a focused plugin pane, and can the arrows move its tabs without a click? | Open `/model-router` in tmux; press each arrow, Tab and Shift+Tab with hooks on `ui.focus` and `ui.scroll` that toast what they see; try a `Select` and a `Client` with `onKey`; read the engine's default keybinding contexts. | How the usage view's tabs and window are driven by keys. |
 
 ## Order
 
@@ -103,3 +104,13 @@ it anyway. One `general-purpose` start with no model, tagged `[mr:read-search]`,
 | ID | Date | Claude Code | Setup | Outcome |
 |---|---|---|---|---|
 | S14 | 2026-11-21 | 2.1.330 | As above; first with the 0.3.1 mod, then with 0.3.2. | **0.3.1 in auto mode: the start is refused.** The row reads "Not run · auto mode's check had no usable answer"; the tool error says a hook changed the call's input (`effort: "low"`) after auto mode reviewed it. **0.3.2 in auto mode: both starts run.** The plain one is logged `keep` on haiku with effort `low` (the session's own, so no step is rewritten); the `!` one `forced-risk`, haiku to `claude-opus-5-5` through `agent.spawn`, effort `high` through `turn.step`; the debug log has `first turn.step effort` before the subagent's first API request (`model=claude-opus-5-5`), and the report record has `model: claude-opus-5-5`, `effort: high`. **Default mode: the same** for the `!` start. A `tool.call` hook that calls `next(e)` unchanged does not disturb the auto mode review. `agent.spawn`'s input in this build has no effort field (it has `permissionMode`, the parent's). |
+
+## Results for model-router 0.3.3
+
+Setup: tmux at 150 by 45 columns and rows, `claude --plugin-dir <worktree>/model-router --model haiku --effort
+low`, `/model-router` opened in the fullscreen layout (the pane docked) and, with `CLAUDE_CODE_NO_FLICKER=0`,
+inline above the prompt; hooks on `ui.focus` and `ui.scroll` that toasted their input.
+
+| ID | Date | Claude Code | Setup | Outcome |
+|---|---|---|---|---|
+| S15 | 2026-11-21 | 2.1.330 | As above. | **Left and Right never reach a plugin pane.** The engine's `Pane` keybinding context binds Tab and Shift+Tab to the ring (`abovePrompt:next`/`previous`), Up and Down to `pane:scrollUp`/`scrollDown`, and nothing to Left or Right (the `AbovePrompt` band and `Tabs` contexts do bind them). With the pane focused, Right raised no event at all; Left fell through to the prompt and opened the agents view ("← for agents"). A `Select` drew as an open list and Right did nothing on it (its `Select` context binds Up and Down, not Left or Right); the ring skipped a `Client`, whose `onKey` is reached only after a click. **Up and Down reach the pane**: as a `ui.scroll` of one row (`by` ±1, no `pointer`) while the body has rows to scroll, at its edges too, and as a ring move otherwise. **Tab and Shift+Tab** raise `ui.focus` (origin `person`); `next({ ...e, element })` onto another of the plugin's Buttons lands the ring there, while a move onto the engine's close mark (`element` absent) cannot be rewritten, and adding `plugin` is refused by `claude plugin test`. A plugin's own `$.ui.focus` from inside a `ui.focus` hook answered `{}` without moving the ring. So the usage view takes Tab/Shift+Tab for the tabs and Up/Down for the window, with the body padded to one row more than the window; all worked right after the open, without a click, docked and inline. |

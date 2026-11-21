@@ -151,7 +151,7 @@ one file per environment).
 | `model-router:report` | skill | Runs `scripts/report.mjs` and gives the user the page's path. Computes nothing itself. |
 | `model-router` | mod | `hooks/model-router.tsx`, registered as a module in `hooks/hooks.json`. Routes subagent starts that carry no model and records the quality loop's events. Thin glue over the plain modules in `lib/`. |
 | `/model-router` | command | Registered by the mod: the usage view, a tabbed dialog (Overview, Models, Classes, Decisions) with a text fallback; `on` or `off` for the session; `report`; `help`. See [Commands](#commands). |
-| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the usage view's rows (`usage-view.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
+| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the usage view's rows (`usage-view.mjs`), its tiles and sparklines (`usage-tiles.mjs`) and keys (`usage-nav.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
 | `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes outcomes and updates the aggregates under a lock; the report renders them into one self-contained page and opens it; `usage.mjs` compacts within a 3-second budget and prints the usage view's data as JSON. |
 | `grid.json` | data | The same grid in machine-readable form, with each class's usual choice (`default`); the judge's prompt is generated from it. |
 | `grid.test.mjs` | test | Fails when `grid.json` and the two skills drift apart. |
@@ -720,17 +720,26 @@ weekly trend and the router's decisions. The router does not use the data until 
 
 ### The usage view
 
-`/model-router` opens a dialog pane (`model-router-usage`, opened with `focus` and `closeOnEscape`) drawn by a
-`ui.render` hook. The mod runs `scripts/usage.mjs` with this session's id, its project and its live agents from
+`/model-router` opens a dialog pane (`model-router-usage`, opened with `focus`, `closeOnEscape` and 24 rows inline)
+drawn by a `ui.render` hook, laid out like Claude Code's Settings dialog: a header row with 🧭 and the tabs, a row
+with the window and the level, the tab's rows, a footer of key hints. The active tab and window are teal blocks. The mod runs `scripts/usage.mjs` with this session's id, its project and its live agents from
 `$.agent.list()` on stdin; the script runs compaction in a child process for at most 3 seconds, reads
 `events.jsonl` and the aggregates once and prints the data of every tab for every window (24h, 7d, 30d, all) and
 both levels (user, project). The mod keeps that data in `$.state` (`usage`), with the tab, window and level
 (`view`), so a key redraws without running anything; `r` runs the script again. The rows of each tab come from
-`lib/usage-view.mjs`, a pure module, for the pane's width; where no pane can be placed, the command answers the
+`lib/usage-view.mjs`, a pure module, for the pane's width, with the KPI tiles and sparklines of
+`lib/usage-tiles.mjs` (the numbers, with the window before for the deltas, are `headline` in `lib/usage-data.mjs`);
+a row may carry coloured segments, which the pane draws and the text keeps as plain text; where no pane can be placed, the command answers the
 same rows as text. Every answer of the command carries `isTextDisplayOnly`, so the model never reads it. A script
 that fails or times out (15 seconds) gives one short line; in the pane, a line in place of the rows when there is
 no data yet, or a warning under the earlier rows after a failed refresh. The commands of both plugins are listed in
 [Commands](#commands).
+
+Keys: the engine routes Tab, Shift+Tab, Up, Down, the page keys and the Buttons' hotkeys to a focused pane, never
+Left or Right (spike S15). Tab moves the focus ring along the tab Buttons and a `ui.focus` hook switches the tab
+as the ring lands, wrapping at the ends; Up and Down arrive as a one-row `ui.scroll`, because the pane pads its
+body to one row more than the window, and a `ui.scroll` hook turns them into the next or previous window
+(`lib/usage-nav.mjs`).
 
 ```mermaid
 sequenceDiagram
@@ -749,7 +758,10 @@ sequenceDiagram
     U->>F: read events.jsonl and aggregates once
     U-->>M: JSON: every window, both levels
     M->>M: $.state usage, view; the pane draws the tab's rows
-    P->>M: 1-4, Tab, d/w/m/a, p (redraw only)
+    P->>M: Tab / Shift+Tab (ui.focus: ring to the next tab)
+    P->>M: Down / Up (ui.scroll of one row: next window, body kept)
+    P->>M: d/w/m/a, p (Button hotkeys)
+    M->>M: $.state view; redraw only
     P->>M: r (usage.mjs again), o (report.mjs)
   else no pane (headless, -p, under 60 columns)
     M->>U: the same read
@@ -772,9 +784,10 @@ the report skill still work then. Every answer is for the person (`isTextDisplay
 | `/model-router report` | | Writes and opens the report page; answers its path. | The `model-router:report` skill does the same. |
 | `/model-router help` | | The arguments and the keys. Any unknown argument prints the same. | |
 
-Keys in the usage view: `1`–`4` or Tab onto a tab switch tab; `d`, `w`, `m`, `a` set the window to 24
-hours, 7 days, 30 days or all; `p` switches between the user and the project level; `o` writes and opens the
-report; `r` refreshes (runs compaction); Esc closes.
+Keys in the usage view: Tab and Shift+Tab switch tab; Down and Up step the window, and `d`, `w`, `m`, `a` set
+it to 24 hours, 7 days, 30 days or all; `p` switches between the user and the project level; `o` writes and opens
+the report; `r` refreshes (runs compaction); Page Up and Page Down scroll; Esc closes. Left and Right do not reach
+a plugin pane.
 
 ## State on disk
 

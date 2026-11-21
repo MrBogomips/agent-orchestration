@@ -13,11 +13,16 @@ import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky
 import { parseTag } from '../lib/text.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, TAB_TITLES, TABS, WINDOW_KEYS, helpText, noteRows, parseArgs, tabRows, textView } from '../lib/usage-view.mjs'
 import type { Row } from '../lib/usage-view.mjs'
+import { isArrowScroll, padRows, ringTarget, stepWindow, tabKey, tabOfKey, windowKey } from '../lib/usage-nav.mjs'
 
 const PLUGIN = 'model-router'
 const PROMPT_CHARS = 2000
 const PANE = 'model-router-usage'
 const PANE_TITLE = 'model-router usage'
+// The body rows asked for when the pane opens inline (no fullscreen layout): enough for the footer under a tab.
+const PANE_ROWS = 24
+// A press this soon after the ring wrapped is the click that moved it, not a key: the wrap is undone.
+const CLICK_MS = 500
 const USAGE_TIMEOUT_MS = 15000
 const REPORT_TIMEOUT_MS = 60000
 const WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit']
@@ -262,8 +267,10 @@ async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | 
   const view: UsageView = { tab: asked.tab ?? DEFAULT_VIEW.tab, window: asked.window ?? DEFAULT_VIEW.window, level: asked.level ?? DEFAULT_VIEW.level }
   await update($, viewState, () => view)
   if (columns >= MIN_COLUMNS) {
-    const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true })
+    const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true, rows: PANE_ROWS })
     if (opened.isPlaced) {
+      // A pane that was already open keeps its ring where it was: move it to the tab asked for.
+      void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
       await refreshUsage($, ctx, true)
       return display('Usage view opened (Esc closes it).')
     }
@@ -273,8 +280,28 @@ async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | 
   return display(textView(data, { ...asked, window: view.window, level: view.level, status: await statusOf($, opts) }, columns))
 }
 
-const toneProps = (row: Row) =>
-  row.tone === 'title' ? { bold: true } : row.tone === 'dim' ? { dimColor: true } : row.tone === 'warn' ? { color: 'warning' as const } : {}
+// The view's identity: the compass and a teal accent, on the title, the active tab and window, the tile borders.
+// Everything else keeps the theme's own colours; good, fair and bad are the theme's success, warning and error.
+const ICON = '🧭'
+const ACCENT = '#14b8a6'
+const TONES: Record<string, object> = {
+  title: { bold: true },
+  dim: { dimColor: true },
+  warn: { color: 'warning' },
+  accent: { color: ACCENT },
+  good: { color: 'success' },
+  fair: { color: 'warning' },
+  bad: { color: 'error' },
+}
+const toneProps = (tone: string | null | undefined) => (tone ? TONES[tone] ?? {} : {})
+
+// The active tab and window are drawn as Claude Code's Settings dialog draws them: a block in the accent colour
+// (inverse, so the focus ring, which inverts too, leaves the block as it is).
+const activeProps = (isActive: boolean) => (isActive ? { bold: true, inverse: true, color: ACCENT } : {})
+const HINT = { italic: true, color: 'inactive' as const }
+
+/** Where the focus ring is in the pane, and the last move this plugin wrapped round the tab row. */
+type Ring = { at: string | null; wrap: { to: string | undefined; tab: string; at: number } | null }
 
 export const register: Register = (on, options) => {
   const opts = optionsOf(options)
@@ -323,13 +350,40 @@ export const register: Register = (on, options) => {
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
   }).catch(($, e, next) => ({ text: `Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
 
-  // The ring landing on a tab (Tab, or an arrow where the engine routes it to the pane) switches to it.
-  // A ring move carries the element as `element`; this plugin's own $.ui.focus call names it `key`.
+  // Keys of the usage view (lib/usage-nav.mjs says what the engine routes to a pane). Tab and Shift+Tab move the
+  // focus ring along the tab row, wrapping at its ends, and the tab follows the ring. Up and Down arrive as a
+  // one-row scroll, kept from moving the body, and step the window. A press right after a wrap was a click.
+  const ring: Ring = { at: null, wrap: null }
+
+  // A ring move carries the element as `element`; this plugin's own $.ui.focus call in a test names it `key`.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
-    const element: unknown = (e as { element?: unknown }).element ?? (e as { key?: unknown }).key
-    const tab = typeof element === 'string' && element.startsWith('tab-') ? element.slice(4) : undefined
-    if (tab && TABS.includes(tab)) await update($, viewState, (v) => ({ ...v, tab }))
-    return next(e)
+    const to = ((e as { element?: string }).element ?? (e as { key?: string }).key) as string | undefined
+    const target = e.origin?.kind === 'person' ? ringTarget(ring.at, to) : to
+    const fromTab = tabOfKey(ring.at)
+    ring.wrap = target !== to && fromTab ? { to, tab: fromTab, at: Date.now() } : null
+    const tab = tabOfKey(target)
+    if (tab) await update($, viewState, (v) => ({ ...v, tab }))
+    const moved = await next(target === to ? e : { ...e, element: target })
+    if (!moved?.deny) ring.at = target ?? null
+    return moved
+  }).catch(($, e, next) => next(e))
+
+  on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
+    if (!isArrowScroll(e)) return next(e)
+    await update($, viewState, (v) => ({ ...v, window: stepWindow(v.window, e.by) }))
+    return {}
+  }).catch(($, e, next) => next(e))
+
+  // A press on anything but a tab leaves the ring on the active tab, so the row keeps one highlighted block.
+  on('ui.press', { requestId: PANE }, async ($, e, next) => {
+    const wrap = ring.wrap
+    ring.wrap = null
+    if (tabOfKey(e.element)) return next(e)
+    if (wrap && wrap.to === e.element && Date.now() - wrap.at < CLICK_MS) await update($, viewState, (v) => ({ ...v, tab: wrap.tab }))
+    const pressed = await next(e)
+    const view = await read($, viewState)
+    if (ring.at !== tabKey(view.tab)) void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
+    return pressed
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -347,31 +401,47 @@ export const register: Register = (on, options) => {
       ...(usage.error && usage.data ? [{ text: `Last refresh failed: ${usage.error}`, tone: 'warn' as const }] : []),
     ]
     const setView = (patch: Partial<UsageView>) => update($, viewState, (v) => ({ ...v, ...patch }))
-    const windowKeys = Object.entries(WINDOW_KEYS)
+    const isProject = view.level === 'project'
+    // Header, sub-tabs, footer and three margins: the fewest rows drawn besides the content and the notes.
+    const pad = padRows(rows.length + notes.length + 6, e.props.scroll?.bodyRows)
+    const line = (r: Row) => (r.segments
+      ? <Text {...toneProps(r.tone)} wrap="truncate">{r.segments.map((s) => <Text {...toneProps(s.tone)}>{s.text}</Text>)}</Text>
+      : <Text {...toneProps(r.tone)} wrap="truncate">{r.text || ' '}</Text>)
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" gap={1}>
-          {TABS.map((tab, i) => (
-            <Button key={`tab-${tab}`} label={TAB_TITLES[tab]} hotkey={String(i + 1)} variant={view.tab === tab ? 'primary' : 'secondary'}
-              autoFocus={view.tab === tab ? true : undefined} onPress={() => setView({ tab })} />
+          {/* The title is a Button so that Shift+Tab off the first tab lands on it, which the ring wraps. */}
+          <Button key="title" label={PLUGIN} plain onPress={() => undefined}>
+            <Text bold color={ACCENT}>{ICON} {PLUGIN}</Text>
+          </Button>
+          {TABS.map((tab) => (
+            <Button key={tabKey(tab)} label={TAB_TITLES[tab]} plain autoFocus={view.tab === tab ? true : undefined} onPress={() => setView({ tab })}>
+              <Text {...activeProps(view.tab === tab)}> {TAB_TITLES[tab]} </Text>
+            </Button>
           ))}
+        </Box>
+        <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
+          <Box flexDirection="row" gap={1}>
+            {Object.entries(WINDOW_KEYS).map(([key, window]) => (
+              <Button key={windowKey(window)} label={window} hotkey={key} plain onPress={() => setView({ window })}>
+                <Text {...activeProps(view.window === window)}> {window} </Text>
+              </Button>
+            ))}
+          </Box>
+          <Button key="level" label={`${isProject ? 'project' : 'user'} level`} hotkey="p" plain onPress={() => setView({ level: isProject ? 'user' : 'project' })}>
+            <Text {...(isProject ? { dimColor: true } : { bold: true, color: ACCENT })}>user</Text>
+            <Text dimColor> · </Text>
+            <Text {...(isProject ? { bold: true, color: ACCENT } : { dimColor: true })}>project</Text>
+          </Button>
         </Box>
         <Box flexDirection="column" marginTop={1}>
-          {rows.map((row) => (
-            <Text {...toneProps(row)} wrap="truncate">{row.text || ' '}</Text>
-          ))}
+          {rows.map(line)}
         </Box>
         <Box flexDirection="column" marginTop={1}>
-          {notes.map((row) => (
-            <Text {...toneProps(row)} wrap="truncate">{row.text}</Text>
-          ))}
+          {notes.map(line)}
         </Box>
-        <Box flexDirection="row" gap={2}>
-          {windowKeys.map(([key, window]) => (
-            <Button key={`window-${window}`} label={window} hotkey={key} plain dimColor={view.window !== window} onPress={() => setView({ window })} />
-          ))}
-          <Button key="level" label={view.level === 'project' ? 'project' : 'user'} hotkey="p" plain
-            onPress={() => setView({ level: view.level === 'project' ? 'user' : 'project' })} />
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1} marginTop={1}>
+          <Text {...HINT}>Tab/⇧Tab tab · ↑/↓ period · p level ·</Text>
           <Button key="report" label="report" hotkey="o" plain dimColor
             onPress={async () => {
               try {
@@ -380,9 +450,11 @@ export const register: Register = (on, options) => {
                 $.ui.toast(`model-router: could not write the report: ${errorText(err)}`)
               }
             }} />
+          <Text {...HINT}>·</Text>
           <Button key="refresh" label="refresh" hotkey="r" plain dimColor onPress={() => refreshUsage($, ctx)} />
-          <Text dimColor>Esc close</Text>
+          <Text {...HINT}>· Esc</Text>
         </Box>
+        {Array.from({ length: pad }, () => <Text> </Text>)}
       </Box>
     )
   })

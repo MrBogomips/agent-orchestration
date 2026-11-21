@@ -280,7 +280,7 @@ describe('/model-router usage view', () => {
     const w = world(on)
     const out = await run($, '')
     expect(out.isTextDisplayOnly).toBe(true)
-    expect(w.opens[0]).toEqual({ id: 'model-router-usage', title: 'model-router usage', focus: true, closeOnEscape: true })
+    expect(w.opens[0]).toEqual({ id: 'model-router-usage', title: 'model-router usage', focus: true, closeOnEscape: true, rows: 24 })
     const reads = w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs'))
     expect(reads.length).toBe(1)
     expect(reads[0].argv).toContain('/home/u/.claude')
@@ -331,6 +331,124 @@ describe('/model-router usage view', () => {
     await $.ui.focus({ requestId: 'model-router-usage', key: 'tab-decisions' } as any)
     expect(moves.length).toBe(1)
     expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the header and the second row are drawn as Claude Code draws its Settings tabs', async ($, on) => {
+    world(on)
+    await run($, 'classes 30d')
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      expect(await ui.find({ type: 'Text', text: '🧭 model-router' })).toBeDefined()
+      const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
+      expect(keys).toEqual(['title', 'tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level', 'report', 'refresh'])
+      const drawn = JSON.stringify(await ui.drawn())
+      // The active tab and window are inverse blocks in the teal accent; no other label is.
+      expect(drawn.match(/"inverse":true/g)?.length).toBe(2)
+      expect(drawn.match(/"inverse":true,"color":"#14b8a6"/g)?.length).toBe(2)
+      expect(await ui.find({ type: 'Text', text: /Tab\/⇧Tab tab · ↑\/↓ period · p level/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /· Esc$/ })).toBeDefined()
+      await ui.unmount()
+    }
+  })
+
+  test('Overview opens with the KPI tiles, sparklines and model bars in colour', async ($, on) => {
+    world(on)
+    await run($, 'overview 30d')
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      expect(await ui.find({ type: 'Text', text: /^╭─ FPY ─/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /75% ▼25/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^FPY by 3 days/ })).toBeDefined()
+      const drawn = JSON.stringify(await ui.drawn())
+      // Worse than the 30 days before: the deltas are red, the statuses yellow and red; bars of under 5 tasks dim.
+      expect(drawn).toContain('{"color":"error"},"children":["▼25"]')
+      expect(drawn).toContain('{"color":"warning"},"children":["fair"]')
+      expect(drawn).toContain('{"dimColor":true},"children":["████████████████████"]')
+      await ui.unmount()
+    }
+  })
+
+  test('the body is kept one row taller than the window, so Up and Down arrive as a scroll', async ($, on) => {
+    world(on)
+    await run($, '')
+    const short = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, scroll: { offset: 0, bodyRows: 90 } } })
+    const blanks = async (ui: any) => (await ui.findAll({ type: 'Text' })).filter((t: any) => t.text === ' ').length
+    const tall = await blanks(short)
+    await short.unmount()
+    const none = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, scroll: { offset: 0, bodyRows: 5 } } })
+    expect(tall - (await blanks(none))).toBeGreaterThan(30)
+    await none.unmount()
+  })
+
+  test('Tab moves the ring along the tabs and wraps at both ends', async ($, on) => {
+    world(on)
+    const landed: any[] = []
+    on('ui.focus', ($, e) => {
+      landed.push((e as any).element ?? (e as any).key)
+      return {}
+    })
+    const person = (element: string | undefined) =>
+      $.ui.focus({ requestId: 'model-router-usage', component: 'Pane', element, origin: { kind: 'person' } } as any)
+    await run($, 'decisions')
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await $.ui.focus({ requestId: 'model-router-usage', key: 'tab-decisions' } as any)
+    await person('window-24h')
+    expect(landed.at(-1)).toBe('tab-overview')
+    expect(await ui.find({ type: 'Text', text: /^Status:/ })).toBeDefined()
+    await person('tab-models')
+    expect(await ui.find({ type: 'Text', text: /^Models ·/ })).toBeDefined()
+    await person('tab-overview')
+    await person('title')
+    expect(landed.at(-1)).toBe('tab-decisions')
+    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
+    // Onto one of the engine's stops (the close mark) a move cannot be rewritten: it lands there, the tab stays.
+    await person('tab-overview')
+    await person(undefined)
+    expect(landed.at(-1)).toBe(undefined)
+    expect(await ui.find({ type: 'Text', text: /^Status:/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a click off the tab row from an end tab keeps the tab and presses what was clicked', async ($, on) => {
+    world(on)
+    on('ui.focus', () => ({}))
+    await run($, 'decisions')
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await $.ui.focus({ requestId: 'model-router-usage', key: 'tab-decisions' } as any)
+    await $.ui.focus({ requestId: 'model-router-usage', component: 'Pane', element: 'window-30d', origin: { kind: 'person' } } as any)
+    await ui.press({ key: 'window-30d' })
+    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
+    await ui.press({ key: 'tab-models' })
+    expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 30 days')
+    await ui.unmount()
+  })
+
+  test('Down and Up step the window, cycling, and leave the body where it is', async ($, on) => {
+    world(on)
+    const scrolled: any[] = []
+    on('ui.scroll', ($, e) => {
+      scrolled.push(e)
+      return {}
+    })
+    const arrow = (by: number, extra: Record<string, unknown> = {}) =>
+      $.ui.scroll({ requestId: 'model-router-usage', component: 'Pane', by, offset: 0, bodyRows: 40, contentRows: 41, origin: { kind: 'person' }, ...extra } as any)
+    await run($, 'models')
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const header = async () => (await ui.find({ type: 'Text', text: /^Models ·/ }))?.text
+    await arrow(1)
+    expect(await header()).toContain('last 30 days')
+    await arrow(1)
+    expect(await header()).toContain('all time')
+    await arrow(1)
+    expect(await header()).toContain('last 24 hours')
+    await arrow(-1)
+    expect(await header()).toContain('all time')
+    expect(scrolled.length).toBe(0)
+    await arrow(1, { pointer: { row: 3, column: 2 } })
+    await arrow(40)
+    expect(await header()).toContain('all time')
+    expect(scrolled.length).toBe(2)
     await ui.unmount()
   })
 

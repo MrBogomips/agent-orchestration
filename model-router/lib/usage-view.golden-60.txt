@@ -3,6 +3,24 @@ Usage · all time · project level
 ── Overview ────────────────────────────────────────────────
 Status:               routing on · measuring on · adapt off
 
+All time · project /work/shop · 8 tasks scored
+╭─ FPY ───────╮ ╭─ $/success ─╮
+│     75%     │ │   $0.100    │
+│   🟡 fair   │ │ ⚪ no prior │
+╰─────────────╯ ╰─────────────╯
+╭─ Rework ────╮ ╭─ Routed ────╮
+│     13%     │ │  0 starts   │
+│   🟡 some   │ │  ↓0 ↑0 =0   │
+╰─────────────╯ ╰─────────────╯
+
+FPY by week                 █  ▁ ▇  83%
+$/success by week           ▁    █  $0.098
+
+haiku·low      ███████████████████ 100%   $0.0047    2 tasks
+sonnet·low     ███████████████████ 100%    $0.023    3 tasks
+sonnet·medium  █████████████░░░░░░  67%    $0.060    4 tasks
+opus·high      ░░░░░░░░░░░░░░░░░░░   0%         –     1 task
+
 Session
 Subagents:            3 · $0.034
 Usage by model:

@@ -199,27 +199,60 @@ command `/model-router on|off` turns routing on or off for the session (kept in 
 view of every number the mod and the quality loop hold, in compact blocks with aligned labels, `k`/`M` token
 counts, `$` costs and text bars sized to the room.
 
-**The usage view** is a dialog pane: `$.ui.open({ id: 'model-router-usage', focus: true, closeOnEscape: true })`,
-drawn by a `ui.render` hook on its `Pane`. It has four tabs:
+**The usage view** is a dialog pane: `$.ui.open({ id: 'model-router-usage', focus: true, closeOnEscape: true,
+rows: 24 })`, drawn by a `ui.render` hook on its `Pane`. Its layout follows Claude Code's Settings dialog (`/usage`,
+`/stats`): a header row with the title and the tabs, a second row of sub-tabs, the content, and a footer of key
+hints in italics. The identity is the 🧭 icon and a teal accent (`#14b8a6`), used only for the title, the active
+tab and window (drawn as an inverse block, as Claude Code draws its active tab) and the tile borders; status
+colours are the theme's success, warning and error, and everything else keeps the theme's colours.
+
+```
+🧭 model-router [Overview]  Models   Classes   Decisions
+d:  24h  w: [7d] m:  30d  a:  all                p: user · project
+...
+Tab/⇧Tab tab · ↑/↓ period · p level · o: report · r: refresh · Esc
+```
+
+The second row is the window, on every tab, with the level (user or project) at its right end; the level is not a
+row of its own because only Classes and the tiles depend on it. The view has four tabs:
 
 | Tab | Shows |
 |---|---|
-| Overview | A status line (routing on or off for the session, measuring, adapt). **Session**: this session's subagents by model, with input, output, cache-read and cache-write tokens and cost, and the total. **Routing**: this session's decisions counted by action (downgrade, upgrade, keep, explicit, forced-risk, error). |
-| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar, cost per successful task; the model ids seen in the window, on one line. A task closed `cancelled` counts in the tasks but not in the first-pass yield. |
-| Classes | Per class, over the window and at the level: n, first-pass yield with a bar, rework rate, cost per successful task, the best measured cell next to the grid's choice, weak-signal flags; under each class its cells. Then up to three recommendation rows that differ from the grid, each led by the recommended cell's first-pass yield. |
+| Overview | A status line (routing on or off for the session, measuring, adapt). The **KPI tiles** of the window at the level: first-pass yield, cost per successful task, rework rate and routed starts (by downgrade ↓, upgrade ↑, keep =). Each tile carries the change against the window of the same length before it (▲/▼, in points for the rates and in percent for the cost; green when better, red when worse, whatever the direction) and a status dot: FPY 🟢 from 85%, 🟡 from 70%, 🔴 below; rework 🟢 up to 10%, 🟡 up to 25%, 🔴 above; cost 🟢 cheaper or 🔴 dearer than before; ⚪ under five scored tasks. Four tiles stand on one row from 70 columns, two by two below. Two **sparklines**, first-pass yield and cost per success, in equal buckets across the window (24h: 3 hours, 7d: a day, 30d: 3 days, all: the last 12 weeks by week). The **tier·effort bars** of the window, coloured by the FPY thresholds (dim under five tasks). **Session**: this session's subagents by model, with input, output, cache-read and cache-write tokens and cost, and the total. **Routing**: this session's decisions counted by action (downgrade, upgrade, keep, explicit, forced-risk, error). |
+| Models | The tiles when they fit on one row; then per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar coloured as above, cost per successful task; the model ids seen in the window, on one line. A task closed `cancelled` counts in the tasks but not in the first-pass yield or the tiles. |
+| Classes | The tiles when they fit on one row; then per class, over the window and at the level: n, first-pass yield with a bar, rework rate, cost per successful task, the best measured cell next to the grid's choice, weak-signal flags; under each class its cells. Then up to three recommendation rows that differ from the grid, each led by the recommended cell's first-pass yield. |
 | Decisions | The latest routing decisions, all sessions, newest last: time, action, model before and after, effort, subagent type, reason. |
 
-Keys while the pane holds the keyboard. The tabs and the footer are Buttons, so the engine's own focus ring and
-hotkeys drive them:
+The headline numbers (`headline` of each window in `lib/usage-data.mjs`) count the scored tasks (success, rework,
+failure) of the window; at the project level they count the project's tasks and the decisions of its spawns.
+
+**Keys** while the pane holds the keyboard, from the moment it opens (no click):
 
 | Key | Does |
 |---|---|
-| `1`–`4`, or Tab onto a tab | Switch tab (a `ui.focus` hook switches as the ring lands on a tab) |
+| Tab, Shift+Tab | Next or previous tab, wrapping at both ends |
+| ↓, ↑ | Next or previous window (24h, 7d, 30d, all), cycling |
 | `d` `w` `m` `a` | Window: last 24 hours, 7 days, 30 days, all |
 | `p` | Level: the user's data or this project's |
 | `o` | Write and open the HTML report (`scripts/report.mjs`); a toast gives its path |
 | `r` | Refresh: run compaction and read again |
+| Page Up, Page Down, wheel | Scroll the content |
 | Esc | Close |
+
+Left and Right do not switch tabs, unlike Claude Code's own dialog: the engine does not route them to a plugin
+pane (spike S15 in `spikes.md`). How the other keys are wired, in `lib/usage-nav.mjs`:
+
+- **Tab** walks the engine's focus ring over the pane's Buttons. The tabs are Buttons, the active one drawn with
+  `autoFocus`, so the ring sits on the active tab from the open; a `ui.focus` hook switches the tab as the ring
+  lands on one. A step off either end of the tab row is rewritten to the other end (`next({ ...e, element })`).
+  The title is a Button before the tabs so that Shift+Tab off the first tab meets an element of the plugin: a
+  move onto one of the engine's own stops (the close mark) cannot be rewritten.
+- **↓ and ↑** reach a pane as a one-row `ui.scroll` while its body has rows to scroll, and walk the ring
+  otherwise. The hook pads the body with blank rows to one row more than the window (`e.props.scroll.bodyRows`),
+  so the arrows always arrive as a scroll; a `ui.scroll` hook answers a one-row scroll from the person with no
+  pointer by stepping the window and leaves the body where it is. Page keys, Home, End and the wheel scroll.
+- A click moves the ring before it presses. A press on anything but a tab moves the ring back to the active tab;
+  a press within 500 ms of a wrap undoes the wrap, which a click off the row from an end tab would cause.
 
 **Arguments.** `/model-router models 30d` opens on that tab and window; tab, window (`24h`, `7d`, `30d`, `all`)
 and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` writes and opens the report page and answers with its path. `help`, and any argument the
