@@ -3,7 +3,7 @@
 // In a child: the send guard (session.send), the best-effort shell check (tool.call on Bash and Monitor), origin
 // marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel, the
 // start line under a Bash call that starts children (ui.render ToolUse), and the scope line. In every session: the
-// /session-hub command. The panel and the start line use the look shared with model-router (./mod/look.mjs). Guards
+// /session-hub command. A child that runs under another configuration folder than its master says so (./mod/identity.mjs). The panel and the start line use the look shared with model-router (./mod/look.mjs). Guards
 // fail closed; the panel, the start line and the marking never block anything. The classic scope guard in
 // hooks.json stays and covers file writes with mods off.
 
@@ -12,6 +12,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { ScopeLine, SessionHubMaster, SessionHubPanel, SessionHubStarts } from '../types'
 import { helpText, parseCommand } from './mod/command.mjs'
+import { identityMismatch, mismatchText } from './mod/identity.mjs'
 import { markContext, markText } from './mod/origin.mjs'
 import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
 import { childStarts, startLineSegments } from './mod/start-line.mjs'
@@ -82,6 +83,21 @@ async function loadRole($: $): Promise<Role> {
     registry: await $.env.get('SESSION_HUB_REGISTRY'),
     guards: await $.env.get('SESSION_HUB_GUARDS'),
   })
+}
+
+// Whether this child runs under another configuration folder than its master. A notice: an error means no notice.
+async function loadMismatch($: $, role: Role) {
+  if (role.kind !== 'child') return undefined
+  try {
+    return await identityMismatch({
+      role,
+      configDir: await $.env.get('CLAUDE_CONFIG_DIR'),
+      home: await $.env.get('HOME'),
+      realpath: (path: string) => realpath($, path),
+    })
+  } catch {
+    return undefined
+  }
 }
 
 // Only a missing path may count as "not there yet"; any other failure throws, so the guard fails closed.
@@ -186,7 +202,7 @@ async function scopeLineDue($: $): Promise<boolean> {
 
 async function currentSection($: $, role: Role) {
   const master = await read($, masterState)
-  return scopeSection({ role, master: master.isMaster ? master : undefined })
+  return scopeSection({ role, master: master.isMaster ? master : undefined, mismatch: await loadMismatch($, role) })
 }
 
 export const register: Register = (on) => {
@@ -194,6 +210,8 @@ export const register: Register = (on) => {
     const started = await next(e)
     const role = await loadRole($)
     if (role.kind === 'none') await detectMaster($, e.cwd)
+    const mismatch = await loadMismatch($, role)
+    if (mismatch) $.ui.log(mismatchText(mismatch))
     $.clock.every(REFRESH_MS, async () => {
       if ((await read($, masterState)).isMaster) await refreshPanel($)
     })
@@ -306,7 +324,7 @@ export const register: Register = (on) => {
     const role = await loadRole($)
     if (role.kind === 'none' && !(await read($, masterState)).isMaster) await detectMaster($, await $.session.cwd())
     const master = await read($, masterState)
-    const lines = roleSummary({ role, master: master.isMaster ? master : undefined })
+    const lines = roleSummary({ role, master: master.isMaster ? master : undefined, mismatch: await loadMismatch($, role) })
     if (master.isMaster) {
       const panel = await refreshPanel($)
       await $.ui.open({ id: PANE, title: 'session-hub: children' })

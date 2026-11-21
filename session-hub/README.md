@@ -23,6 +23,7 @@ important one, the write scope, with a hook.
 | `session-hub:dispatch` | skill | Master side. Decides per repository whether the master reads, a subagent reads, or a child works; handles the children's messages and routes out-of-scope requests; keeps master-only duties. |
 | `session-hub:setup` | skill | Writes or updates the hub's *Child sessions* section, after an explicit yes. |
 | `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, to a file with more than one hard link (another of its names may be outside), or to the repository's `.claude/settings*.json`, and tells the model to send an `out-of-scope` message to the master. |
+| `scripts/launch.mjs` | script | Reads how this session was started (identity variables, configuration flags, permission mode), so that `spawn` starts children the same way. Prints named variables only, never the environment. |
 | `scripts/registry.mjs` | script | Reads and writes the children record, atomically. Used by the skills and, read only, by the mod. |
 | `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel and the start line under each child launch. See *The mod* below. |
 | `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel. See [Commands](#commands). |
@@ -183,6 +184,8 @@ the old section and proposes the changes below.
 | — | `Scope` | new: what a child of each repository may read outside its write root |
 | — | `Registry` | new: path of the children record, outside the hub |
 | — | `Guards` | new: `on` or `off` for the scope guard and the mod's send guard and shell check |
+| — | `Permissions` | new: `ask` or `inherit`, for the children of a master that bypasses permission prompts |
+| — | `Carry` | new: names of more environment variables a child takes from the master's launch |
 
 Other changes: the handoff gains *Session*, *Scope* and *Messages* (which replaces *Channel to the master*); a
 request outside the scope goes to the master even when the user makes it in the child's session; the master

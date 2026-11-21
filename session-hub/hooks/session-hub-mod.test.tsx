@@ -207,6 +207,24 @@ test('/session-hub in a child shows its role and scope', async ($, on) => {
   expect(text).toMatch(/Write root: \/w\/repo/)
 })
 
+const MASTER_RECORD = '/profiles/work/.claude/session-hub/children-0123456789abcdef.json'
+
+test('a child under another configuration folder than its master says so in its scope line and in /session-hub', async ($, on) => {
+  engine(on, { ...CHILD_ENV, SESSION_HUB_REGISTRY: MASTER_RECORD })
+  on('prompt.compose', () => ({ sections: [] }))
+  await $.session.start({ cwd: '/w/repo', surface: 'terminal', isInteractive: true })
+  const { sections } = await $.prompt.compose(COMPOSE)
+  expect(sections[0]!.text).toMatch(/another configuration folder \(\/Users\/me\/\.claude\) than its master \(\/profiles\/work\/\.claude\)/)
+  expect((await $.command.run(RUN)).text).toMatch(/another configuration folder/)
+})
+
+test('a child in the configuration folder of its master gets no such notice', async ($, on) => {
+  engine(on, { ...CHILD_ENV, SESSION_HUB_REGISTRY: MASTER_RECORD, CLAUDE_CONFIG_DIR: '/profiles/work/.claude' })
+  on('prompt.compose', () => ({ sections: [] }))
+  const { sections } = await $.prompt.compose(COMPOSE)
+  expect(sections[0]!.text).not.toMatch(/another configuration folder/)
+})
+
 const RECORD = {
   version: 1,
   hub: '/hub',

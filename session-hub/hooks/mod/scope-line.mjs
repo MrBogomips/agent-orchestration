@@ -1,12 +1,16 @@
 // The scope line: a session-scoped system prompt section with the role and the scope, so that they survive a
-// compaction. Pure: the mod passes the role and, in a master, what it knows of the children record.
+// compaction. Pure: the mod passes the role and, in a master, what it knows of the children record; in a child, also
+// whether it runs under another configuration folder than its master.
+
+import { mismatchText } from './identity.mjs';
 
 export const SECTION_ID = 'session-hub:scope';
 
 const or = (value, fallback = 'not set') => value ?? fallback;
 
-function childText(role) {
+function childText(role, mismatch) {
   const lines = [
+    ...(mismatch ? [`${mismatchText(mismatch)} Tell the user before anything else.`] : []),
     `session-hub: this session is a child of the master session "${or(role.master)}".`,
     `Write root: ${or(role.scopeRoot)}. Create and change files only under it, and never through the shell outside it.`,
     `Handoff: ${or(role.handoff)}. It holds your task, scope and message rules; read it again after a compaction.`,
@@ -32,9 +36,9 @@ const INVALID_TEXT =
 /**
  * @returns {{ id: string, text: string, scope: 'session' } | undefined}
  */
-export function scopeSection({ role, master }) {
+export function scopeSection({ role, master, mismatch }) {
   let text;
-  if (role.kind === 'child') text = childText(role);
+  if (role.kind === 'child') text = childText(role, mismatch);
   else if (role.kind === 'invalid') text = INVALID_TEXT;
   else if (master) text = masterText(master);
   if (text === undefined) return undefined;
@@ -42,9 +46,10 @@ export function scopeSection({ role, master }) {
 }
 
 /** Lines for `/session-hub`: the session's role and scope. */
-export function roleSummary({ role, master }) {
+export function roleSummary({ role, master, mismatch }) {
   if (role.kind === 'child') {
     return [
+      ...(mismatch ? [mismatchText(mismatch), ''] : []),
       `Role: child of "${or(role.master)}"`,
       `Write root: ${or(role.scopeRoot)}`,
       `Handoff: ${or(role.handoff)}`,

@@ -3,6 +3,29 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.4.0
+
+2026-11-21 · pull request #74
+
+### Added
+
+- `scripts/launch.mjs` reads how the session was started: the identity variables its launcher set (`HOME`,
+  `CLAUDE_CONFIG_DIR`, `SHALLOW_PROFILE`, the `XDG_*_HOME` folders), the configuration flags of its `claude` process
+  and whether it bypasses permission prompts. It prints named variables only and lists what it is unsure of.
+- *Child sessions* keys: `Permissions` (`ask` or `inherit`) and `Carry` (names of more variables to take from the
+  master's launch). `setup` proposes them.
+- A child that runs under another configuration folder than its master says so in its scope line and in
+  `/session-hub`.
+
+### Fixed
+
+- A master started through an alias or a wrapper started children under the account's default profile: another
+  subscription, other settings, no messages between the sessions. `spawn` now builds every start from
+  `launch.mjs`, carries a wrapper's profile variable too, checks after the start that the child is listed, and its
+  description covers sessions started outside a hub (#72).
+- With `Permissions: inherit`, children of a master that bypasses permission prompts start in the same mode without
+  a question at every start (#72).
+
 ## session-hub 0.3.2
 
 2026-11-21 · pull request #71

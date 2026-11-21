@@ -17,8 +17,9 @@ tmux split-window -v -d -t <last-child-pane-id> -l "$(( 100 * (n - k + 1) / (n -
 
 `<variables>` is one `-e KEY=VALUE` per variable: `-e SESSION_HUB_ROLE=child -e SESSION_HUB_MASTER=<master>
 -e SESSION_HUB_SCOPE_ROOT=<root> -e SESSION_HUB_HANDOFF=<file> -e SESSION_HUB_REGISTRY=<record>
--e SESSION_HUB_GUARDS=<on|off>`, and first `-e HOME=…` and `-e CLAUDE_CONFIG_DIR=…` when *Launch command* in
-[environments.md](../environments.md) found those identity variables. Write no brackets.
+-e SESSION_HUB_GUARDS=<on|off>`, and first one `-e KEY=VALUE` for every identity variable that *Launch command* in
+[environments.md](../environments.md) found (`HOME`, `CLAUDE_CONFIG_DIR`, a wrapper's profile). Write no brackets.
+After the start, `ListAgents` must list the child (*Launch command*, step 6).
 
 Then tag the pane with the child's name and keep it open when the child exits:
 

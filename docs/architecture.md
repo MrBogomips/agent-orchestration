@@ -130,6 +130,7 @@ flowchart LR
 | `session-hub:spawn` | skill | Starts one child per repository in the detected environment, with a scope, a model, an effort level, the `SESSION_HUB_*` variables and a handoff file. Records each child. |
 | `session-hub:setup` | skill | Writes or updates the `## Child sessions` section of the hub's instruction file (`AGENTS.md`, else `CLAUDE.md`), only after the user's explicit yes. |
 | `session-hub-scope-guard` | hook | `PreToolUse` hook on `Edit`, `Write` and `NotebookEdit`, defined in `hooks/hooks.json` and implemented in `hooks/scope-guard.mjs`. In a child, blocks a write outside the write root. |
+| `scripts/launch.mjs` | script | Reads how the session was started: identity variables, carried flags, model, effort and whether it bypasses permission prompts. Used by `spawn` and `setup`; prints named variables only. |
 | `scripts/registry.mjs` | script | The only writer of the children record: reads, merges and writes it atomically under a lock taken over atomically when stale. Refuses options a command does not take, and any path that lands inside the hub. |
 | `session-hub` | mod | Loaded from the same `hooks/hooks.json` (`modules`), glue in `hooks/session-hub-mod.tsx`, pure logic in `hooks/mod/*.mjs`. In a child: send guard, shell check, origin marking, scope line. In the master: the children panel. Needs mods on. |
 | `/session-hub` | command (mod) | The session's role and scope; in the master, the children table and panel. `help` lists what it does. See [Commands](#commands). |
@@ -194,22 +195,32 @@ check block every command it sees writing a file, so that a typo cannot switch t
 ### Launch command
 
 A child starts the way the master was started, so that it uses the same account and configuration folder (two
-sessions with different configuration folders cannot message each other). `spawn` reads the master's own
-arguments from the process list and builds the child's command from:
+sessions with different configuration folders cannot message each other) and the same permission mode. Users often
+start Claude Code through an alias or a wrapper; what the wrapper did shows from inside the session, and
+`scripts/launch.mjs` reads it: it walks up the process list to the session's own `claude` process and prints, as
+JSON, what a child's command is built from. This holds for every session a master starts, also outside a hub.
 
 1. **Carried flags** that configure the session, such as `--settings`, `--mcp-config`, `--plugin-dir`,
    `--setting-sources`, `--agent`, `--append-system-prompt`. Flags that belong to the master's own session
-   (`--name`, `--resume`, `--continue`, `--worktree`, `--add-dir`, a prompt and others) and permission flags are
-   left out.
-2. **Identity variables**: `CLAUDE_CONFIG_DIR` when set, and `HOME` when it differs from the account's home.
-   Nothing else from the environment is copied.
-3. **Child flags**: `-n <name>`, `--model <model>`, `--effort <level>`, `--permission-mode <mode>`,
+   (`--name`, `--resume`, `--continue`, `--worktree`, `--add-dir`, a prompt and others) are left out.
+2. **Identity variables**: `CLAUDE_CONFIG_DIR`, `SHALLOW_PROFILE` and the `XDG_*_HOME` folders when set, `HOME`
+   when it differs from the account's home, and the variables the hub's *Carry* key names. Nothing else from the
+   environment is copied, and a name that looks like a credential is refused.
+3. **Child flags**: `-n <name>`, `--model <model>`, `--effort <level>`, the permission flags,
    `--add-dir <handoff folder>`, then `--` and the one-line prompt `Read and follow <handoff file>`.
 4. **Role variables**, placed as each environment allows.
 
+What the script could not read for certain (a value with spaces in the process list, a flag it does not know) it
+lists under `unsure`, and `spawn` asks the user before starting.
+
 Children start in the master's permission mode: messages between sessions that differ on bypassing permission
 prompts wait for the user's approval. When the master bypasses permission prompts, `spawn` asks at every start
-which mode the children get.
+which mode the children get, unless the hub says `Permissions: inherit`: then they get the master's own flags
+without a question, and the report says so.
+
+After a start, `spawn` checks that `ListAgents` lists the child: a session under another configuration folder is
+not listed. With mods on, a child whose configuration folder is not the one that holds the default children record
+says so in its scope line and in `/session-hub`.
 
 ### Role per environment
 

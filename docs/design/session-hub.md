@@ -148,10 +148,38 @@ New keys:
 | `Scope` | Per repository: what a child may read outside its write root by default | nothing |
 | `Registry` | Path of the children record | a file under the session's config folder, outside the hub |
 | `Guards` | `on` or `off` for the scope guard and the mod's send guard and shell check | `on` |
+| `Permissions` | `ask` or `inherit`: whether a master that bypasses permission prompts asks at every start which mode its children get, or gives them its own | `ask` |
+| `Carry` | Names of more environment variables a child takes from the master's launch. Names only: the file may be shared, and each master reads the values from its own environment | none |
 | `Master only` | Parts of the hub's instruction file, and duties (a tracker, a backlog), that apply to the master only; the handoff tells a child to ignore them | nothing |
 
 `session-hub:setup` writes the section. It proposes values from what it finds (child folders with `.git`, the
 repositories' own worktree policies) and writes only after an explicit yes.
+
+## Launch identity
+
+A child starts the way its master was started: same account, same configuration folder, same configuration flags,
+same permission mode. Decided in 0.4.0, after a master started through a wrapper got children under the account's
+default profile (issue #72): they used another subscription and could not be reached by message.
+
+- **Read, don't name.** A `Launch` key naming the wrapper was considered and dropped: an alias or a shell function
+  exists only in an interactive shell, Herdr starts the executable itself, and a user starts the same hub through
+  different wrappers on different days. What a wrapper did is visible from inside the session, so
+  `scripts/launch.mjs` reads it: the arguments of the session's own `claude` process and a fixed list of identity
+  variables (`HOME` when it is not the account's home, `CLAUDE_CONFIG_DIR`, `SHALLOW_PROFILE`, the `XDG_*_HOME`
+  folders).
+- **`Carry`** names more variables for a wrapper the list does not know. Names only, so the section can be shared;
+  a name that looks like a credential is refused, and the environment is never dumped.
+- **Unsure means ask.** On macOS the process list joins arguments with spaces, so a value with a space cannot be
+  told from two arguments; an unknown flag is not carried. Both are listed under `unsure` for the user.
+- **Permission mode.** The default stays a question at every start when the master bypasses permission prompts.
+  `Permissions: inherit` is the user's standing answer for that hub: children get the master's own flags.
+- **Checked after the start.** `ListAgents` lists only sessions under the same configuration folder, so a child
+  that is not listed runs under another identity. In the child, the mod compares its configuration folder with
+  the one that holds the default children record (`SESSION_HUB_REGISTRY`) and says so in the scope line and in
+  `/session-hub`. A notice, not a guard: with a record at a path of the hub's own choice it cannot tell and says
+  nothing.
+- **Every session, not only in a hub.** `spawn`'s description also covers a session started outside a hub (a
+  second session in a worktree of the same repository): the launch rules apply there too.
 
 ## Children record
 
@@ -269,10 +297,8 @@ Constraints:
 | 0.3.0 | The look shared with `model-router`: the children panel in colour, the bar in the `/session-hub` table, the start line under a child launch. Its colours are a copy in `hooks/mod/look.mjs`, checked against `model-router`'s by `tests/validate.sh`. |
 | 0.3.1 | The shell check reads `find`: the command of `-exec`, `-execdir`, `-ok` and `-okdir`, the file of `-fprint` and the like, and the starting points of `-delete`. |
 | 0.3.2 | A child may not write the repository's `.claude/settings*.json`. The children record never lands inside the hub, the registry script refuses options a command does not take and takes a stale lock over atomically, and a finished child's name gets a fresh entry. tmux children get their command as arguments and are named by the pane option `@session_hub_child`. |
+| 0.4.0 | Launch identity: `scripts/launch.mjs` reads how the master was started, the keys `Permissions` and `Carry`, the identity check after a start and the child's own notice. |
 
 ## Open points
 
 - The manual environment (print the commands, start nothing) is kept in 0.1.
-- The launcher wrapper: some users start sessions through a wrapper that sets up an identity before `claude`
-  runs. The old skill rebuilds only the config folder and home variables, not the wrapper. Decide whether a
-  `Launch` key should let a hub name its own launch command.

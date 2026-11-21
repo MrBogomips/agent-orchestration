@@ -2,8 +2,8 @@
 
 Requires `HERDR_ENV=1`. Read IDs from the JSON that each command returns; never derive them.
 
-`<env>` below is one `--env KEY=VALUE` per variable: the identity variables from *Launch command* in
-[environments.md](../environments.md), then every role variable (`SESSION_HUB_ROLE`, `SESSION_HUB_MASTER`,
+`<env>` below is one `--env KEY=VALUE` per variable: every identity variable `scripts/launch.mjs` printed (*Launch
+command* in [environments.md](../environments.md)), then every role variable (`SESSION_HUB_ROLE`, `SESSION_HUB_MASTER`,
 `SESSION_HUB_SCOPE_ROOT`, `SESSION_HUB_HANDOFF`, `SESSION_HUB_REGISTRY`, `SESSION_HUB_GUARDS`). They go on the
 pane, because `agent start` runs Claude Code's own executable in it.
 
@@ -38,8 +38,10 @@ herdr agent prompt <name> "Read and follow <file>"
   `herdr agent focus <name>`.
 - Never close tabs or panes you did not create, and close yours only when the user asks.
 
-**Check.** After the start, `herdr agent get <name>` shows the agent; the role variables are not visible from
-outside. If the user asks to verify the guard, the child can run `printenv SESSION_HUB_ROLE`.
+**Check.** After the start, `herdr agent get <name>` shows the agent, and `ListAgents` must list `<name>`: if it
+does not, the pane was made without the identity variables and the child runs under another account (*Launch
+command*, step 6). The role variables are not visible from outside. If the user asks to verify the guard, the
+child can run `printenv SESSION_HUB_ROLE`.
 
 **Channel.** `SendMessage` in both directions: child to the master's name, master to `<name>`. To hear when a
 child finishes its turn, the master sends `SendMessage` with `notify_when_idle: true`. It sends one notice, then

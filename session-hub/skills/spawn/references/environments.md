@@ -24,29 +24,49 @@ access to the file's folder with `--add-dir <handoff-dir>`.
 ## Launch command
 
 A child starts as the master was started, so it gets the same account, the same configuration directory
-(without which the two sessions can't message each other) and the same settings. Users often start Claude through
-an alias or a wrapper; its effect is visible from inside the session, and that is what the child replicates.
+(without which the two sessions can't message each other), the same settings and the same permission mode. Users
+often start Claude through an alias or a wrapper that picks a profile or adds flags; its effect is visible from
+inside the session, and that is what the child replicates. A pane or a window of a multiplexer is a new shell: it
+has nothing of the master's environment unless the command puts it there.
 
-1. **Master's arguments.** Walk up from the shell's parent process (`ps -o ppid=,command= -p <pid>`) to the first
-   whose command runs `claude` (`claude …` or `node …/claude …`), and read its arguments.
-2. **Flags to carry**: those that configure the session, such as `--settings`, `--mcp-config`,
-   `--strict-mcp-config`, `--plugin-dir`, `--setting-sources`, `--agent`, `--append-system-prompt`. Leave out the
-   ones that belong to the master's own session (`-n`/`--name`, `-r`/`--resume`, `-c`/`--continue`,
-   `--session-id`, `--fork-session`, `-p`/`--print`, `--bg`, `-w`/`--worktree`, `--add-dir`, a prompt) and the
-   permission flags (`--dangerously-skip-permissions`, `--permission-mode`). Note the master's `--model` and
-   `--effort` for step 9 of the skill, but don't carry them: the child gets its own. If an argument has spaces,
-   `ps` can't tell where it ends: ask the user for the master's command.
-3. **Identity variables**, read with `printenv` in your own shell: `CLAUDE_CONFIG_DIR` when set, and `HOME` when
-   it differs from the account's home (`dscl . -read /Users/$USER NFSHomeDirectory` on macOS,
-   `getent passwd $USER` on Linux). Other variables only when the user names them. Never dump or copy the
-   environment: it holds tokens, which would end up on command lines and in pane scrollback.
+This holds for **every session a master starts**, also outside a hub (a second session in a worktree of the same
+repository): never start one with a bare `claude` or a bare `herdr agent start`.
+
+1. **Read the launch**, in your own shell, before each batch of starts:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/launch.mjs"                       # add --carry <NAME,NAME> for the *Carry* key
+   ```
+
+   It walks up to this session's `claude` process and prints JSON: `env`, `flags`, `model`, `effort`,
+   `permission` (`bypass`, `flags`) and `unsure`. Each line of `unsure` is something it could not read for certain
+   (a value with spaces, a flag it does not know, no `claude` process found): ask the user about it before
+   starting anything. If the script fails, ask the user for the command that started this session; never guess.
+2. **Flags to carry** are `flags`, as they are: those that configure the session (`--settings`, `--mcp-config`,
+   `--strict-mcp-config`, `--plugin-dir`, `--setting-sources`, `--agent`, `--append-system-prompt`). The script
+   already leaves out the ones that belong to the master's own session (`-n`/`--name`, `-r`/`--resume`,
+   `-c`/`--continue`, `--session-id`, `--fork-session`, `-p`/`--print`, `--bg`, `-w`/`--worktree`, `--add-dir`, a
+   prompt). `model` and `effort` are for step 9 of the skill and are not carried: the child gets its own.
+   `permission` is for *Permission mode* in [hub-config.md](hub-config.md). Inline JSON in `--settings` or
+   `--mcp-config` is not carried, because it may hold credentials, and words after a prompt are not read as
+   flags: both come back under `unsure`.
+3. **Identity variables** are `env`, all of them: `CLAUDE_CONFIG_DIR`, a wrapper's profile (`SHALLOW_PROFILE`),
+   the `XDG_*_HOME` folders, and `HOME` when it is not the account's own home. The hub's *Carry* key names more
+   variables; the script refuses a name that looks like a credential. Never dump or copy the environment: it
+   holds tokens, which would end up on command lines and in pane scrollback.
 4. **Child flags**, after the carried ones: `-n <name>`, `--model <model>` and `--effort <level>` when step 9
-   chose them (`low`, `medium`, `high`, `xhigh`, `max`), `--permission-mode <mode>`, `--add-dir <handoff-dir>`.
+   chose them (`low`, `medium`, `high`, `xhigh`, `max`), the permission flags from *Permission mode* in
+   [hub-config.md](hub-config.md), `--add-dir <handoff-dir>`.
    Leave out `--model` or `--effort` only when the child inherits and the master set none. `--add-dir` takes
    every argument after it, so a prompt on the same command line goes after `--`:
    `… --add-dir <handoff-dir> -- "Read and follow <file>"`.
 5. **Role variables** (`SESSION_HUB_*`, below). Each environment's file says where they go, with the identity
    variables.
+6. **Check the identity** after the start, where `SendMessage` is the channel (Herdr, tmux, terminal):
+   `ListAgents` lists a child by its name only when it runs under the master's configuration folder. A child that
+   started and is not listed runs under another identity: don't send it work, tell the user, and record it as
+   `abandoned` with that reason. With mods on, such a child says so itself, in its first lines and in
+   `/session-hub`.
 
 ## Role variables
 

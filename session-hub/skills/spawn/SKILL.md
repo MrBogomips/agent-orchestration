@@ -4,7 +4,9 @@ description: >-
   Starts a child Claude Code session in each repository of a hub (a folder holding several git repositories) so
   that each child loads that repository's own rules, skills and agents, with a written scope, a model and an
   effort level. Use when the user asks to start, spawn, open or launch a session, child or "lavorazione" in one
-  or more repositories of the hub, or when `session-hub:dispatch` decides a child is needed. To decide which
+  or more repositories of the hub, or when `session-hub:dispatch` decides a child is needed. Use it also before
+  starting any other Claude Code session from this one in Herdr, tmux or a terminal, hub or not, so that the new
+  session gets the account, configuration and permission mode this session was started with. To decide which
   repositories need a child at all, use `session-hub:dispatch` first.
 ---
 
@@ -22,6 +24,11 @@ children record.
 
 If the work has not been split into repositories yet, run `session-hub:dispatch` first: it decides which
 repositories need a child at all.
+
+Outside a hub (a second session in a worktree of the same repository, for example) the steps about repositories
+and hub configuration fall away, but *Launch command* in
+[references/environments.md](references/environments.md) still applies in full: a session started with a bare
+command comes up under another account and cannot be reached by message.
 
 ## Steps
 
@@ -68,14 +75,16 @@ repositories need a child at all.
 10. **Permission mode and layout.** Children start in the master's permission mode: messages between sessions
     that differ on bypassing permission prompts wait for the user's approval. Only when the master bypasses
     permission prompts, ask at every start to confirm that mode for the children, the master's mode first and
-    recommended. When neither the request nor the *Layout* key decides it, ask the layout and whether to save it
+    recommended; with `Permissions: inherit` in the hub configuration, don't ask and say so in the report.
+    When neither the request nor the *Layout* key decides it, ask the layout and whether to save it
     as the hub's default, in the same ask as the mode when there is one (AskUserQuestion). Details in
     [references/hub-config.md](references/hub-config.md).
 11. **Handoff.** Write one handoff file per child following
     [references/child-prompt.md](references/child-prompt.md), outside the hub and every repository.
 12. **Start** each child as [references/environments.md](references/environments.md) and the environment's own
-    file say: the master's identity variables and configuration flags, then `--model`, `--effort`, the
-    permission mode, and the `SESSION_HUB_*` variables. Start the children in parallel; with stacked panes, make
+    file say: the master's identity variables and configuration flags as `scripts/launch.mjs` prints them, then
+    `--model`, `--effort`, the permission mode, and the `SESSION_HUB_*` variables. After the start, check each
+    child's identity (*Launch command*, step 6). Start the children in parallel; with stacked panes, make
     the panes one after another first. The first child in a repository may stop at the folder-trust check:
     follow *First run in a repository* in `environments.md`.
 13. **Record** each started child (*Children record* below), with status `running`.
@@ -126,5 +135,6 @@ and rules are in [references/children-record.md](references/children-record.md).
 | A write root that does not contain the child's worktree | the worktree as write root, or the repository when the worktree lives under it |
 | The hub's whole instruction file quoted into the handoff | for a child inside the hub, only which parts are master-only; *Propagate* quotes only for a child outside the hub |
 | `--model` from the master's launch kept next to the chosen one | the chosen `--model` replaces the carried one |
+| A child started with a bare `claude` or `herdr agent start`, the master's launch not read | `scripts/launch.mjs` first; its `env` and `flags` on every start, then the identity check |
 | A long prompt passed on the command line | the handoff in a file, and a one-line prompt that says to read it |
 | Answering a child's folder-trust prompt | tell the user, who opens the folder once; retry when they say so |
