@@ -189,6 +189,7 @@
     <tr><td><code>session-hub/children-&lt;hub id&gt;.json</code> e <code>.lock</code></td><td><code>session-hub</code></td><td>Il registro delle sessioni figlie e il relativo lock</td></tr>
     <tr><td><code>&lt;scratchpad or mktemp -d&gt;/&lt;name&gt;-handoff.md</code></td><td><code>session-hub</code></td><td>Un file di handoff per sessione figlia, salvato fuori dall'hub</td></tr>
     <tr><td><code>model-router/events.jsonl</code></td><td><code>model-router</code></td><td>Decisioni, avvii, segnali, report, chiusure di sessione ed esiti (solo in accodamento)</td></tr>
+    <tr><td><code>model-router/archive/</code></td><td><code>model-router</code></td><td>Il log degli eventi ruotato dalla compattazione oltre i 32 MB: conserva esiti, decisioni e avvii, e dopo 90 giorni solo gli esiti</td></tr>
     <tr><td><code>model-router/quality/user.json</code>, <code>quality/projects/&lt;id&gt;.json</code></td><td><code>model-router</code></td><td>Aggregati di qualità per utente e per progetto</td></tr>
     <tr><td><code>model-router/quality/state.json</code>, <code>quality/.lock</code></td><td><code>model-router</code></td><td>Posizione della compattazione e relativo lock (obsoleto dopo 2 minuti)</td></tr>
     <tr><td><code>model-router/options.json</code></td><td><code>model-router</code></td><td>Le opzioni usate dalla compattazione e dal report</td></tr>

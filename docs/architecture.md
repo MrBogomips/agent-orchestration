@@ -839,7 +839,8 @@ No plugin keeps state inside a hub or a repository. State lives under the active
 | a path named by the hub's *Registry* key | session-hub | the master, through `registry.mjs` | the children record, when the hub moves it; never inside the hub | 0.1 |
 | `<scratchpad or mktemp -d>/<name>-handoff.md` | session-hub | `spawn` | one handoff per child; none for a desktop app child, whose handoff is passed inline | 0.1 |
 | `<config dir>/model-router/quality/recommendations.json` | model-router | nothing up to 0.3 (read only, if present) | per-class model and effort hints | written from 0.4 |
-| `<config dir>/model-router/events.jsonl` | model-router | the router mod and compaction, append only | routing decisions, spawns, signals, reports, session ends; outcomes (compaction) | 0.2 |
+| `<config dir>/model-router/events.jsonl` | model-router | the router mod and compaction, append only; compaction renames it into `archive/` from 32 MB | routing decisions, spawns, signals, reports, session ends; outcomes (compaction) | 0.2 |
+| `<config dir>/model-router/archive/` | model-router | compaction | rotated logs (`raw-<ms>.jsonl` until settled, then `events-<ms>.jsonl` with outcomes, decisions and spawns only), and `outcomes.jsonl` with the outcomes of rotated logs older than 90 days | 0.3.11 |
 | `<config dir>/model-router/quality/user.json`, `quality/projects/<project id>.json` | model-router | compaction, written whole (temporary name, then rename) | quality aggregates per user and per project | 0.2 |
 | `<config dir>/model-router/quality/state.json`, `quality/.lock` | model-router | compaction | the offset of the earliest open task, and the lock (stale after 2 minutes) | 0.2 |
 | `<config dir>/model-router/options.json` | model-router | the mod, at each session start | the options compaction and the report use: rework window, similarity threshold, half-life and project prior strength | 0.2 |
