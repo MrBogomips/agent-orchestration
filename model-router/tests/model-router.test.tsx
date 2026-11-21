@@ -16,8 +16,8 @@ const GRID = {
     levels: ['low', 'medium', 'high', 'xhigh'],
     questions: [
       { ask: 'Simple?', level: 'low' },
-      { ask: 'Costly mistake?', level: 'high' },
       { ask: 'Long and unattended?', level: 'xhigh' },
+      { ask: 'Costly mistake?', level: 'high' },
       { ask: 'None.', level: 'medium', otherwise: true },
     ],
   },

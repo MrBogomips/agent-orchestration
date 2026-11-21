@@ -49,8 +49,8 @@ cheapest first: `haiku` < `sonnet` < `opus` < `fable`. "One tier up" follows thi
 Ask in order and stop at the first yes.
 
 1. Is it a simple task or a quick exchange? → `low`
-2. Would an unnoticed mistake cost money, a client or a wrong decision? → `high`
-3. Is it long, hard and critical, **and** does it run unattended? All three. → `xhigh`
+2. Is it long, hard and critical, **and** does it run unattended? All three. → `xhigh`
+3. Would an unnoticed mistake cost money, a client or a wrong decision? → `high`
 4. None of the above. → `medium`
 
 Never `max`.

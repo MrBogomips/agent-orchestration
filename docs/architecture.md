@@ -646,9 +646,10 @@ A child the user never starts (manual environment) stays `running` until the nex
 The tier names are aliases; which model sits behind each is configuration. By price, cheapest first:
 `haiku` < `sonnet` < `opus` < `fable`. "One tier up" follows this order.
 
-**Effort**, by four questions in order: a simple task or a quick exchange → `low`; an unnoticed mistake would
-cost money, a client or a wrong decision → `high`; long, hard, critical and unattended, all three → `xhigh`;
-otherwise `medium`. Never `max`.
+**Effort**, by four questions in order: a simple task or a quick exchange → `low`; long, hard, critical and
+unattended, all three → `xhigh`; an unnoticed mistake would cost money, a client or a wrong decision → `high`;
+otherwise `medium`. Never `max`. The `xhigh` question comes before `high`, since a critical task almost always
+answers yes to the `high` one too.
 
 **Task classes**: `read-search`, `read-analyze`, `edit-mechanical`, `edit-specified`, `review-debug`,
 `design-open`. When none fits, the closest one is used; no class is invented.

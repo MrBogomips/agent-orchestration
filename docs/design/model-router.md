@@ -41,8 +41,8 @@ Tier names are aliases. The models behind them are options, not constants.
 Ask in order and stop at the first yes.
 
 1. Is it a simple task or a quick back-and-forth? → `low`
-2. Would a hidden mistake cost money, a client or a wrong decision? → `high`
-3. Is it long, hard and critical, and handed off to run unattended? All three. → `xhigh`
+2. Is it long, hard and critical, and handed off to run unattended? All three. → `xhigh`
+3. Would a hidden mistake cost money, a client or a wrong decision? → `high`
 4. Otherwise → `medium`
 
 Never `max`.
