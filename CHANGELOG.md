@@ -3,6 +3,27 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.3.1
+
+2026-11-21 · pull request #PR
+
+### Fixed
+
+- A child may not write the repository's Claude Code settings, `<root>/.claude/settings*.json`: their `env` and hook
+  settings turned the guards off at the child's next start. The scope guard and the shell check block it and send
+  the change to the master (#56).
+- The children record can no longer land inside the hub: every path is judged where it really lands, the default
+  path included; a write with `--file` needs `--hub`; a relative `CLAUDE_CONFIG_DIR` is refused (#28).
+- The registry script refuses an option a command does not take, a repeated option, and `--live` with
+  `--live-none`; `status` takes `--reason` (#27).
+- A child started under the name of a finished one gets a fresh entry, and spawn no longer reuses such a name (#29).
+- A stale lock is taken over atomically, and a lock whose writer has ended is cleared at once (#33).
+- tmux: the child's command is given to tmux as arguments, so a JSON `--settings`, a `$` or a backtick in a carried
+  flag reaches the child as written (#30); the child is named by the pane option `@session_hub_child`, since Claude
+  Code overwrites the pane title (#31).
+- spawn no longer writes a hub's `## Child sessions` section when it is missing, and `Guards` is described as turning
+  off all three guards (#32).
+
 ## model-router 0.3.10
 
 2026-11-21 · pull request #69

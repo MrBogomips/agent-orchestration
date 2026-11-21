@@ -147,7 +147,7 @@ New keys:
 | `Effort` | Default effort per repository or kind of work | chosen with the grid |
 | `Scope` | Per repository: what a child may read outside its write root by default | nothing |
 | `Registry` | Path of the children record | a file under the session's config folder, outside the hub |
-| `Guards` | `on` or `off` for the scope guard and the mod's send guard | `on` |
+| `Guards` | `on` or `off` for the scope guard and the mod's send guard and shell check | `on` |
 | `Master only` | Parts of the hub's instruction file, and duties (a tracker, a backlog), that apply to the master only; the handoff tells a child to ignore them | nothing |
 
 `session-hub:setup` writes the section. It proposes values from what it finds (child folders with `.git`, the
@@ -178,6 +178,18 @@ One JSON file, written whole by the master on every change. Proposal for an entr
 - The record replaces the old rule "Nothing is tracked". It holds no project content beyond names and URLs, so
   that it can sit outside the hub.
 - A project may also want notes in its own tracker or backlog; that stays a project rule, outside the plugin.
+- `scripts/registry.mjs` is the only writer. Each command takes only its own options: an unknown or repeated option,
+  or `--live` with `--live-none`, exits 1 and writes nothing. `status` takes `--reason` (why a child was abandoned),
+  kept on the entry until the next status.
+- The record never lands inside the hub: every path is judged where it really lands (the deepest existing part
+  resolved, the rest as written) before a folder is made, the default path included; a write with `--file` needs
+  `--hub`; a relative `CLAUDE_CONFIG_DIR` is refused and a leading `~` expanded.
+- An `upsert` that starts a child again under the name of one that ended (`done`, `abandoned`, `lost`) makes a fresh
+  entry; `spawn` does not reuse a name the record holds anyway.
+- Writes take a lock next to the file. A lock older than 30 s, or whose writer has ended, is taken over by moving it
+  aside atomically and removing it only if it is the lock examined, so two writers cannot remove each other's lock.
+- In tmux, a child's pane is tagged with the pane option `@session_hub_child`, which Claude Code cannot overwrite as
+  it does the pane title; the live names come from `list-panes -F '#{pane_dead} #{@session_hub_child}'`.
 
 ## Hook `session-hub-scope-guard`
 
@@ -255,6 +267,7 @@ Constraints:
 | 0.2.3 | The shell check follows `cd` and `pushd` to a literal folder; a denial names where a linked path lands. |
 | 0.2.5 | The shell check reads zsh forms, substitutions in every quoting, `eval` and `sh -c`, arithmetic and `$'…'`; it judges hard-link sources and links made in the same command, and refuses the roots the scope guard refuses. The scope guard blocks a write to a hard-linked file. |
 | 0.3.0 | The look shared with `model-router`: the children panel in colour, the bar in the `/session-hub` table, the start line under a child launch. Its colours are a copy in `hooks/mod/look.mjs`, checked against `model-router`'s by `tests/validate.sh`. |
+| 0.3.1 | A child may not write the repository's `.claude/settings*.json`. The children record never lands inside the hub, the registry script refuses options a command does not take and takes a stale lock over atomically, and a finished child's name gets a fresh entry. tmux children get their command as arguments and are named by the pane option `@session_hub_child`. |
 
 ## Open points
 

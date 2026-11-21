@@ -65,7 +65,7 @@
     <tr><td><code>Model</code>, <code>Effort</code></td><td>Valori predefiniti per repository o tipo di lavoro</td><td>Nessuno: usa <code>choose-model</code>, altrimenti eredita dal master</td></tr>
     <tr><td><code>Scope</code></td><td>Per ogni repository, quali percorsi può leggere una sessione figlia fuori dalla sua radice di scrittura</td><td>Niente</td></tr>
     <tr><td><code>Registry</code></td><td>Percorso del registro delle sessioni figlie, fuori dall'hub</td><td><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></td></tr>
-    <tr><td><code>Guards</code></td><td><code>on</code> oppure <code>off</code></td><td><code>on</code></td></tr>
+    <tr><td><code>Guards</code></td><td><code>on</code> oppure <code>off</code>, per tutte e tre le protezioni</td><td><code>on</code></td></tr>
     <tr><td><code>Environment</code></td><td><code>auto</code>, <code>desktop</code>, <code>herdr</code>, <code>tmux</code>, <code>cli</code> o <code>manual</code></td><td><code>auto</code></td></tr>
     <tr><td><code>Layout</code></td><td><code>tabs</code>, <code>panes</code> o <code>ask</code></td><td><code>ask</code></td></tr>
     <tr><td><code>Worktrees</code></td><td><code>repo</code>, <code>always</code> o <code>never</code>, per le sessioni figlie che modificano file</td><td><code>repo</code></td></tr>
@@ -172,6 +172,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   <li>un percorso di destinazione relativo;</li>
   <li>una radice di scrittura impostata su <code>/</code> o sulla cartella home;</li>
   <li>un file con più di un hard link: un altro suo nome potrebbe trovarsi fuori dalla radice di scrittura, e la modifica cambierebbe il file anche lì;</li>
+  <li>le impostazioni di Claude Code del repository, <code>.claude/settings.json</code> e <code>.claude/settings.local.json</code>: le loro impostazioni <code>env</code> e degli hook spegnerebbero le protezioni della sessione figlia al suo avvio successivo, quindi la modifica va chiesta al master (lo blocca anche il controllo sulla shell);</li>
   <li>un valore di ruolo sconosciuto o un input illeggibile;</li>
   <li>l'assenza di <code>node</code> nel <code>PATH</code>.</li>
 </ul>
