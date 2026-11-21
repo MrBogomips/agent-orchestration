@@ -187,6 +187,35 @@ test('check: broken links, missing alt text and forbidden text are reported', ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test('build: placeholder syntax in the changelog is rendered as written', () => {
+  const root = fixture();
+  const out = join(root, 'dist');
+  try {
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\n## alpha 1.2.3\n\n- Pages link with `{{link:home}}` and show `{{version:<plugin>}}`.\n\n```\n{{img:shot}}\n```\n');
+    buildSite({ root, out });
+    const html = readFileSync(join(out, 'en/changelog/index.html'), 'utf8');
+    assert.match(html, /<code>&#123;&#123;link:home}}<\/code>/);
+    assert.match(html, /<code>&#123;&#123;version:&lt;plugin&gt;}}<\/code>/);
+    assert.match(html, /<pre><code>&#123;&#123;img:shot}}<\/code><\/pre>/);
+    assert.deepEqual(checkBuiltSite(out, loadSite(root)), []);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('check: a link to an anchor that does not exist is reported', () => {
+  const root = fixture();
+  const out = join(root, 'dist');
+  try {
+    buildSite({ root, out });
+    const page = join(out, 'en/guide/index.html');
+    writeFileSync(page, `${readFileSync(page, 'utf8')}<a href="../#no-such-anchor">a</a><a href="#also-missing">b</a><a href="#first">ok</a><a href="./#second">ok</a><a href="#">top</a>`);
+    const problems = checkBuiltSite(out, loadSite(root));
+    assert.deepEqual(problems.filter((p) => p.includes('anchor')), [
+      'en/guide/index.html: broken anchor ../#no-such-anchor',
+      'en/guide/index.html: broken anchor #also-missing',
+    ]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('check: untranslated strings and diagram text are reported', () => {
   const root = fixture();
   try {

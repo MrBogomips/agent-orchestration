@@ -6,7 +6,7 @@ dependencies.
 
 ```bash
 node site/build.mjs            # build into site/dist/ (ignored by git)
-node site/check.mjs            # build into a temporary folder and check it (links, images, translations, text)
+node site/check.mjs            # build into a temporary folder and check it (links and anchors, images, translations, text)
 node site/serve.mjs            # serve site/dist/ on http://localhost:4173 to look at it
 node site/translate.mjs        # translate the stale English pages, the strings and the diagram text (an authoring step)
 node --test site/*.test.mjs              # unit tests

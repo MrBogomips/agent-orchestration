@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds the site into a temporary folder and checks it. Fails (exit 1) on: a build error, a broken internal link
-// or image, an image without alt text, a diagram without a title, a page missing in a language, a stale or missing
+// or image, a link to an anchor no element has, an image without alt text, a diagram without a title, a page missing in a language, a stale or missing
 // translation (an English page older than the Italian page it is translated from), an authored page that carries a
 // translation header, an untranslated interface string or diagram text, a placeholder left in a page, AI attribution or
 // AI-service links, or a build that is not reproducible. Prints one line per problem.
@@ -26,7 +26,23 @@ function walk(dir) {
   });
 }
 
+/** The file a link resolves to (a folder's index.html), or null when there is none. */
+function pageFile(target) {
+  if (!existsSync(target)) return null;
+  if (statSync(target).isFile()) return target;
+  const index = join(target, 'index.html');
+  return existsSync(index) ? index : null;
+}
+
+const idCache = new Map();
+/** The ids of the elements of a built page, read once per check. */
+function idsOf(file) {
+  if (!idCache.has(file)) idCache.set(file, new Set([...readFileSync(file, 'utf8').matchAll(/\sid="([^"]+)"/g)].map((x) => x[1])));
+  return idCache.get(file);
+}
+
 export function checkBuiltSite(out, site) {
+  idCache.clear();
   const problems = [];
   const files = walk(out);
   const htmlFiles = files.filter((f) => f.endsWith('.html'));
@@ -38,10 +54,14 @@ export function checkBuiltSite(out, site) {
     if (rel === '404.html' || rel === 'index.html') continue;
     for (const m of html.matchAll(/\s(?:href|src)="([^"]+)"/g)) {
       const url = m[1];
-      if (/^(https?:|mailto:|#|data:)/.test(url)) continue;
-      const target = resolve(dirname(file), url.split('#')[0]);
-      const exists = existsSync(target) && (statSync(target).isFile() || existsSync(join(target, 'index.html')));
-      if (!exists) problems.push(`${rel}: broken link ${url}`);
+      if (/^(https?:|mailto:|data:)/.test(url)) continue;
+      const [path, fragment] = url.split('#');
+      const page = path ? pageFile(resolve(dirname(file), path)) : file;
+      if (!page) {
+        problems.push(`${rel}: broken link ${url}`);
+        continue;
+      }
+      if (fragment && page.endsWith('.html') && !idsOf(page).has(decodeURIComponent(fragment))) problems.push(`${rel}: broken anchor ${url}`);
     }
     for (const m of html.matchAll(/<img\b[^>]*>/g)) if (!/\salt="[^"]+"/.test(m[0])) problems.push(`${rel}: image without alt text: ${m[0].slice(0, 80)}`);
     for (const m of html.matchAll(/<svg\b[^>]*role="img"[^>]*>([\s\S]*?)<\/svg>/g)) {
