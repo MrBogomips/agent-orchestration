@@ -14,6 +14,18 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
   judged, since it runs in each file's folder. The file of `-fprint`, `-fprint0`, `-fprintf` and `-fls` is a write
   target, and with `-delete` the starting points are, as for `rm`.
 
+## model-router 0.3.10
+
+2026-11-21 · pull request #69
+
+### Fixed
+
+- The effort question for `xhigh` (long, hard, critical and unattended) is asked before the one for `high`. A
+  critical task almost always also answers yes to the `high` question, so `xhigh` was practically unreachable.
+- An agent definition is no longer read from a file that declares another agent's `name`. Claude Code names an
+  agent type after its frontmatter `name`, not its file, so such a file could make an agent with a fixed model
+  look routable; the start is now kept.
+
 ## session-hub 0.3.0
 
 2026-11-21 · pull request #68

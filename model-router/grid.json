@@ -45,8 +45,8 @@
     "never": ["max"],
     "questions": [
       { "ask": "Is it a simple task or a quick exchange?", "level": "low" },
-      { "ask": "Would an unnoticed mistake cost money, a client or a wrong decision?", "level": "high" },
       { "ask": "Is it long, hard and critical, and does it run unattended? All three must hold.", "level": "xhigh" },
+      { "ask": "Would an unnoticed mistake cost money, a client or a wrong decision?", "level": "high" },
       { "ask": "None of the above.", "level": "medium", "otherwise": true }
     ]
   },

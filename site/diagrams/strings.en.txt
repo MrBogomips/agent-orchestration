@@ -150,7 +150,7 @@ medium
 high
 xhigh
 max is never used
-The grid asks its questions in order and stops at the first yes: haiku for simple, repetitive work that is easy to check, sonnet when done fits in one sentence, fable for large open-ended work where judgment and accuracy both matter, opus for everything else and whenever in doubt; effort is low for a simple task, high when a missed mistake would be costly, xhigh for long, hard, critical and unattended work, medium otherwise, and never max. Every start also names one of six task classes.
+The grid asks its questions in order and stops at the first yes: haiku for simple, repetitive work that is easy to check, sonnet when done fits in one sentence, fable for large open-ended work where judgment and accuracy both matter, opus for everything else and whenever in doubt; effort is low for a simple task, xhigh for long, hard, critical and unattended work, high when a missed mistake would be costly, medium otherwise, and never max. Every start also names one of six task classes.
 Model: the first fit wins
 Effort: the first yes wins
 Simple, repetitive work?

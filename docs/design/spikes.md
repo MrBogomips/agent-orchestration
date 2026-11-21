@@ -123,3 +123,14 @@ auto permission mode; a `haiku` session at low effort, then a `sonnet` one for t
 | ID | Date | Claude Code | Setup | Outcome |
 |---|---|---|---|---|
 | S16 | 2026-11-21 | 2.1.330 | As above; a `ui.render` hook on `{ component: 'ToolUse', props: { tool: 'Agent' } }` keeping the row (`await next(e)`) and adding one line read from a `$.state` family member keyed by `tool_use_id`, written at `agent.spawn`. | **The line draws under a standalone `Agent` row** and updates when the member is written: the row's `requestId` is the call's `tool_use_id`. Hex colours reach the terminal (as the nearest 256-colour index under tmux without truecolor, as 24-bit with `COLORTERM=truecolor`). **The subagent's effort is known at its first `turn.step`**: a call with `model: "sonnet"` and no effort, from a `haiku` session at low, ran at `medium`. **Several `Agent` calls in one message** are drawn as one "N background agents launched" row, not as `ToolUse` rows, so no line shows there; the ctrl+o transcript draws each call as a `ToolUse` row with its line. A command's text answer is shown after the plugin's name (`model-router: …`), so the mod's one-line answers start with 🔀 and no name of their own. |
+
+## Results for model-router 0.3.10
+
+Setup: a scratch project with `.claude/agents/foo.md` declaring `name: bar` and `model: haiku`, and
+`.claude/agents/plain.md` declaring `name: plain`; `claude -p "Reply with OK." --output-format stream-json
+--verbose` run in it with an empty `CLAUDE_CONFIG_DIR` (no login). The `system/init` event is written before any
+model call.
+
+| ID | Date | Claude Code | Setup | Outcome |
+|---|---|---|---|---|
+| S17 | 2026-11-21 | 2.1.330 | As above. | **The agent type is the frontmatter `name`, not the file name.** The init event's `agents` list reads `bar`, `claude`, `Explore`, `general-purpose`, `plain`, `Plan`, `statusline-setup`: `bar` is there, `foo` is not. So the mod's lookup of `<dir>/.claude/agents/<type>.md` can read a file that defines another agent; it now treats a file whose `name` differs from the type as `unknown` (start kept). The run stopped at the login check, so no subagent was started. |
