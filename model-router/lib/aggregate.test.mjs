@@ -51,6 +51,34 @@ test('applyOutcome adds to the cell of class x tier x effort and returns a new l
   assert.equal(c2.tokensMean, 30000);
 });
 
+test('the cost and token means count only the outcomes that carry a value', () => {
+  let level = emptyLevel('user');
+  for (const [costUsd, tokens] of [[null, null], [1, 100], [3, 300]]) level = applyOutcome(level, outcome({ costUsd, tokens }), OPTS);
+  const cell = level.cells[cellKey('edit-specified', 'sonnet', 'medium')];
+  assert.equal(cell.n, 3);
+  assert.equal(cell.costMean, 2);
+  assert.equal(cell.tokensMean, 200);
+  assert.equal(cell.costN, 2);
+  assert.equal(cell.tokensN, 2);
+});
+
+test('the value counts age with the other counts', () => {
+  const cell = { n: 4, success: 4, rework: 0, failure: 0, costMean: 1, costN: 2, tokensMean: 10, tokensN: 4, updated: new Date(NOW - 30 * DAY).toISOString() };
+  const aged = ageCell(cell, NOW, 30);
+  assert.equal(aged.costN, 1);
+  assert.equal(aged.tokensN, 2);
+});
+
+test('a cell written before the value counts weighs its means by n', () => {
+  const key = cellKey('edit-specified', 'sonnet', 'medium');
+  const old = { class: 'edit-specified', tier: 'sonnet', effort: 'medium', model: 'claude-sonnet-5-5', n: 3, success: 3, rework: 0, failure: 0, costMean: 1, tokensMean: null, updated: new Date(NOW).toISOString() };
+  const next = applyOutcome({ ...emptyLevel('user'), cells: { [key]: old } }, outcome({ costUsd: 5, tokens: 50 }), OPTS);
+  assert.equal(next.cells[key].costMean, 2);
+  assert.equal(next.cells[key].costN, 4);
+  assert.equal(next.cells[key].tokensMean, 50);
+  assert.equal(next.cells[key].tokensN, 1);
+});
+
 test('applyOutcome ignores outcomes that are not learned', () => {
   const level = emptyLevel('user');
   assert.equal(applyOutcome(level, outcome({ learn: false }), OPTS), level);

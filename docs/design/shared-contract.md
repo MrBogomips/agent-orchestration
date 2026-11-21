@@ -36,6 +36,24 @@ the user and for the child; nothing parses it in release 0.1.
 `--effort` works (S1), so no child-side mod is needed for effort. A classic hook can read the effective effort from
 its input (`effort.level`).
 
+## A shared look
+
+The two mods draw a model and an effort the same way, so a person reads them at a glance in either plugin. The
+values are `model-router`'s (`lib/route-line.mjs`). A plugin uses nothing outside its folder, so `session-hub`
+holds its own copy; `tests/validate.sh` fails when the two copies differ from each other.
+
+| Element | Value |
+|---|---|
+| Model name, bold, by tier | `haiku` `#ececec`, `sonnet` `#7dd3fc`, `opus` `#3b82f6`, `fable` `#fb923c`; an id of no known tier in the theme's own colour |
+| Effort bar and effort word, by level | `low` `#22c55e`, `medium` `#eab308`, `high` `#f97316`, `xhigh` `#ef4444` |
+| Effort bar | four cells, `▰` filled and `▱` empty (`#3a3f47`): `low` one, `medium` two, `high` three, `xhigh` four; an unknown effort has four empty cells and a dim word |
+| The line that states a model and an effort | `🔀 <model> <bar> <effort> -> <reason>`, the arrow and the reason dim |
+| Good, fair and bad states | the theme's `success`, `warning` and `error` |
+| Secondary text | the theme's dim colour |
+
+`🔀` and the teal accent (`#14b8a6`) are the identity of `model-router`'s own view. `session-hub` uses `🔀` only
+on a line that states a child's model and effort, and never the accent.
+
 ## Environment variables for a child
 
 Set by `session-hub:spawn` on the launch command. A mod can read an environment variable only by a literal name,

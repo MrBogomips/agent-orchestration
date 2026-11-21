@@ -6,7 +6,7 @@
 // Usage: node compact.mjs [--config-dir <dir>] [--options '<json>']
 // Prints a JSON summary. Fails open: any error is printed as { error } and the exit code stays 0, so a caller
 // (the mod at session start, the report) is never stopped by it. The event log is never rewritten.
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, openSync, closeSync, unlinkSync, renameSync, existsSync, statSync, realpathSync } from 'node:fs';
+import { readFileSync, readSync, writeFileSync, appendFileSync, mkdirSync, openSync, closeSync, unlinkSync, renameSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,8 @@ import { applyOutcome, emptyLevel } from '../lib/aggregate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LOCK_STALE_MS = 2 * 60000;
+// A torn last line untouched for this long has no writer left: appends are one short `cat >>`.
+const TORN_STALE_MS = 2 * 60000;
 export const DEFAULT_OPTIONS = Object.freeze({ halfLifeDays: 30, reworkWindowMin: 30, similarityThreshold: 0.5 });
 
 export function defaultConfigDir() {
@@ -136,6 +138,24 @@ function readNewLines(file, offset) {
   return { ...parseLines(buffer.subarray(from), from), from };
 }
 
+/**
+ * How the log ends: `whole` (empty, or on a newline), `writing` (a torn last line changed within the last two
+ * minutes: a writer may still be finishing it) or `abandoned` (a torn last line older than that).
+ */
+function tailOf(file, now) {
+  const { size, mtimeMs } = statSync(file);
+  if (size === 0) return 'whole';
+  const fd = openSync(file, 'r');
+  try {
+    const last = Buffer.alloc(1);
+    readSync(fd, last, 0, 1, size - 1);
+    if (last[0] === 10) return 'whole';
+  } finally {
+    closeSync(fd);
+  }
+  return now - mtimeMs < TORN_STALE_MS ? 'writing' : 'abandoned';
+}
+
 /** The next offset: the first line of any record of a task still open, so none of its records is skipped. */
 function nextState(records, starts, end, openTasks, closedKeys) {
   const keyOf = (r) => `${r.session}/${r.agentId}`;
@@ -186,8 +206,8 @@ export function effectiveOptions(configDir, options = {}) {
 }
 
 /**
- * One compaction run. Returns `{ outcomes, learned, open }`, or `{ skipped: 'locked' }` while another run holds
- * the lock.
+ * One compaction run. Returns `{ outcomes, learned, open }` (plus `deferred` when a torn last line held the outcomes
+ * back for the next run), or `{ skipped: 'locked' }` while another run holds the lock.
  */
 export function compact({ configDir = defaultConfigDir(), now = Date.now(), options = {}, grid = loadGrid() } = {}) {
   const opts = effectiveOptions(configDir, options);
@@ -205,8 +225,20 @@ export function compact({ configDir = defaultConfigDir(), now = Date.now(), opti
     const { outcomes, openTasks } = computeOutcomes(records, {
       now, windowMin: opts.reworkWindowMin, similarityThreshold: opts.similarityThreshold, done,
     });
+    const tail = outcomes.length > 0 ? tailOf(p.events, now) : 'whole';
+    if (tail === 'writing') {
+      // Another writer is finishing the last line: appending now would glue the outcomes onto it. The tasks stay
+      // behind the offset, and the next run closes, folds and appends them.
+      const waiting = new Set([...openTasks, ...outcomes.map((o) => o.task)]);
+      writeWhole(p.state, JSON.stringify(nextState(records, starts, end, waiting, done)));
+      return { outcomes: 0, learned: 0, open: openTasks.size, deferred: outcomes.length };
+    }
     const learned = fold(p, outcomes, { now, options: opts, grid });
-    if (outcomes.length > 0) appendFileSync(p.events, outcomes.map((o) => JSON.stringify(o)).join('\n') + '\n');
+    if (outcomes.length > 0) {
+      // A torn line whose writer died is ended first, so it stays one malformed (skipped) line of its own.
+      const lead = tail === 'abandoned' ? '\n' : '';
+      appendFileSync(p.events, lead + outcomes.map((o) => JSON.stringify(o)).join('\n') + '\n');
+    }
     const closed = new Set([...done, ...outcomes.map((o) => o.task)]);
     writeWhole(p.state, JSON.stringify(nextState(records, starts, end, openTasks, closed)));
     return { outcomes: outcomes.length, learned, open: openTasks.size };

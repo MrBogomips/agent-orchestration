@@ -13,6 +13,19 @@ test('normalizeRemote makes ssh, https and credentials the same', () => {
   assert.equal(normalizeRemote(undefined), null);
 });
 
+test('normalizeRemote drops a port, so one repository gets one id however its remote is spelled', async () => {
+  const forms = ['git@github.com:o/r.git', 'https://github.com/o/r.git', 'ssh://git@github.com:22/o/r.git', 'https://github.com:443/o/r'];
+  assert.deepEqual(forms.map(normalizeRemote), forms.map(() => 'github.com/o/r'));
+  const ids = new Set(await Promise.all(forms.map(async (remote) => (await projectId({ remote, root: '/x' })).id)));
+  assert.equal(ids.size, 1);
+});
+
+test('an scp-style remote whose owner is all digits keeps its owner: it has no port', () => {
+  assert.equal(normalizeRemote('git@github.com:1234/r.git'), 'github.com/1234/r');
+  assert.equal(normalizeRemote('https://github.com/1234/r'), 'github.com/1234/r');
+  assert.notEqual(normalizeRemote('git@github.com:1234/r.git'), normalizeRemote('git@github.com:5678/r.git'));
+});
+
 test('projectId is the first 16 hex of SHA-256 of the remote, else of the root path', async () => {
   const hex = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
   assert.deepEqual(await projectId({ remote: 'git@github.com:Org/Repo.git', root: '/r' }), { id: hex('github.com/org/repo'), root: '/r' });

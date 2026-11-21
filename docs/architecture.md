@@ -844,10 +844,12 @@ block.
 
 **`model-router` fails open.** An error never stops work. In the skills, a missing or unreadable
 `recommendations.json`, or one with no entry for the class, means the grid alone decides, silently. The router mod
-keeps this rule: the routing and recording hooks each have a `.catch` that hands the event on unchanged,
+keeps this rule: the routing and recording hooks each have a `.catch` that writes one `[model-router] <hook>:`
+debug line and hands the event on unchanged (at `agent.spawn`, the spawn record is still written once the agent
+has started),
 `session.start` catches its own work, and a judge error, a timeout or an unreadable answer leaves the start
-unchanged (logged as `error`, unless a `!` tag forces the deep tier). Compaction only appends to the event log; a
-run that dies is safe to repeat, because a task with an `outcome` record is not decided again and each aggregate
+unchanged (logged as `error`, unless a `!` tag forces the deep tier). Compaction only appends to the event log,
+never after a torn last line another session may still be writing; a run that dies is safe to repeat, because a task with an `outcome` record is not decided again and each aggregate
 file remembers the tasks it folded.
 
 ## Compatibility

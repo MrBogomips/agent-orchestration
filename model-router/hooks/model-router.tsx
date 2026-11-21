@@ -343,6 +343,60 @@ async function fillEffort($: any, effortWait: Map<string, string>, agentId: stri
   }
 }
 
+/**
+ * One debug line for a failure, an error or a hook's failure (`next.error` in a catch): a router that fails on every
+ * call must not look like an idle one. Never throws.
+ */
+function logFailure($: any, where: string, err: any) {
+  try {
+    const text = typeof err?.message === 'string' ? err.message : typeof err?.kind === 'string' ? err.kind : String(err)
+    $.ui.log(`[model-router] ${where}: ${text.slice(0, 200)}`, { to: 'debug' })
+  } catch {
+    // the log itself is unavailable: nothing more can be said
+  }
+}
+
+/** Runs `fn`; a failure is logged under `where` and answers `fallback`. */
+async function guarded<T>($: any, where: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    logFailure($, where, err)
+    return fallback
+  }
+}
+
+/**
+ * Appends the decision and spawn records of a started subagent. The grid and the project are read on their own:
+ * when one cannot be read the record is written without it (no class, no project), since a task with no spawn
+ * record never gets an outcome.
+ */
+async function recordStart($: any, ctx: Ctx, e: any, planned: Pending | null, decision: any, started: any) {
+  const session = await $.session.id()
+  const tag = await guarded($, 'agent.spawn', async () => parseTag(e.description, (await gridOf($, ctx)).classes.map((c: any) => c.name)), {
+    cls: null,
+    risky: parseTag(e.description).risky,
+  })
+  const project = await guarded($, 'agent.spawn', () => projectOf($, ctx), null)
+  const records: object[] = []
+  if (planned && decision) {
+    const j = planned.judge
+    records.push({
+      type: 'decision', ts: now(), session, agentId: started.agentId, toolUseId: e.tool_use_id, subagentType: e.subagentType,
+      class: planned.cls, action: decision.action, before: e.model ?? e.parentModel, after: started.model, effort: planned.effort ?? null,
+      judge: j ? { tier: j.tier, confidence: j.confidence, effort: j.effort, effortConfidence: j.effortConfidence, risky: j.risky, class: j.class, ms: planned.judgeMs } : null,
+      reason: decision.reason,
+    })
+  }
+  records.push({
+    type: 'spawn', ts: now(), session, agentId: started.agentId, parentAgentId: e.parentAgentId, name: e.name,
+    subagentType: e.subagentType, description: e.description, class: planned?.cls ?? tag.cls,
+    risky: planned?.risky ?? tag.risky, model: started.model, effort: planned?.effort ?? null, fork: e.fork,
+    route: planned?.route ?? 'unseen', explicitModel: Boolean(e.model), project,
+  })
+  await appendEvents($, ctx, records)
+}
+
 /** Where the focus ring is in the pane, and the last move this plugin wrapped round the tab row. */
 type Ring = { at: string | null; wrap: { to: string | undefined; tab: string; at: number } | null }
 
@@ -411,13 +465,19 @@ export const register: Register = (on, options) => {
     const moved = await next(target === to ? e : { ...e, element: target })
     if (!moved?.deny) ring.at = target ?? null
     return moved
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'ui.focus', next.error)
+    return next(e)
+  })
 
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
     if (!isArrowScroll(e)) return next(e)
     await update($, viewState, (v) => ({ ...v, window: stepWindow(v.window, e.by) }))
     return {}
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'ui.scroll', next.error)
+    return next(e)
+  })
 
   // A press on anything but a tab leaves the ring on the active tab, so the row keeps one highlighted block.
   on('ui.press', { requestId: PANE }, async ($, e, next) => {
@@ -429,7 +489,10 @@ export const register: Register = (on, options) => {
     const view = await read($, viewState)
     if (ring.at !== tabKey(view.tab)) void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
     return pressed
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'ui.press', next.error)
+    return next(e)
+  })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
@@ -528,13 +591,19 @@ export const register: Register = (on, options) => {
         </Text>
       </Box>
     )
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'ui.render ToolUse', next.error)
+    return next(e)
+  })
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
     firstFire($, fired, 'tool.call Agent')
     pending.set(e.tool_use_id, await planStart($, ctx, opts, e))
     return next(e)
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'tool.call Agent', next.error)
+    return next(e)
+  })
 
   // Sets the routed effort on each model request of the subagent; any other loop's steps pass unchanged. The first
   // step of a subagent whose effort was not known at its start says what it runs at, for the line under its row.
@@ -546,11 +615,17 @@ export const register: Register = (on, options) => {
     return yield* next({ ...e, effort } as typeof e)
   })
 
+  // What runs after next() has started the agent is guarded on its own: a failure there is logged and the spawn
+  // record is still written with what is known, so the hook never reaches its catch with the agent running.
   on('agent.spawn', async ($, e, next) => {
     firstFire($, fired, 'agent.spawn')
     if (e.resume) {
       const r = await next(e)
-      if (opts.measure) await appendEvents($, ctx, [{ type: 'signal', kind: 'resume', ts: now(), session: await $.session.id(), agentId: e.resume.agentId }])
+      if (opts.measure) {
+        await guarded($, 'agent.spawn', async () => {
+          await appendEvents($, ctx, [{ type: 'signal', kind: 'resume', ts: now(), session: await $.session.id(), agentId: e.resume!.agentId }])
+        }, undefined)
+      }
       return r
     }
     const planned = pending.get(e.tool_use_id) ?? null
@@ -561,27 +636,12 @@ export const register: Register = (on, options) => {
     if (planned?.effort && planned.effort !== planned.callEffort && started.agentId && !e.fork) stepEffort.set(started.agentId, planned.effort)
     await drawLine($, effortWait, e, planned, decision, started)
     if (!opts.measure) return started
-    const session = await $.session.id()
-    const tag = parseTag(e.description, (await gridOf($, ctx)).classes.map((c: any) => c.name))
-    const records: object[] = []
-    if (planned && decision) {
-      const j = planned.judge
-      records.push({
-        type: 'decision', ts: now(), session, agentId: started.agentId, toolUseId: e.tool_use_id, subagentType: e.subagentType,
-        class: planned.cls, action: decision.action, before: e.model ?? e.parentModel, after: started.model, effort: planned.effort ?? null,
-        judge: j ? { tier: j.tier, confidence: j.confidence, effort: j.effort, effortConfidence: j.effortConfidence, risky: j.risky, class: j.class, ms: planned.judgeMs } : null,
-        reason: decision.reason,
-      })
-    }
-    records.push({
-      type: 'spawn', ts: now(), session, agentId: started.agentId, parentAgentId: e.parentAgentId, name: e.name,
-      subagentType: e.subagentType, description: e.description, class: planned?.cls ?? tag.cls,
-      risky: planned?.risky ?? tag.risky, model: started.model, effort: planned?.effort ?? null, fork: e.fork,
-      route: planned?.route ?? 'unseen', explicitModel: Boolean(e.model), project: await projectOf($, ctx),
-    })
-    await appendEvents($, ctx, records)
+    await guarded($, 'agent.spawn', () => recordStart($, ctx, e, planned, decision, started), undefined)
     return started
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'agent.spawn', next.error)
+    return next(e)
+  })
 
   on('tool.call', async ($, e, next) => {
     const result: any = await next(e)
@@ -598,7 +658,10 @@ export const register: Register = (on, options) => {
       await appendEvents($, ctx, [{ type: 'signal', kind: 'tool-error', ...base, tool }])
     }
     return result
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'tool.call', next.error)
+    return next(e)
+  })
 
   on('prompt.submit', async ($, e, next) => {
     const result = await next(e)
@@ -607,16 +670,25 @@ export const register: Register = (on, options) => {
       await appendEvents($, ctx, [{ type: 'signal', kind: 'prompt', ts: now(), session: await $.session.id(), text: e.text.slice(0, PROMPT_CHARS) }])
     }
     return result
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'prompt.submit', next.error)
+    return next(e)
+  })
 
   on('agent.report', async ($, e, next) => {
     firstFire($, fired, 'agent.report')
     if (opts.measure) await appendEvents($, ctx, [await reportOf($, e)])
     return next(e)
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'agent.report', next.error)
+    return next(e)
+  })
 
   on('session.end', async ($, e, next) => {
     if (opts.measure) await appendEvents($, ctx, [{ type: 'session-end', ts: now(), session: e.sessionId, reason: e.reason }])
     return next(e)
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    logFailure($, 'session.end', next.error)
+    return next(e)
+  })
 }

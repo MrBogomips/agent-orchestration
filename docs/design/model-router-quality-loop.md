@@ -93,8 +93,8 @@ A fixed list, so that cells fill up:
 | `review-debug` | review, debugging with an unknown cause |
 | `design-open` | open-ended design where judgment matters |
 
-The class comes from, in order: a tag `[mr:<class>]` at the start of the start call's description, which
-`choose-model` tells the agent to add; the judge's answer, when the judge runs (the judge prompt gains a `class`
+The class comes from, in order: a tag `[mr:<class>]` at the start of the start call's description (any case, spaces
+allowed inside; a class not in the grid reads as none), which `choose-model` tells the agent to add; the judge's answer, when the judge runs (the judge prompt gains a `class`
 field); otherwise `unknown`, which is logged and never learned.
 
 ## Memory
@@ -110,13 +110,17 @@ inside a hub or a repository.
 | `quality/.lock` | compaction lock (pid, time) | compaction |
 
 *Project id*: the first 16 hex characters of the SHA-256 of the normalized git remote URL of the session's
-repository, else of its root path. The file also stores the readable root path for the report.
+repository (`host/owner/repo`: no scheme, user, port or `.git`, lower case), else of its root path. The file also stores the readable root path for the report.
 
 **Aggregate cell**, keyed by class × tier × effort:
 
 ```json
-{ "alpha": 3.2, "beta": 1.1, "n": 5, "costMean": 0.041, "tokensMean": 18200, "updated": "2026-11-20T10:00:00Z" }
+{ "alpha": 3.2, "beta": 1.1, "n": 5, "costMean": 0.041, "costN": 4, "tokensMean": 18200, "tokensN": 4, "updated": "2026-11-20T10:00:00Z" }
 ```
+
+`costN` and `tokensN` count only the outcomes that carried a cost or a token count, and weigh each mean, so a task
+with no cost does not pull the mean down. They age with `n`. A cell written before they existed weighs its means
+by `n`.
 
 **Compaction** runs at `session.start` and from `model-router:report`. It takes the lock (stale after 2 minutes),
 reads closed outcomes after the last compacted offset, updates both levels, writes each file whole (write to a
@@ -258,6 +262,11 @@ Choices left to the builder, and where the build departs from the text above.
 - **A run that dies is safe to repeat.** A task that already has an `outcome` record in the log is not decided
   again, and each aggregate file keeps the keys of the tasks it folded (for 90 days), so a repeated fold counts
   nothing twice. The event log itself is only appended to.
+- **A torn last line.** A line with no newline yet is not read; it waits for the next run. Compaction never
+  appends after it: while the line changed in the last two minutes, another session may still be finishing it,
+  and the run closes nothing (its tasks stay behind the offset and are closed, folded and appended by a later
+  run). A torn line older than that has no writer left: the run ends it with a newline, so it stays one skipped
+  line, and appends its outcomes after it.
 - **Options.** The mod saves the options compaction needs in `<config dir>/model-router/options.json` at each
   session start; compaction and the report read it when no `--options` is given.
 - **Cells** store aged evidence counts (`n`, `success`, `rework`, `failure`) and the means; `alpha` and `beta` are
