@@ -210,7 +210,7 @@ Set in `/config` or under `pluginConfigs` in settings.
 
 ## Privacy
 
-Nothing leaves the machine. Everything the plugin records stays under the active config folder
+The plugin sends what it records nowhere: it all stays under the active config folder
 (`CLAUDE_CONFIG_DIR`, else `~/.claude`) in `model-router/`: `events.jsonl` (decisions; each subagent start with
 its type, name and short description; the paths of files the session and its subagents write; tool names of
 failed subagent calls and stop targets; the first 2,000 characters of the prompts you type; reports with tokens
