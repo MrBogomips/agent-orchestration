@@ -31,24 +31,21 @@ function validate(root) {
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The `find …` that lists the unit tests, as AGENTS.md and the validate workflow write it. */
-function testFinders() {
-  const agents = readFileSync(join(REPO, 'AGENTS.md'), 'utf8').match(/node --test \$\((find [^)]+)\)/)?.[1];
-  const workflow = readFileSync(join(REPO, '.github/workflows/validate.yml'), 'utf8').match(/files=\$\((find [^)]+)\)/)?.[1];
-  return { agents, workflow };
+/** The `find …` that lists the unit tests, as tests/ci.sh writes it (the only place that does). */
+function testFinder() {
+  return readFileSync(join(REPO, 'tests/ci.sh'), 'utf8').match(/find \.[\s\S]*?-print/)?.[0].replace(/\\\n\s*/g, '');
 }
 
 test('the unit-test command skips worktrees, node_modules and the built site', () => {
-  const { agents, workflow } = testFinders();
-  assert.ok(agents && workflow, 'both places write the command');
-  assert.equal(agents, workflow, 'AGENTS.md and the workflow run the same command');
+  const finder = testFinder();
+  assert.ok(finder, 'tests/ci.sh writes the command');
   const root = mkdtempSync(join(tmpdir(), 'finder-'));
   try {
     for (const p of ['lib/a.test.mjs', '.claude/worktrees/x/lib/a.test.mjs', 'node_modules/m/b.test.mjs', 'site/dist/c.test.mjs']) {
       mkdirSync(dirname(join(root, p)), { recursive: true });
       writeFileSync(join(root, p), '');
     }
-    const r = spawnSync('sh', ['-c', agents], { cwd: root, encoding: 'utf8' });
+    const r = spawnSync('sh', ['-c', finder], { cwd: root, encoding: 'utf8' });
     assert.deepEqual(r.stdout.trim().split('\n'), ['./lib/a.test.mjs']);
   } finally {
     rmSync(root, { recursive: true, force: true });

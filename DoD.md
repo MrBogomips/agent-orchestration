@@ -2,9 +2,9 @@
 
 ## Requirements
 
-The `validate` check of a pull request runs the structural checks, the unit tests, the manifest validation, the mod
-tests, the version-bump and attribution checks of commits and pull request text, and the site check. The rest is
-checked by hand.
+`bash tests/ci.sh origin/main` runs the structural checks, the unit tests, the manifest validation, the mod tests,
+the version-bump and attribution checks of commits and pull request text, and the site check; the `validate` check
+of a pull request runs the same script, and `main` requires it. The rest is checked by hand.
 
 - [ ] Structural checks pass: `bash tests/validate.sh`
 - [ ] Unit tests pass: `node --test` on every `*.test.mjs`

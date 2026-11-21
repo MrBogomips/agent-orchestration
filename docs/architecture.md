@@ -933,7 +933,7 @@ Everything in this section is provisional: names, defaults and behaviour may cha
     mod; `grid.json` and `grid.test.mjs` sit at the plugin's root. The mod's tests are
     `tests/model-router.test.tsx` for the glue and `lib/*.test.mjs` and `scripts/*.test.mjs` for the logic; the
     usage view's golden text is in `lib/usage-view.golden-*.txt`.
-- Checks: `bash tests/validate.sh` for structure, `node --test` on the `*.test.mjs` files next to the code,
+- Checks: `bash tests/ci.sh` runs them all, locally and in the `validate` workflow: `bash tests/validate.sh` for structure, `node --test` on the `*.test.mjs` files next to the code,
   `claude plugin validate ./<plugin> --strict`, and `claude plugin test ./<plugin>` for each mod's glue. Manual
   scenarios are under `tests/scenarios/`.
 - The design and the tests run before building are in `docs/design/`; what the two plugins may assume about each

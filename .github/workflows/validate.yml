@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request cancels the run it makes stale; runs on main always finish.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   # The Claude Code CLI runs only `plugin validate` and `plugin test`: no login, no model call, no update.
   CLAUDE_CODE_VERSION: 2.1.330
@@ -16,8 +21,10 @@ env:
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
 
 jobs:
+  # The job name is the required status check on main: keep it `validate`.
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,34 +34,18 @@ jobs:
         with:
           node-version: 22
 
-      - name: Plugins and skills agree
-        run: bash tests/validate.sh
-
-      - name: Unit tests
-        run: |
-          files=$(find . -path ./node_modules -prune -o -path ./.claude -prune -o -path ./site/dist -prune -o -name '*.test.mjs' -print)
-          if [ -n "$files" ]; then node --test $files; else echo "no unit tests yet"; fi
-
-      - name: Version bumps and attribution
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: node tests/pr-checks.mjs "origin/$BASE_REF"
-
-      - name: Documentation site
-        run: node site/check.mjs
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-claude-code-${{ env.CLAUDE_CODE_VERSION }}
 
       - name: Claude Code CLI
         run: npm install --global "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
 
-      - name: Plugin manifests (strict)
-        run: |
-          claude plugin validate ./session-hub --strict
-          claude plugin validate ./model-router --strict
-
-      - name: Mod tests
-        run: |
-          claude plugin test ./session-hub
-          claude plugin test ./model-router
+      # Every check lives in tests/ci.sh, the same script developers and the pre-push hook run.
+      - name: Checks
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash tests/ci.sh $BASE

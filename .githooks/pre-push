@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Runs the repository's whole check (tests/ci.sh) against origin/main before a push.
+# Turn on once per clone: git config core.hooksPath .githooks    Skip one push: git push --no-verify
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel)" || exit 1
+# A stale origin/main only weakens the version-bump check; offline, check against what is there.
+git -C "$root" fetch origin main --quiet 2>/dev/null || echo "[pre-push] could not fetch origin/main; using the local copy"
+exec bash "$root/tests/ci.sh" origin/main
