@@ -2,16 +2,17 @@
 // The children record of a session-hub master: one JSON file, written whole and atomically on every change,
 // under an exclusive lock so that concurrent writers lose no entry.
 //
-// Default location: <config dir>/session-hub/children-<hub id>.json, where <config dir> is CLAUDE_CONFIG_DIR or
-// ~/.claude and <hub id> is the first 16 hex digits of the sha256 of the hub's real path (NFC). Never inside a hub.
+// Default location: <config dir>/session-hub/children-<hub id>.json, where <config dir> is CLAUDE_CONFIG_DIR (absolute,
+// or starting with ~) or ~/.claude and <hub id> is the first 16 hex digits of the sha256 of the hub's real path (NFC).
+// Never inside a hub: every path is judged where it really lands before anything is written.
 //
-// Usage:
+// Usage (a write with --file needs --hub too, so that the file can be checked against the hub):
 //   registry.mjs path      --hub <dir>
 //   registry.mjs read      (--hub <dir> | --file <path>)
-//   registry.mjs upsert    (--hub <dir> | --file <path>) --entry '<json>'
-//   registry.mjs status    (--hub <dir> | --file <path>) --name <child> --status <status>
-//   registry.mjs request   (--hub <dir> | --file <path>) --name <child> --text <text> [--outcome <text>]
-//   registry.mjs reconcile (--hub <dir> | --file <path>) (--live <name,name,...> | --live-none)
+//   registry.mjs upsert    --hub <dir> [--file <path>] --entry '<json>'
+//   registry.mjs status    --hub <dir> [--file <path>] --name <child> --status <status>
+//   registry.mjs request   --hub <dir> [--file <path>] --name <child> --text <text> [--outcome <text>]
+//   registry.mjs reconcile --hub <dir> [--file <path>] (--live <name,name,...> | --live-none)
 //
 // Exit 0 on success, with JSON on stdout (the path for `path`); exit 1 with a `[session-hub]` message on stderr.
 // A file that cannot be read as a record, or was written by a newer format, is reported and never overwritten.
@@ -31,7 +32,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const STATUSES = Object.freeze(['running', 'waiting-user', 'done', 'abandoned', 'lost']);
@@ -45,8 +46,16 @@ const LOCK_BACKOFF_MAX_MS = 200;
 
 export class RegistryError extends Error {}
 
+// The config folder: CLAUDE_CONFIG_DIR, with a leading `~` or `~/` expanded, else ~/.claude. A relative one would
+// depend on the current folder (and could land inside a repository), so it is refused.
 export function configDir(env = process.env, home = homedir()) {
-  return env.CLAUDE_CONFIG_DIR ? env.CLAUDE_CONFIG_DIR : join(home, '.claude');
+  const configured = env.CLAUDE_CONFIG_DIR;
+  if (!configured) return join(home, '.claude');
+  const expanded = configured === '~' || configured.startsWith('~/') ? join(home, configured.slice(1)) : configured;
+  if (!isAbsolute(expanded)) {
+    throw new RegistryError(`CLAUDE_CONFIG_DIR is not an absolute path (${configured}); the record would depend on the current folder`);
+  }
+  return expanded;
 }
 
 function realHub(hub) {
@@ -293,23 +302,44 @@ function isInside(path, dir) {
   return path === dir || path.startsWith(`${dir}${sep}`);
 }
 
-function resolveFile(options) {
+// Where a path really lands: the deepest part of it that exists, with its links resolved, and the rest as written.
+function landing(path) {
+  const missing = [];
+  let current = resolve(path);
+  for (;;) {
+    try {
+      return join(realpathSync.native(current), ...missing).normalize('NFC');
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw new RegistryError(`cannot resolve ${path}: ${error.message}`);
+      const parent = dirname(current);
+      if (parent === current) return resolve(path).normalize('NFC');
+      missing.unshift(basename(current));
+      current = parent;
+    }
+  }
+}
+
+// The record may never live inside the hub (AGENTS.md: no state files inside a hub or a repository). Judged where the
+// file would land, before any folder is made, so neither an alias nor a link to the hub nor a folder not made yet
+// gets past it.
+function checkOutsideHub(file, hubDir) {
+  if (isInside(landing(file), realHub(hubDir))) throw new RegistryError(`the record may not live inside the hub: ${file}`);
+  return file;
+}
+
+const WRITES = Object.freeze(['upsert', 'status', 'request', 'reconcile']);
+
+function resolveFile(command, options) {
   if (options.file) {
     if (!isAbsolute(options.file)) throw new RegistryError(`--file must be an absolute path: ${options.file}`);
     const file = resolve(options.file);
-    if (options.hub) {
-      const hub = realHub(options.hub);
-      let fileDir;
-      try {
-        fileDir = realpathSync.native(dirname(file)).normalize('NFC');
-      } catch {
-        fileDir = dirname(file).normalize('NFC');
-      }
-      if (isInside(fileDir, hub)) throw new RegistryError(`the record may not live inside the hub: ${file}`);
+    if (options.hub) return checkOutsideHub(file, options.hub);
+    if (WRITES.includes(command)) {
+      throw new RegistryError(`a write with --file needs --hub <dir> too, so that the file can be checked against the hub`);
     }
     return file;
   }
-  if (options.hub) return defaultRegistryPath(options.hub);
+  if (options.hub) return checkOutsideHub(defaultRegistryPath(options.hub), options.hub);
   throw new RegistryError('give --hub <dir> or --file <path>');
 }
 
@@ -332,8 +362,11 @@ function liveNames(options) {
 export function runCli(argv) {
   const { command, options } = parseArgs(argv);
   if (!COMMANDS.includes(command)) throw new RegistryError(`unknown command "${command}"; use ${COMMANDS.join(', ')}`);
-  if (command === 'path') return { out: defaultRegistryPath(required(options, 'hub')) };
-  const file = resolveFile(options);
+  if (command === 'path') {
+    const hub = required(options, 'hub');
+    return { out: checkOutsideHub(defaultRegistryPath(hub), hub) };
+  }
+  const file = resolveFile(command, options);
   const hub = options.hub ? { hub: options.hub } : {};
   const json = (value) => ({ out: JSON.stringify(value, null, 2) });
   switch (command) {

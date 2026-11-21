@@ -28,9 +28,10 @@ node "$R" request --hub /abs/hub --name <child> --text "<request>" --outcome "<w
   same Bash call as the command. With mods on, the `session-hub` mod recognises the master from these calls: it
   reads the command for `registry.mjs` and a literal absolute `--hub` or `--file`, and only then turns on the
   children panel.
-- The default path is `<config dir>/session-hub/children-<hub id>.json` (`CLAUDE_CONFIG_DIR`, else `~/.claude`).
-  When the hub's *Registry* key gives a path, add `--file <path>` to every call; the script refuses a path inside
-  the hub.
+- The default path is `<config dir>/session-hub/children-<hub id>.json` (`CLAUDE_CONFIG_DIR`, else `~/.claude`;
+  a relative `CLAUDE_CONFIG_DIR` is refused). When the hub's *Registry* key gives a path, add `--file <path>` to
+  every call, next to `--hub`: a write with `--file` and no `--hub` is refused. The script refuses a path that lands
+  inside the hub, also through a link or a folder that does not exist yet.
 - Use the exact child name, the one given with `-n <name>` at the start. `upsert` with an unknown name creates a
   new entry with status `running`, so a misspelt name makes a second child. `status` and `request` refuse a name
   that is not in the record.

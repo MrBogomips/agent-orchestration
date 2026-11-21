@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync, utimesSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -43,6 +43,10 @@ describe('paths', () => {
   test('config dir comes from CLAUDE_CONFIG_DIR, else ~/.claude', () => {
     assert.equal(configDir({ CLAUDE_CONFIG_DIR: '/x/cfg' }, '/home/u'), '/x/cfg');
     assert.equal(configDir({}, '/home/u'), '/home/u/.claude');
+    assert.equal(configDir({ CLAUDE_CONFIG_DIR: '~/.claude-x' }, '/home/u'), '/home/u/.claude-x');
+    assert.equal(configDir({ CLAUDE_CONFIG_DIR: '~' }, '/home/u'), '/home/u');
+    assert.throws(() => configDir({ CLAUDE_CONFIG_DIR: 'relative/cfg' }, '/home/u'), /CLAUDE_CONFIG_DIR is not an absolute path/);
+    assert.throws(() => configDir({ CLAUDE_CONFIG_DIR: '~other/cfg' }, '/home/u'), /CLAUDE_CONFIG_DIR is not an absolute path/);
   });
 
   test('hub id is the first 16 hex of the sha256 of the real path', () => {
@@ -273,7 +277,7 @@ describe('command line', () => {
 
   test('--file overrides the default path, and a file inside the hub is refused', () => {
     const custom = join(base, 'elsewhere', 'kids.json');
-    let r = cli(['upsert', '--file', custom, '--entry', JSON.stringify(entry('a'))]);
+    let r = cli(['upsert', '--hub', hub, '--file', custom, '--entry', JSON.stringify(entry('a'))]);
     assert.equal(r.status, 0, r.stderr);
     assert.ok(existsSync(custom));
 
@@ -281,6 +285,57 @@ describe('command line', () => {
     assert.equal(r.status, 1);
     assert.match(r.stderr, /\[session-hub\].*inside the hub/);
     assert.equal(existsSync(join(hub, 'kids.json')), false);
+  });
+
+  // Issue #28: the record may never land inside the hub
+  const refusedInside = (r, path) => {
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stderr, /^\[session-hub\] registry: /);
+    assert.equal(existsSync(path), false, path);
+  };
+
+  test('a write with --file needs --hub, so that the file can be checked; a read does not', () => {
+    const inside = join(hub, 'kids.json');
+    const r = cli(['upsert', '--file', inside, '--entry', JSON.stringify(entry('a'))]);
+    refusedInside(r, inside);
+    assert.match(r.stderr, /--hub/);
+    const elsewhere = join(base, 'elsewhere', 'kids.json');
+    assert.equal(cli(['upsert', '--hub', hub, '--file', elsewhere, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    assert.equal(cli(['read', '--file', elsewhere]).status, 0);
+  });
+
+  test('a file under a folder not made yet is judged where it lands: an alias of the hub is refused', () => {
+    const alias = join(base, 'alias');
+    symlinkSync(base, alias);
+    const target = join(alias, 'hub', 'state', 'kids.json');
+    refusedInside(cli(['upsert', '--hub', hub, '--file', target, '--entry', JSON.stringify(entry('a'))]), join(hub, 'state'));
+  });
+
+  test('a link to the hub followed by a new folder is refused', () => {
+    const link = join(base, 'hublink');
+    symlinkSync(hub, link);
+    const target = join(link, 'st2', 'kids.json');
+    refusedInside(cli(['upsert', '--hub', hub, '--file', target, '--entry', JSON.stringify(entry('a'))]), join(hub, 'st2'));
+  });
+
+  test('CLAUDE_CONFIG_DIR: ~ is expanded, a relative one is refused, one inside the hub is refused', () => {
+    const repo = join(hub, 'repo');
+    mkdirSync(repo);
+    const home = join(base, 'home');
+    mkdirSync(home);
+    const inHome = spawnSync(process.execPath, [SCRIPT, 'upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))], {
+      cwd: repo, encoding: 'utf8', env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '~/.claude-x' },
+    });
+    assert.equal(inHome.status, 0, inHome.stderr);
+    assert.ok(existsSync(join(home, '.claude-x', 'session-hub', `children-${hubId(hub)}.json`)));
+    assert.equal(existsSync(join(repo, '~')), false);
+    const relative = spawnSync(process.execPath, [SCRIPT, 'upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))], {
+      cwd: repo, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: 'cfg-relative' },
+    });
+    refusedInside(relative, join(repo, 'cfg-relative'));
+    assert.match(relative.stderr, /CLAUDE_CONFIG_DIR/);
+    refusedInside(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))], { CLAUDE_CONFIG_DIR: join(hub, '.cfg') }), join(hub, '.cfg'));
+    assert.equal(cli(['path', '--hub', hub], { CLAUDE_CONFIG_DIR: join(hub, '.cfg') }).status, 1);
   });
 
   test('errors exit 1 with a prefixed message', () => {
