@@ -2,6 +2,7 @@
 // the record from the master's own calls to the registry script. Pure: the mod reads the record through
 // `scripts/registry.mjs read` and the live list through the ListAgents tool (spike S8), and passes both here.
 
+import { EFFORT_WIDTH, MODEL_WIDTH, modelEffortSegments } from './look.mjs';
 import { tokenize } from './shell-words.mjs';
 
 const NOT_LISTED = 'not listed';
@@ -55,22 +56,78 @@ export function panelRows(record, live) {
 
 const pad = (value, width) => (value.length >= width ? value : value + ' '.repeat(width - value.length));
 
-/** One line for a row, cut to `width` columns. */
-export function formatRow(row, width) {
-  const cells = [
-    pad(row.name, 18),
-    pad(row.status, 12),
-    pad(row.live, 10),
-    pad(row.model === NONE && row.effort === NONE ? NONE : `${row.model}/${row.effort}`, 15),
-    row.last,
-  ];
-  const line = cells.join(' ').trimEnd();
-  return line.length <= width ? line : `${line.slice(0, Math.max(0, width - 1))}…`;
+const NAME_WIDTH = 18;
+const STATUS_WIDTH = 12;
+const LIVE_WIDTH = 10;
+// The model, the four-cell bar and the effort word: `sonnet ▰▰▱▱ medium`.
+const MODEL_EFFORT_WIDTH = MODEL_WIDTH + 1 + 4 + 1 + EFFORT_WIDTH;
+
+// The record status and the live status in the theme's good, fair and bad colours (*A shared look*).
+const STATUS_TONES = Object.freeze({
+  running: 'good',
+  working: 'good',
+  busy: 'good',
+  'waiting-user': 'fair',
+  abandoned: 'fair',
+  [NOT_LISTED]: 'fair',
+  lost: 'bad',
+  [UNKNOWN]: 'dim',
+});
+
+const statusSegment = (value, width) => {
+  const tone = STATUS_TONES[value];
+  return tone ? { text: `${pad(value, width)} `, tone } : { text: `${pad(value, width)} ` };
+};
+
+// Keeps the first `width` columns of the segments, the last one cut and followed by `…` when they are longer.
+function cut(segments, width) {
+  const kept = [];
+  let room = Math.max(0, width - 1);
+  for (const segment of segments) {
+    if (room <= 0) break;
+    kept.push(segment.text.length <= room ? segment : { ...segment, text: segment.text.slice(0, room) });
+    room -= segment.text.length;
+  }
+  return [...kept, { text: '…' }];
 }
 
-/** The header line that goes with formatRow. */
+/** A row's text, for the `/session-hub` table. */
+export const rowText = (segments) => segments.map((segment) => segment.text).join('');
+
+/**
+ * One row as segments, `{ text, color?, bold?, tone? }` (`tone`: `dim`, `good`, `fair`, `bad`), cut to `width`
+ * columns: the model bold in its tier's colour, the effort as the bar and the word in its level's colour.
+ */
+export function formatRow(row, width) {
+  const modelEffort =
+    row.model === NONE && row.effort === NONE
+      ? [{ text: pad(NONE, MODEL_EFFORT_WIDTH) }]
+      : modelEffortSegments(row.model === NONE ? undefined : row.model, row.effort);
+  const segments = [
+    { text: `${pad(row.name, NAME_WIDTH)} ` },
+    statusSegment(row.status, STATUS_WIDTH),
+    statusSegment(row.live, LIVE_WIDTH),
+    ...modelEffort,
+    { text: ' ' },
+    { text: row.last },
+  ];
+  const last = segments.length - 1;
+  const trimmed = segments.map((segment, index) => (index === last ? { ...segment, text: segment.text.trimEnd() } : segment));
+  const fitted = rowText(trimmed).length <= width ? trimmed : cut(trimmed, width);
+  return fitted.filter((segment) => segment.text !== '');
+}
+
+/** The header line that goes with formatRow, as text. */
 export function headerRow(width) {
-  return formatRow({ name: 'child', status: 'record', live: 'live', model: 'model', effort: 'effort', last: 'last message' }, width);
+  const cells = [
+    pad('child', NAME_WIDTH),
+    pad('record', STATUS_WIDTH),
+    pad('live', LIVE_WIDTH),
+    pad(`${pad('model', MODEL_WIDTH)} effort`, MODEL_EFFORT_WIDTH),
+    'last message',
+  ];
+  const line = cells.join(' ');
+  return line.length <= width ? line : `${line.slice(0, Math.max(0, width - 1))}…`;
 }
 
 /**
