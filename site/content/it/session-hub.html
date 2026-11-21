@@ -1,4 +1,3 @@
-<!-- translated-from: en/session-hub.html sha256:22a0e7163cbf -->
 <h1>session-hub</h1>
 <p class="lede">Quando un'attività tocca più repository, provare a gestire tutto in un'unica sessione fa perdere rapidamente il filo e i confini. Con <code>session-hub</code>, una sessione <strong>master</strong> aperta nella radice dell'hub avvia una o più <strong>sessioni figlie</strong> — una per repository — che lavorano in parallelo.</p>
 <p>Ogni sessione figlia riceve uno <strong>scope</strong> scritto, un modello e un grado di effort, comunica soltanto con il master e gli inoltra tutto ciò che esce dal proprio perimetro. In questo modo puoi entrare direttamente nella sessione figlia che riguarda il tuo dominio e guidarla da vicino, mentre il master coordina tutto il resto.</p>

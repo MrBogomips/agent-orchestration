@@ -8,7 +8,7 @@ dependencies.
 node site/build.mjs            # build into site/dist/ (ignored by git)
 node site/check.mjs            # build into a temporary folder and check it (links, images, translations, text)
 node site/serve.mjs            # serve site/dist/ on http://localhost:4173 to look at it
-node site/translate.mjs        # translate the stale Italian pages, strings and diagram text (an authoring step)
+node site/translate.mjs        # translate the stale English pages, the strings and the diagram text (an authoring step)
 node --test site/*.test.mjs              # unit tests
 ```
 
@@ -38,7 +38,8 @@ The PDF manual is copied from `docs/manual/user-manual.pdf` and the changelog pa
 
 ## Writing a page
 
-A page is `content/en/<id>.html`. A document page starts with `<h1>` and an optional `<p class="lede">`, which
+A page is written in Italian, `content/it/<id>.html`, and translated into `content/en/<id>.html` (see
+"Translating"). A document page starts with `<h1>` and an optional `<p class="lede">`, which
 become its hero; every `<h2>` goes into the "On this page" list. The home page brings its own sections.
 
 Placeholders, replaced at build time (an unknown one stops the build):
@@ -71,20 +72,21 @@ for an Italian text about a third longer than the English one. Ids are prefixed 
 
 ## Translating
 
-Italian pages carry a first line `<!-- translated-from: en/<page>.html sha256:<12 hex> -->`. When the English
-page changes, its hash no longer matches and `check.mjs` reports the Italian page as stale; `translate.mjs`
-translates it again through the `gemini-translate` skill script (found in the plugin cache, or set
-`GEMINI_TRANSLATE_SCRIPT`), with the glossary `src/glossary.it.md`, and writes the new header. Run
-`node site/translate.mjs pages <id>`, `strings [--all]` or `diagrams [--all]` to translate one part; each call is
-billed to the API key, so translate only what changed. The Italian interface strings live in
-`src/strings/it.json` and the diagrams' text in `diagrams/i18n/it.json`; `check.mjs` fails on any string left
-untranslated.
+The pages are written and reviewed in Italian (`sourceLanguage` in `src/site.json`): `content/it/*.html` is the
+authored text and carries no header. Each English page is translated from it and carries a first line
+`<!-- translated-from: it/<page>.html sha256:<12 hex> -->`, the hash of the Italian page it was translated from.
+When the Italian page changes, the hash no longer matches and `check.mjs` reports the English page as stale.
 
-The page text is now written and reviewed in Italian: `content/it/*.html` is the authored version and
-`content/en/*.html` is translated from it (Italian to English, same script, glossary of the site's English terms).
-After an Italian edit, translate the page to English, then rewrite the Italian page's first line with the new English
-hash so the check stays green. Do not run `translate.mjs pages` on those pages: it translates English to Italian and
-would overwrite the authored Italian text.
+`node site/translate.mjs pages [<id>…]` translates the stale English pages (or the ones named) from Italian through
+the `gemini-translate` skill script (found in the plugin cache, or set `GEMINI_TRANSLATE_SCRIPT`), with the glossary
+`src/glossary.en.md`, and writes the new header. It only ever writes English pages; it refuses an Italian page that
+carries a header.
+
+The interface strings (`src/strings/en.json`) and the diagrams' text are still written in English: `node
+site/translate.mjs strings [--all]` and `diagrams [--all]` translate them into `src/strings/it.json` and
+`diagrams/i18n/it.json` with `src/glossary.it.md`, and `check.mjs` fails on any string left untranslated.
+
+Each call is billed to the API key, so translate only what changed.
 
 ## Publishing
 

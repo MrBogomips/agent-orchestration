@@ -13,7 +13,7 @@ export function slugify(text) {
 
 const HEADER_RE = /^<!--\s*translated-from:\s*(\S+)\s+sha256:([0-9a-f]{12})\s*-->\s*\n?/;
 
-// A translated file starts with `<!-- translated-from: en/<file> sha256:<12 hex> -->`, the hash of the source it
+// A translated file starts with `<!-- translated-from: it/<file> sha256:<12 hex> -->`, the hash of the source it
 // was translated from, so a changed source shows up as a stale translation.
 export function readTranslationHeader(text) {
   const m = text.match(HEADER_RE);

@@ -4,6 +4,7 @@
   "repo": "https://github.com/MrBogomips/agent-orchestration",
   "languages": ["en", "it"],
   "defaultLanguage": "en",
+  "sourceLanguage": "it",
   "pages": [
     { "id": "home", "slug": "", "nav": false, "toc": false },
     { "id": "concept", "slug": "concept", "nav": true, "toc": true },

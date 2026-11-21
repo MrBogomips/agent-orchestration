@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Builds the site into a temporary folder and checks it. Fails (exit 1) on: a build error, a broken internal link
 // or image, an image without alt text, a diagram without a title, a page missing in a language, a stale or missing
-// translation, an untranslated interface string or diagram text, a placeholder left in a page, AI attribution or
+// translation (an English page older than the Italian page it is translated from), an authored page that carries a
+// translation header, an untranslated interface string or diagram text, a placeholder left in a page, AI attribution or
 // AI-service links, or a build that is not reproducible. Prints one line per problem.
 import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname, resolve, relative } from 'node:path';
@@ -9,6 +10,9 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { buildSite, loadSite, repoRoot } from './build.mjs';
 import { diagramStrings, normalize } from './lib/diagrams.mjs';
+import { readTranslationHeader } from './lib/text.mjs';
+
+const LANGUAGE_NAMES = { en: 'English', it: 'Italian' };
 
 const FORBIDDEN = [
   /claude\.ai\/(code|chat|artifact)/i, /anthropic\.com/i, /co-authored-by/i, /generated (with|by) (claude|ai|chatgpt|codex|gemini)/i,
@@ -66,8 +70,14 @@ export function checkSources(site) {
       const missing = diagramStrings(readFileSync(join(diagramDir, f), 'utf8')).filter((s) => !Object.hasOwn(dicts[lang], normalize(s)));
       for (const s of missing) problems.push(`diagrams/i18n/${lang}.json: no translation for "${s}" (${f})`);
     }
-    for (const page of config.pages.filter((p) => !p.source)) {
-      if (!existsSync(join(site.root, `site/content/${lang}/${page.id}.html`))) problems.push(`content/${lang}/${page.id}.html: missing`);
+  }
+  for (const page of config.pages.filter((p) => !p.source)) {
+    for (const lang of config.languages) {
+      const file = join(site.root, `site/content/${lang}/${page.id}.html`);
+      if (!existsSync(file)) problems.push(`content/${lang}/${page.id}.html: missing`);
+      else if (lang === site.sourceLanguage && readTranslationHeader(readFileSync(file, 'utf8')).hash) {
+        problems.push(`content/${lang}/${page.id}.html: the authored page carries a translation header`);
+      }
     }
   }
   return problems;
@@ -83,7 +93,8 @@ function main() {
     let first;
     try { first = buildSite({ out: a }); } catch (err) { problems.push(`build: ${err.message}`); }
     if (first) {
-      for (const p of first.report.stale) problems.push(`content/${p}.html: stale translation (the English page changed)`);
+      const source = LANGUAGE_NAMES[site.sourceLanguage] ?? site.sourceLanguage;
+      for (const p of first.report.stale) problems.push(`content/${p}.html: stale translation (the ${source} page changed)`);
       problems.push(...checkBuiltSite(a, site));
       buildSite({ out: b });
       const fa = walk(a).map((f) => relative(a, f)).sort();
