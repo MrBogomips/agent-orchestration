@@ -258,6 +258,11 @@ Choices left to the builder, and where the build departs from the text above.
 - **A run that dies is safe to repeat.** A task that already has an `outcome` record in the log is not decided
   again, and each aggregate file keeps the keys of the tasks it folded (for 90 days), so a repeated fold counts
   nothing twice. The event log itself is only appended to.
+- **A torn last line.** A line with no newline yet is not read; it waits for the next run. Compaction never
+  appends after it: while the line changed in the last two minutes, another session may still be finishing it,
+  and the run closes nothing (its tasks stay behind the offset and are closed, folded and appended by a later
+  run). A torn line older than that has no writer left: the run ends it with a newline, so it stays one skipped
+  line, and appends its outcomes after it.
 - **Options.** The mod saves the options compaction needs in `<config dir>/model-router/options.json` at each
   session start; compaction and the report read it when no `--options` is given.
 - **Cells** store aged evidence counts (`n`, `success`, `rework`, `failure`) and the means; `alpha` and `beta` are
