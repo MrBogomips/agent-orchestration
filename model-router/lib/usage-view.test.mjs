@@ -97,7 +97,7 @@ test('arguments: tab, window and level in any order; on, off, report, help; anyt
   assert.deepEqual(parseArgs('constructor'), { kind: 'unknown', word: 'constructor' });
   assert.deepEqual(parseArgs('__proto__'), { kind: 'unknown', word: '__proto__' });
   assert.ok(helpText().split('\n').every((l) => l.length <= 80), 'the help fits 80 columns');
-  assert.match(helpText(), /^Usage: \/model-router/);
+  assert.match(helpText(), /^🔀 Usage: \/model-router/);
 });
 
 test('formatting: tokens, dollars, shares, bars and cuts', () => {

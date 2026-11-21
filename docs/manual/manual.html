@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>session-hub and model-router: user manual</title>
-<meta name="description" content="User manual for the session-hub 0.2.4 and model-router 0.3.2 Claude Code plugins.">
+<meta name="description" content="User manual for the session-hub 0.2.4 and model-router 0.3.4 Claude Code plugins.">
 <style>
 :root {
   --fg: #1d1d1b; --muted: #5f5f5a; --line: #d9d8d2; --accent: #2f5f9e; --code-bg: #f4f3ef; --note-bg: #eef3fa;
@@ -71,7 +71,7 @@ dl.faq dd { margin: 2pt 0 0 0; }
   <table>
     <tr><th>Plugin</th><th>Version</th><th>Marketplace</th></tr>
     <tr><td><code>session-hub</code></td><td>0.2.4</td><td><code>mrbogomips</code></td></tr>
-    <tr><td><code>model-router</code></td><td>0.3.2</td><td><code>mrbogomips</code></td></tr>
+    <tr><td><code>model-router</code></td><td>0.3.4</td><td><code>mrbogomips</code></td></tr>
   </table>
   <p class="small">Claude Code 2.1.329 or later for the mods; tested on 2.1.329 and 2.1.330. Source:
   <code>docs/manual/manual.html</code> in the plugins' repository; rebuild the PDF with
@@ -138,7 +138,7 @@ subagent records. Paths in them are shortened the same way.</p>
       record of its children.</td>
       <td>Your work spans several repositories kept side by side in one folder, each with its own instructions,
       skills and agents.</td></tr>
-  <tr><td><code>model-router</code> 0.3.2</td>
+  <tr><td><code>model-router</code> 0.3.4</td>
       <td>One written grid guides the choice of model and effort level for subagents, child sessions and workflow
       agents. A mod routes the subagent starts (through the <code>Agent</code> tool) that carry no model, and measures on your machine how often each choice was
       right the first time and what a successful task cost.</td>
@@ -194,7 +194,7 @@ command, a hook on a tool call. Both plugins ship one, loaded from <code>hooks/h
   <tr><td><code>session-hub</code> skills, scope guard hook, children record</td><td>yes</td><td>yes</td></tr>
   <tr><td>Send guard, shell check, origin marking, scope line, children panel, <code>/session-hub</code></td><td>yes</td><td>no</td></tr>
   <tr><td><code>model-router</code> skills (<code>choose-model</code>, <code>setup</code>, <code>report</code>)</td><td>yes</td><td>yes</td></tr>
-  <tr><td>Routing of starts with no model, measurement, <code>/model-router</code></td><td>yes</td><td>no</td></tr>
+  <tr><td>Routing of starts with no model, the coloured 🔀 line under <code>Agent</code> calls, measurement, <code>/model-router</code></td><td>yes</td><td>no</td></tr>
 </table>
 <p>A quick check: type <code>/session-hub</code> or <code>/model-router</code>. If Claude Code does not know the
 command, the mod is not loaded (mods off, or a Claude Code version older than 2.1.329).</p>
@@ -611,7 +611,7 @@ at its path (2.6).</p>
   <tr><td><code>model-router:choose-model</code></td><td>skill</td><td>The grid. Meant to load whenever the agent is about to start a subagent, a child session or a workflow, so that it passes a model and an effort explicitly.</td></tr>
   <tr><td><code>model-router:setup</code></td><td>skill</td><td>Writes a project's <em>Model routing</em> section, after your yes.</td></tr>
   <tr><td><code>model-router:report</code></td><td>skill</td><td>Builds and opens the quality report page.</td></tr>
-  <tr><td><code>model-router</code></td><td>mod</td><td>Routes subagent starts that carry no model; records decisions, starts, signals and reports. Fails open.</td></tr>
+  <tr><td><code>model-router</code></td><td>mod</td><td>Routes subagent starts that carry no model; draws the 🔀 line under each <code>Agent</code> call with the model and effort the subagent got; records decisions, starts, signals and reports. Fails open.</td></tr>
   <tr><td><code>/model-router</code></td><td>command (mod)</td><td>The usage view, routing on or off, the report.</td></tr>
 </table>
 
@@ -674,17 +674,46 @@ wins:</p>
   <li>an agent definition that fixes its own model keeps it (only an effort is passed);</li>
   <li>the grid.</li>
 </ol>
-<p>Before each start the agent writes one line, <code>&lt;model&gt; · &lt;effort&gt; · &lt;reason in under 12
-words&gt;</code>, passes <code>model</code> and <code>effort</code> on the start call, and begins the description
-with the class tag:</p>
-<pre><code>haiku · low · find callers of parseConfig, easy to check
+<p>Before each start the agent writes one line, passes <code>model</code> and <code>effort</code> on the start call,
+and begins the description with the class tag. The line is 🔀, the model, an effort bar of four cells
+(<code>▰</code> filled, <code>▱</code> empty: one for <code>low</code>, two for <code>medium</code>, three for
+<code>high</code>, four for <code>xhigh</code>), the effort, <code>-&gt;</code> and the reason in under 12 words:</p>
+<pre><code>🔀 haiku ▰▱▱▱ low -> find callers of parseConfig, easy to check
 → Agent  model: haiku  effort: low  description: "[mr:read-search] Find callers of parseConfig"
 
-sonnet · medium · CSV endpoint with tests, done-state is clear
+🔀 sonnet ▰▰▱▱ medium -> CSV endpoint with tests, done-state is clear
 → Agent  model: sonnet  effort: medium  description: "[mr:edit-specified] Add GET /export with tests"
 
-opus · high · rotating the production key cannot be undone
+🔀 opus ▰▰▰▱ high -> rotating the production key cannot be undone
 → Agent  model: opus  effort: high  description: "[mr:edit-specified!] Rotate the production API key"</code></pre>
+<p>This line is plain text and works with mods off. With the mod on, the same line is also drawn in colour under
+each <code>Agent</code> call's row, with what the subagent <em>actually got</em> after routing (3.4):</p>
+<figure class="half">
+  <img src="images/mr-agent-lines.png" alt="The coloured choose-model line under three Agent calls">
+  <figcaption>Figure 7. Three subagents started from a <code>sonnet</code> session. The first carried no model: the
+  judge lowered it to <code>haiku</code> at <code>low</code>. The second named <code>opus</code> at <code>high</code>,
+  which the router keeps. The third carried no model either: the judge kept <code>sonnet</code> and set the
+  effort.</figcaption>
+</figure>
+<p>The colours: the model in bold, <code>haiku</code> white, <code>sonnet</code> light blue, <code>opus</code> blue,
+<code>fable</code> orange; the effort bar and word by level, <code>low</code> green, <code>medium</code> yellow,
+<code>high</code> orange, <code>xhigh</code> red, with the empty cells dark grey; the reason dim. The reason names
+the case:</p>
+<ul>
+  <li><code>explicit</code>: the call named the model;</li>
+  <li><code>fixed</code>: the agent's definition fixes it;</li>
+  <li><code>judge: &lt;class&gt;; …</code> with what the router changed: <code>lowered from opus</code>, <code>raised
+  from haiku</code>, or <code>kept sonnet</code>, followed by <code>, effort set</code> when only the effort was
+  set. With no class tag and no class from the judge, the judge's tier (<code>balanced</code>) or <code>no
+  class</code> stands in its place;</li>
+  <li><code>judge: risky work; raised from &lt;tier&gt;</code>: risky work sent to the deep tier;</li>
+  <li><code>keep: &lt;why&gt;</code>: the router left the start alone (routing off, a fork, a session-wide subagent
+  model, a judge error).</li>
+</ul>
+<p>An effort that nobody set shows four empty cells and a dim <code>default</code> until the subagent's first model
+request; if that request carries no effort level either (a model without effort levels), the line keeps
+<code>default</code>. A model id outside the four tiers is shown as it is, without colour. The line never replaces
+the row: when it cannot be drawn, the row is drawn alone.</p>
 <p>For a child session, <code>session-hub:spawn</code> loads the skill and puts the result on the launch command as
 <code>--model &lt;tier&gt; --effort &lt;level&gt;</code>. For a workflow, the skill chooses per agent, one line each.</p>
 <p><strong>Quality hints.</strong> When <code>&lt;config dir&gt;/model-router/quality/recommendations.json</code>
@@ -735,7 +764,8 @@ task, and answers a tier, an effort, a class, a risk and its confidence. The rou
   except a start tagged <code>!</code>, which still goes to the deep tier.</li>
 </ul>
 <p>Decisions are logged with an action: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>,
-<code>explicit</code>, <code>forced-risk</code> or <code>error</code>.</p>
+<code>explicit</code>, <code>forced-risk</code> or <code>error</code>. Under the call's row the mod draws the 🔀
+line of Figure 7 with the model the subagent started on, its effort and the reason.</p>
 <p><strong>What it never touches.</strong> The start call itself is never changed: the model is set when the subagent
 starts and the effort on each of the subagent's model requests, so routing works in every permission mode, auto mode
 included. An effort the call already carries is kept. Starts made by a plugin's own code and workflow agents are
@@ -801,42 +831,69 @@ into the aggregates. It is safe to repeat: a task is never counted twice.</p>
   <tr><td><code>/model-router help</code></td><td>Lists the arguments and the keys; any unknown argument does the same</td></tr>
 </table>
 <p>For example, <code>/model-router classes 30d project</code> opens Classes over the last 30 days for this project.</p>
+<p>The view is a dialog laid out like Claude Code's own Settings dialog: a header row with 🔀
+<code>model-router</code> and the four tabs, a second row with the window (24h, 7d, 30d, all) and the level
+(<code>user · project</code>), the content, and a footer of key hints. The active tab and window are drawn as a teal
+block, and the KPI tiles have teal borders. In a wide terminal with the fullscreen layout the view docks beside the
+chat; otherwise it opens above the prompt.</p>
+<p>The keys work as soon as the view opens, with no click:</p>
 <table>
   <thead><tr><th style="width:30%">Key</th><th>Does</th></tr></thead>
-  <tr><td><code>1</code>–<code>4</code>, Tab, ← →</td><td>Switches tab</td></tr>
-  <tr><td><code>d</code>, <code>w</code>, <code>m</code>, <code>a</code></td><td>Window: last 24 hours, 7 days, 30 days, all time</td></tr>
+  <tr><td>Tab, Shift+Tab</td><td>Next or previous tab, wrapping at both ends</td></tr>
+  <tr><td>↓, ↑</td><td>Next or previous window: last 24 hours, 7 days, 30 days, all time</td></tr>
+  <tr><td><code>d</code>, <code>w</code>, <code>m</code>, <code>a</code></td><td>That window directly</td></tr>
   <tr><td><code>p</code></td><td>Switches between your data across projects (user) and this project's</td></tr>
   <tr><td><code>o</code></td><td>Writes and opens the report page; a toast gives its path</td></tr>
   <tr><td><code>r</code></td><td>Refreshes: runs compaction and reads again</td></tr>
+  <tr><td>Page Up, Page Down</td><td>Scroll a long tab</td></tr>
   <tr><td>Esc</td><td>Closes the view</td></tr>
 </table>
+<p>← and → do not switch tabs, as they do in Claude Code's own dialog: Claude Code does not pass them to a plugin's
+pane, and ← at the prompt opens the agents view.</p>
 <p>Opening the view runs compaction for at most 3 seconds; if it takes longer, the view shows the numbers as of the
 last compaction and says so. Where no pane can be placed (<code>claude -p</code>, a headless run, a terminal under 60
-columns), the command prints the same rows as text: the tab you named, or all four. Every answer is for you only.</p>
+columns), the command prints the same rows as text, without colours but with the status dots: the tab you named, or
+all four, under a <code>🔀 Usage · &lt;window&gt; · &lt;level&gt;</code> title. Every answer is for you only: the model
+does not read it.</p>
+
+<h3>The KPI tiles</h3>
+<p>Overview opens with four tiles for the window and level; Models and Classes show them too when the four fit on one
+row (70 columns). Each compares the window with the window of the same length just before it (<code>all</code> has no
+comparison): the change is green when better and red when worse, and a status dot tells how the number reads.</p>
+<table>
+  <thead><tr><th style="width:18%">Tile</th><th style="width:36%">Shows</th><th>Status dot</th></tr></thead>
+  <tr><td>FPY</td><td>First-pass yield, and its change in points (▲, ▼)</td><td>🟢 <code>good</code> from 85%, 🟡 <code>fair</code> from 70%, 🔴 <code>poor</code> below</td></tr>
+  <tr><td>$/success</td><td>Cost per successful task, and its change in percent</td><td>🟢 <code>cheaper</code> or 🔴 <code>dearer</code> than the window before, 🟡 <code>same</code>; ⚪ <code>no prior</code> with no earlier window to compare with (always for <code>all</code>)</td></tr>
+  <tr><td>Rework</td><td>Rework rate, and its change in points</td><td>🟢 <code>low</code> up to 10%, 🟡 <code>some</code> up to 25%, 🔴 <code>high</code> above</td></tr>
+  <tr><td>Routed</td><td>Subagent starts, and the router's ↓ downgrades, ↑ upgrades and = keeps</td><td>none</td></tr>
+</table>
+<p>A change of zero shows <code>=</code>. A tile over fewer than five tasks shows ⚪ <code>weak</code>: too few to read. Under the tiles, two
+<strong>sparklines</strong> draw FPY and cost per success across the window, oldest first, each ending with its
+latest value; then one FPY bar per tier and effort, coloured as the FPY dot (grey under five tasks).</p>
 
 <h3>Overview</h3>
 <figure class="half">
   <img src="images/mr-overview.png" alt="model-router usage view, Overview tab">
-  <figcaption>Figure 7. Overview: routing, measuring and adapt status; this session's subagents by model with their
-  tokens and cost; this session's routing decisions by action. Here the session itself ran on <code>haiku</code>, and
-  three <code>haiku</code> subagents ran: two <code>Explore</code> starts with no model, where the judge also chose
-  the fast tier, so the model was kept, and one started with an explicit model.</figcaption>
+  <figcaption>Figure 8. Overview: routing, measuring and adapt status; the KPI tiles, the sparklines and the FPY bars
+  of the last 7 days; this session's subagents by model with their tokens and cost; this session's routing decisions
+  by action. Here the week was worse than the one before (FPY down 6 points, cost per success up 58%), and the
+  session ran the three subagents of Figure 7.</figcaption>
 </figure>
 <h3>Models</h3>
 <figure class="half">
   <img src="images/mr-models.png" alt="model-router usage view, Models tab">
-  <figcaption>Figure 8. Models: per tier and effort over the window, closed tasks, tokens, cost, FPY with a bar, cost
-  per successful task, and the model ids seen.</figcaption>
+  <figcaption>Figure 9. Models: the tiles, then per tier and effort over the window, closed tasks, tokens, cost, FPY
+  with a bar, cost per successful task, and the model ids seen.</figcaption>
 </figure>
 <h3>Classes</h3>
 <figure class="half">
   <img src="images/mr-classes.png" alt="model-router usage view, Classes tab">
-  <figcaption>Figure 9. Classes, last 7 days, user level. Each class has a summary line, then a line with the grid's
+  <figcaption>Figure 10. Classes, last 7 days, user level, under the tiles. Each class has a summary line, then a line with the grid's
   choice next to the best measured cell (yellow when it differs) and its weak-signal flags, then its cells;
   <code>*</code> marks the recommended one. Up to three recommendations that differ from the grid close the tab, each
   led by its FPY.</figcaption>
 </figure>
-<p>Read Figure 9 this way. For <code>edit-specified</code>, <code>sonnet·low</code> was right first time in 80% of
+<p>Read Figure 10 this way. For <code>edit-specified</code>, <code>sonnet·low</code> was right first time in 80% of
 5 tasks at $0.055 per success, against 63% and $0.090 for the grid's <code>sonnet·medium</code>: the cheaper cell is
 recommended, and the line turns yellow with <code>(differs)</code>. For <code>review-debug</code>,
 <code>opus·high</code> was right every time but costs more per success than <code>opus·medium</code>, so the grid's
@@ -844,24 +901,25 @@ choice stands. <code>design-open</code> has no cell with three tasks yet: <code>
 <code>n &lt; 5</code> flag marks it as a weak signal.</p>
 <figure class="half">
   <img src="images/mr-classes-30d.png" alt="Classes tab over the last 30 days">
-  <figcaption>Figure 10. The same tab after <code>m</code>: the last 30 days. More tasks, steadier numbers. The
+  <figcaption>Figure 11. The same tab after <code>m</code>: the last 30 days. More tasks, steadier numbers: FPY and rework
+  now read 🟢 <code>good</code> and <code>low</code>, and both changes are green, while cost per success rose 5%. The
   <code>all</code> window (<code>a</code>) shows the aged aggregates, the very numbers of the report page; shorter
   windows count the tasks whose report fell inside them.</figcaption>
 </figure>
 <figure class="half">
   <img src="images/mr-classes-project.png" alt="Classes tab at the project level">
-  <figcaption>Figure 11. After <code>p</code>: the project level, here the <code>product</code> repository, over 30
+  <figcaption>Figure 12. After <code>p</code>: the project level, here the <code>product</code> repository, over 30
   days.</figcaption>
 </figure>
 <h3>Decisions</h3>
 <figure class="half">
   <img src="images/mr-decisions.png" alt="model-router usage view, Decisions tab">
-  <figcaption>Figure 12. Decisions: the latest twelve routing decisions of every session (UTC): action, the model
+  <figcaption>Figure 13. Decisions: the latest twelve routing decisions of every session (UTC): action, the model
   before → the tier and effort after, the subagent type and the reason. <code>•</code> marks this session's.</figcaption>
 </figure>
 <figure class="half">
   <img src="images/mr-help.png" alt="/model-router help">
-  <figcaption>Figure 13. <code>/model-router help</code>.</figcaption>
+  <figcaption>Figure 14. <code>/model-router help</code>.</figcaption>
 </figure>
 
 <h2 id="report">3.7 The report page</h2>
@@ -873,10 +931,10 @@ compacts the event log, writes <code>&lt;config dir&gt;/model-router/report.html
 node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote or headless)</code></pre>
 <figure>
   <img src="images/mr-report.png" alt="The model-router quality report page">
-  <figcaption>Figure 14. The top of the report page: a weekly trend of FPY and cost per successful task, the router's
-  decisions by action, then one card per class at the user level (tier, effort, n, FPY, rework, cost per task, cost
-  per success, explored share, flags) and the same per project. The page follows the system's light or dark
-  theme.</figcaption>
+  <figcaption>Figure 15. The top of the report page: a weekly trend of FPY and cost per successful task, the router's
+  decisions by action. Further down, the page has one card per class at the user level (tier, effort, n, FPY,
+  rework, cost per task, cost per success, explored share, flags) and the same per project. The page follows the
+  system's light or dark theme.</figcaption>
 </figure>
 <p>The page and the usage view share one aggregation, so their numbers agree. The page is self-contained and is
 written locally; share it only if you mean to. The <em>Explored</em> column stays at 0% before release 0.4.</p>
@@ -937,6 +995,8 @@ trimmed).</p>
   <code>fable</code> session can be lowered. Up to 0.3 it does not hold <code>review-debug</code> and
   <code>design-open</code> to the grid's floor.</li>
   <li>Costs are the engine's estimates. Edits made outside the session's own tools are not seen.</li>
+  <li>Several <code>Agent</code> calls made in one message are drawn by Claude Code as one
+  <em>N background agents launched</em> row: the 🔀 lines then show only in the ctrl+o transcript, under each call.</li>
   <li>Up to 0.3 the data is measured, not used: <code>adapt</code>, <code>projectPriorStrength</code> and
   <code>exploreCap</code> take effect from 0.4.</li>
 </ul>
@@ -1003,6 +1063,11 @@ trimmed).</p>
   off (<code>/model-router off</code>, <code>routeSubagents: false</code>, or
   <code>CLAUDE_CODE_SUBAGENT_MODEL</code> set). The Decisions tab shows the reason of each decision.</dd>
 
+  <dt>No 🔀 line under an <code>Agent</code> call.</dt>
+  <dd>The mod is not loaded (see the first answer), the start was refused, or several calls were made in one message
+  and are drawn as one row: press ctrl+o to see each call with its line. The line appears once the subagent has
+  started.</dd>
+
   <dt>The project level shows nothing.</dt>
   <dd>The project is the git remote of the session's folder, else its root. Data recorded under another folder or
   remote belongs to another project; the user level shows everything.</dd>
@@ -1033,15 +1098,16 @@ trimmed).</p>
   <tr><td><code>/session-hub help</code></td><td>help</td></tr>
   <tr><td><code>/model-router [tab] [24h|7d|30d|all] [user|project]</code></td><td>usage view; tabs <code>overview</code>, <code>models</code>, <code>classes</code> (<code>stats</code>), <code>decisions</code> (<code>log</code>)</td></tr>
   <tr><td><code>/model-router on</code> | <code>off</code> | <code>report</code> | <code>help</code></td><td>routing for this session; report page; help</td></tr>
-  <tr><td><code>1</code>–<code>4</code>, Tab, ← →</td><td>tab</td></tr>
-  <tr><td><code>d</code> <code>w</code> <code>m</code> <code>a</code></td><td>window 24h, 7d, 30d, all</td></tr>
-  <tr><td><code>p</code> · <code>o</code> · <code>r</code> · Esc</td><td>user/project · report · refresh · close</td></tr>
+  <tr><td>Tab, Shift+Tab</td><td>next, previous tab</td></tr>
+  <tr><td>↓, ↑ · <code>d</code> <code>w</code> <code>m</code> <code>a</code></td><td>next, previous window · window 24h, 7d, 30d, all</td></tr>
+  <tr><td><code>p</code> · <code>o</code> · <code>r</code> · Page Up/Down · Esc</td><td>user/project · report · refresh · scroll · close</td></tr>
 </table>
 <h3>Messages</h3>
 <table>
   <tr><td style="width:46%"><code>[&lt;task&gt; &lt;repo&gt;] &lt;type&gt;: &lt;text&gt;</code></td><td>child to master; type <code>question</code>, <code>out-of-scope</code>, <code>pr</code>, <code>done</code>, <code>abandoned</code></td></tr>
   <tr><td><code>[master] …</code></td><td>master to child</td></tr>
   <tr><td><code>[mr:&lt;class&gt;]</code>, <code>[mr:&lt;class&gt;!]</code></td><td>class tag at the start of a subagent's description; <code>!</code> when risky</td></tr>
+  <tr><td><code>🔀 &lt;model&gt; &lt;bar&gt; &lt;effort&gt; -&gt; &lt;reason&gt;</code></td><td>choose-model line: before a start (skill), and in colour under the <code>Agent</code> row with what the subagent got (mod)</td></tr>
 </table>
 <h3>Variables</h3>
 <table>

@@ -3,12 +3,13 @@
 // monospaced block on a dark background with the capture's colours (16, 256 and truecolor), bold, dim, italic,
 // underline and inverse. No dependencies.
 //
-// Usage: node ansi2html.mjs <capture> <out.html> [--from <line>] [--to <line>] [--replace <from>=><to>]...
+// Usage: node ansi2html.mjs <capture> <out.html> [--from <line>] [--to <line>] [--cols <a>:<b>] [--replace <from>=><to>]...
 //   --from, --to   keep only these lines of the capture (1-based, inclusive); default all
-//   --cols a:b     keep only columns a to b of each line (1-based, inclusive), after the replacements
+//   --cols a:b     keep only terminal columns a to b of each line (1-based, inclusive), cut before the replacements
 //   --replace      replace a literal text on every line (for example a home folder); can repeat
 // Prints `<width>,<height>` in CSS pixels on stdout: the window size to render the page at.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const FONT_PX = 14;
 const CHAR_PX = 8.43; // Menlo at 14px
@@ -69,12 +70,36 @@ function applySgr(style, params) {
   return s;
 }
 
-/** One line as cells `{ ch, style }`; escapes other than SGR are dropped. */
+// Characters a terminal draws two columns wide: emoji, the emoji-presentation symbols of the BMP, and East Asian
+// wide forms. Enough for what Claude Code and the plugins draw; anything else counts one column.
+const WIDE_BMP = new Set([0x231a, 0x231b, 0x23f0, 0x23f3, 0x25fd, 0x25fe, 0x2614, 0x2615, 0x267f, 0x2693, 0x26a1,
+  0x26aa, 0x26ab, 0x26bd, 0x26be, 0x26c4, 0x26c5, 0x26ce, 0x26d4, 0x26ea, 0x26fa, 0x26fd, 0x2705, 0x270a, 0x270b,
+  0x2728, 0x274c, 0x274e, 0x2757, 0x27b0, 0x27bf, 0x2b1b, 0x2b1c, 0x2b50, 0x2b55]);
+export const isWide = (cp) => cp >= 0x1f000 || WIDE_BMP.has(cp) || (cp >= 0x1100 && cp <= 0x115f) || (cp >= 0x2e80 && cp <= 0xa4cf)
+  || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xff00 && cp <= 0xff60);
+// Joiners and selectors that belong to the character before them and take no column.
+export const isZeroWidth = (cp) => cp === 0x200d || (cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0x1f3fb && cp <= 0x1f3ff);
+
+/**
+ * One line as cells `{ ch, style, wide? }`, one per terminal column: a wide character is a `wide` cell followed by
+ * an empty one, so `--cols` cuts where the terminal's columns are. Escapes other than SGR are dropped.
+ */
 function parseLine(line, start) {
   const cells = [];
   let style = start;
   for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
+    const cp = line.codePointAt(i);
+    const ch = String.fromCodePoint(cp);
+    if (ch.length === 2) i += 1;
+    if (isZeroWidth(cp) && cells.length) {
+      const last = cells[cells.length - (cells.at(-1).isFiller ? 2 : 1)];
+      last.ch += ch;
+      continue;
+    }
+    if (isWide(cp)) {
+      cells.push({ ch, style, wide: true }, { ch: '', style, isFiller: true });
+      continue;
+    }
     if (ch === '\x1b') {
       const sgr = /^\x1b\[([0-9;:]*)m/.exec(line.slice(i));
       if (sgr) {
@@ -96,13 +121,21 @@ function parseLine(line, start) {
 function replaceIn(cells, from, to) {
   const text = cells.map((c) => c.ch).join('');
   if (!from || !text.includes(from)) return cells;
+  // The number of cells, from `i`, whose characters spell `from` exactly; 0 when they do not.
+  const matchAt = (i) => {
+    let s = '';
+    let j = i;
+    while (j < cells.length && s.length < from.length) s += cells[j++].ch;
+    return s === from && !cells[i].isFiller ? j - i : 0;
+  };
   const out = [];
   let i = 0;
   while (i < cells.length) {
-    if (text.startsWith(from, i)) {
+    const n = matchAt(i);
+    if (n) {
       const style = cells[i].style;
       for (const ch of to) out.push({ ch, style });
-      i += from.length;
+      i += n;
     } else {
       out.push(cells[i]);
       i += 1;
@@ -136,6 +169,14 @@ function lineHtml(cells) {
   };
   let last = null;
   for (const c of cells) {
+    if (c.isFiller) continue;
+    if (c.wide) {
+      // Two columns exactly, whatever the emoji font's own advance, so the columns after it stay aligned.
+      flush(last);
+      key = null;
+      html += `<span style="${css(c.style)};display:inline-block;width:${2 * CHAR_PX}px;text-align:center">${escapeHtml(c.ch)}</span>`;
+      continue;
+    }
     const k = css(c.style);
     if (k !== key) {
       flush(last);
@@ -190,8 +231,8 @@ function main() {
     const { cells, end } = parseLine(line, style);
     style = end;
     if (i + 1 < args.from || i + 1 > args.to) return;
-    const replaced = args.replace.reduce((acc, [from, to]) => replaceIn(acc, from, to), cells);
-    lines.push(replaced.slice(args.colFrom - 1, Number.isFinite(args.colTo) ? args.colTo : undefined));
+    const kept = cells.slice(args.colFrom - 1, Number.isFinite(args.colTo) ? args.colTo : undefined);
+    lines.push(args.replace.reduce((acc, [from, to]) => replaceIn(acc, from, to), kept));
   });
   const cols = Math.max(1, ...lines.map((l) => l.length));
   const width = Math.ceil(cols * CHAR_PX + 2 * PAD_PX);
@@ -210,4 +251,4 @@ pre{margin:0;padding:${PAD_PX}px;font:${FONT_PX}px/${LINE_PX}px Menlo,"DejaVu Sa
   process.stdout.write(`${width},${height}\n`);
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

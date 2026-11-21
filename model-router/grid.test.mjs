@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { effortBar, plainLine } from './lib/route-line.mjs';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GRID_PATH = join(HERE, 'grid.json');
 const SKILL_PATH = join(HERE, 'skills', 'choose-model', 'SKILL.md');
@@ -209,4 +211,26 @@ test('setup/SKILL.md lists exactly the models, effort levels and classes of grid
   assert.deepEqual(listed('models'), grid.tiers.map((t) => t.name));
   assert.deepEqual(listed('effort'), grid.effort.levels);
   assert.deepEqual(listed('classes'), grid.classes.map((c) => c.name));
+});
+
+// Drift guard: the choose-model line the skill shows is the one lib/route-line.mjs writes (and the mod draws).
+test('SKILL.md shows the choose-model line as lib/route-line.mjs writes it', () => {
+  const body = section(loadSkill(), '## What to pass and what to say');
+  assert.doesNotMatch(body, /<model> · <effort>/, 'SKILL.md still shows the dotted line');
+  const lines = body.split('\n').filter((l) => l.startsWith('🔀 '));
+  assert.ok(lines.length >= 2, 'SKILL.md shows no 🔀 example line');
+  for (const line of lines) {
+    const m = line.match(/^🔀 (\S+) ([▰▱]{4}) (\S+) -> (.+)$/u);
+    assert.ok(m, `"${line}" is not 🔀 <model> <bar> <effort> -> <reason>`);
+    const [, model, bar, effort, reason] = m;
+    assert.ok(EXPECTED_TIERS.includes(model), `"${line}" names no tier`);
+    assert.ok(EXPECTED_EFFORT_LEVELS.includes(effort), `"${line}" names no effort level`);
+    assert.equal(bar, effortBar(effort), `"${line}" has the wrong bar for ${effort}`);
+    assert.ok(reason.split(/\s+/).length < 12, `"${line}" gives a reason of 12 words or more`);
+    assert.equal(line, plainLine({ model, effort, reason }));
+  }
+  for (const [i, level] of EXPECTED_EFFORT_LEVELS.entries()) {
+    const cells = ['one', 'two', 'three', 'four'][i];
+    assert.match(body, new RegExp(`\`${level}\` ${cells}`), `SKILL.md does not say how many cells ${level} fills`);
+  }
 });

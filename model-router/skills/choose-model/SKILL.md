@@ -92,11 +92,16 @@ no entry for the class, use the grid alone and do not mention it.
 
 ## What to pass and what to say
 
-For each start, write one line before it:
+For each start, write one line before it: 🔀, the model, an effort bar of four cells (`▰` filled, `▱` empty:
+`low` one, `medium` two, `high` three, `xhigh` four), the effort, `->` and the reason in under 12 words.
 
 ```
-<model> · <effort> · <reason in under 12 words>
+🔀 opus ▰▰▰▱ high -> review with unknown cause, going up
+🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check
 ```
+
+With the model-router mod on, the same line is also drawn in colour under the `Agent` call's row, with the model
+and effort the subagent actually got.
 
 **Subagents.** Pass `model` and `effort` on the start call itself (the `Agent` tool takes both). Begin the
 `description` with the class tag, adding `!` when the start is risky:

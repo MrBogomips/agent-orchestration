@@ -2,14 +2,16 @@
 // The logic lives in ../lib (plain modules, unit-tested with node:test); this file is the glue to the engine.
 // Every hook fails open: an error leaves the start, the tool call or the report unchanged.
 // See docs/design/model-router.md and docs/design/model-router-quality-loop.md.
-import { atom, read, update } from 'claude-code'
+import { atom, memberOf, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { UsageCache, UsageView } from '../types'
+import type { RouteLineState, UsageCache, UsageView } from '../types'
 
 import { buildJudgePrompt, parseJudgeAnswer } from '../lib/judge.mjs'
 import { projectId } from '../lib/project-id.mjs'
 import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky, routeCase } from '../lib/route.mjs'
+import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/route-line.mjs'
+import { effortOf } from '../lib/tiers.mjs'
 import { parseTag } from '../lib/text.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, TAB_TITLES, TABS, WINDOW_KEYS, helpText, noteRows, parseArgs, tabRows, textView } from '../lib/usage-view.mjs'
 import type { Row } from '../lib/usage-view.mjs'
@@ -31,6 +33,8 @@ const enabled = atom({ plugin: 'model-router', key: 'enabled' } as const, true)
 // Change a shape tag when its value's fields change: it declines what an earlier version stored.
 const viewState = atom({ plugin: 'model-router', key: 'view' } as const, { ...DEFAULT_VIEW } as UsageView, { shape: 'view-1' })
 const usageState = atom({ plugin: 'model-router', key: 'usage' } as const, { isLoading: false } as UsageCache, { shape: 'usage-1' })
+// One member per Agent call, by tool_use_id: what the subagent got, drawn under the call's row.
+const routeLines = atom({ plugin: 'model-router', key: 'route' } as const, null as RouteLineState | null)
 
 type Options = {
   fastModel: string
@@ -261,6 +265,8 @@ async function writeReport($: any, ctx: Ctx): Promise<string> {
 }
 
 const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
+// A one-line answer to the person carries the identity, after the plugin name the engine puts first: `🔀 …`.
+const say = (text: string) => display(`${ROUTE_ICON} ${text}`)
 
 /** Opens the usage view; where no pane can be placed, answers its rows as text. */
 async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | null; window: string | null; level: string | null }, columns: number) {
@@ -272,7 +278,7 @@ async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | 
       // A pane that was already open keeps its ring where it was: move it to the tab asked for.
       void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
       await refreshUsage($, ctx, true)
-      return display('Usage view opened (Esc closes it).')
+      return say('Usage view opened (Esc closes it).')
     }
     await $.ui.close({ id: PANE }).catch(() => undefined)
   }
@@ -280,9 +286,9 @@ async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | 
   return display(textView(data, { ...asked, window: view.window, level: view.level, status: await statusOf($, opts) }, columns))
 }
 
-// The view's identity: the compass and a teal accent, on the title, the active tab and window, the tile borders.
+// The view's identity: 🔀 and a teal accent, on the title, the active tab and window, the tile borders.
 // Everything else keeps the theme's own colours; good, fair and bad are the theme's success, warning and error.
-const ICON = '🧭'
+const ICON = ROUTE_ICON
 const ACCENT = '#14b8a6'
 const TONES: Record<string, object> = {
   title: { bold: true },
@@ -300,6 +306,41 @@ const toneProps = (tone: string | null | undefined) => (tone ? TONES[tone] ?? {}
 const activeProps = (isActive: boolean) => (isActive ? { bold: true, inverse: true, color: ACCENT } : {})
 const HINT = { italic: true, color: 'inactive' as const }
 
+/**
+ * Keeps the line under an Agent call's row: the model the subagent started on, its effort when known and why.
+ * An unknown effort waits for the subagent's first step (`fillEffort`). Never throws: the line is only a view.
+ */
+async function drawLine($: any, effortWait: Map<string, string>, e: any, planned: Pending | null, decision: any, started: any) {
+  try {
+    if (!e.tool_use_id || e.workflow || !started?.model) return
+    const effort = effortOf(planned?.effort ?? planned?.callEffort ?? null)
+    const reason = planned
+      ? routeReason({
+        route: e.fork ? 'fork' : planned.route, action: decision?.action, reason: planned.route === 'judge' ? decision?.reason : planned.reason,
+        cls: planned.cls, judgeTier: planned.judge?.tier ?? null, before: e.model ?? e.parentModel, after: started.model,
+        effortSet: Boolean(planned.effort && planned.effort !== planned.callEffort),
+      })
+      : 'keep: not seen by the router'
+    await update($, memberOf(routeLines, { requestId: e.tool_use_id }), () => ({ model: String(started.model), effort, reason }))
+    if (!effort && started.agentId) effortWait.set(started.agentId, e.tool_use_id)
+  } catch (err) {
+    $.ui.log(`[model-router] route line: ${errorText(err)}`, { to: 'debug' })
+  }
+}
+
+/** Sets the effort of a waiting line from the subagent's first step. Never throws. */
+async function fillEffort($: any, effortWait: Map<string, string>, agentId: string, effort: unknown) {
+  const toolUseId = effortWait.get(agentId)
+  effortWait.delete(agentId)
+  const level = effortOf(effort)
+  if (!toolUseId || !level) return
+  try {
+    await update($, memberOf(routeLines, { requestId: toolUseId }), (line) => (line ? { ...line, effort: level } : line))
+  } catch (err) {
+    $.ui.log(`[model-router] route line effort: ${errorText(err)}`, { to: 'debug' })
+  }
+}
+
 /** Where the focus ring is in the pane, and the last move this plugin wrapped round the tab row. */
 type Ring = { at: string | null; wrap: { to: string | undefined; tab: string; at: number } | null }
 
@@ -310,6 +351,8 @@ export const register: Register = (on, options) => {
   // The effort each routed subagent runs at, by agentId, applied to every one of its steps (a step rewrite lasts one step).
   const stepEffort = new Map<string, string>()
   const fired = new Set<string>()
+  // Subagents whose line waits for the effort of their first step, by agentId: the tool_use_id of their row.
+  const effortWait = new Map<string, string>()
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
@@ -336,19 +379,19 @@ export const register: Register = (on, options) => {
     const asked = parseArgs(e.args)
     if (asked.kind === 'toggle') {
       await update($, enabled, () => asked.on)
-      return display(`Routing turned ${asked.on ? 'on' : 'off'} for this session.`)
+      return say(`Routing turned ${asked.on ? 'on' : 'off'} for this session.`)
     }
     if (asked.kind === 'help') return display(helpText())
-    if (asked.kind === 'unknown') return display(`Unknown argument "${asked.word}".\n\n${helpText()}`)
+    if (asked.kind === 'unknown') return display(`${ROUTE_ICON} Unknown argument "${asked.word}".\n\n${helpText()}`)
     if (asked.kind === 'report') {
       try {
-        return display(`Report written to ${await writeReport($, ctx)}`)
+        return say(`Report written to ${await writeReport($, ctx)}`)
       } catch (err) {
-        return display(`Could not write the report: ${errorText(err)}`)
+        return say(`Could not write the report: ${errorText(err)}`)
       }
     }
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
-  }).catch(($, e, next) => ({ text: `Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
+  }).catch(($, e, next) => ({ text: `${ROUTE_ICON} Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
 
   // Keys of the usage view (lib/usage-nav.mjs says what the engine routes to a pane). Tab and Shift+Tab move the
   // focus ring along the tab row, wrapping at its ends, and the tab follows the ring. Up and Down arrive as a
@@ -445,9 +488,9 @@ export const register: Register = (on, options) => {
           <Button key="report" label="report" hotkey="o" plain dimColor
             onPress={async () => {
               try {
-                $.ui.toast(`model-router: report written to ${await writeReport($, ctx)}`)
+                $.ui.toast(`${ROUTE_ICON} model-router: report written to ${await writeReport($, ctx)}`)
               } catch (err) {
-                $.ui.toast(`model-router: could not write the report: ${errorText(err)}`)
+                $.ui.toast(`${ROUTE_ICON} model-router: could not write the report: ${errorText(err)}`)
               }
             }} />
           <Text {...HINT}>·</Text>
@@ -459,15 +502,43 @@ export const register: Register = (on, options) => {
     )
   })
 
+  // The choose-model line under an Agent call's row: `🔀 opus ▰▰▰▱ high -> reason`, in colour, with what the
+  // subagent actually got. The row is kept as it is; with no line yet, or on any error, only the row is drawn.
+  on('ui.render', { component: 'ToolUse', props: { tool: 'Agent' } }, async ($, e, next) => {
+    const line = await read($, memberOf(routeLines, e))
+    const row = await next(e)
+    if (!line) return row
+    const { Box, Text } = $.ui.resolve(e)
+    const p = lineParts(line, { pad: true })
+    return (
+      <Box flexDirection="column">
+        {row}
+        <Text wrap="truncate">
+          <Text dimColor>{'  ⎿  '}</Text>
+          <Text>{p.icon} </Text>
+          <Text weight="bold" {...(p.modelColor ? { color: p.modelColor } : {})}>{p.model}</Text>
+          <Text> </Text>
+          <Text {...(p.effortColor ? { color: p.effortColor } : {})}>{p.filled}</Text>
+          <Text color={EMPTY_COLOR}>{p.empty}</Text>
+          <Text> </Text>
+          <Text {...(p.effortColor ? { color: p.effortColor } : { dimColor: true })}>{p.effort}</Text>
+          <Text dimColor> {ARROW} {p.reason}</Text>
+        </Text>
+      </Box>
+    )
+  }).catch(($, e, next) => next(e))
+
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
     firstFire($, fired, 'tool.call Agent')
     pending.set(e.tool_use_id, await planStart($, ctx, opts, e))
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // Sets the routed effort on each model request of the subagent; any other loop's steps pass unchanged.
+  // Sets the routed effort on each model request of the subagent; any other loop's steps pass unchanged. The first
+  // step of a subagent whose effort was not known at its start says what it runs at, for the line under its row.
   on('turn.step', async function* ($, e, next) {
     const effort = e.agentId ? stepEffort.get(e.agentId) : undefined
+    if (e.agentId && effortWait.has(e.agentId)) await fillEffort($, effortWait, e.agentId, effort ?? e.effort)
     if (!effort || effort === e.effort) return yield* next(e)
     firstFire($, fired, 'turn.step effort')
     return yield* next({ ...e, effort } as typeof e)
@@ -486,6 +557,7 @@ export const register: Register = (on, options) => {
     const started = await next(decision?.model && !e.fork ? { ...e, model: decision.model } : e)
     if ('deny' in started) return started
     if (planned?.effort && planned.effort !== planned.callEffort && started.agentId && !e.fork) stepEffort.set(started.agentId, planned.effort)
+    await drawLine($, effortWait, e, planned, decision, started)
     if (!opts.measure) return started
     const session = await $.session.id()
     const tag = parseTag(e.description, (await gridOf($, ctx)).classes.map((c: any) => c.name))
