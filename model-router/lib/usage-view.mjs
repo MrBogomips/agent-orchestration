@@ -5,6 +5,7 @@
 import { familyOf } from './tiers.mjs';
 import { ROUTE_ICON } from './route-line.mjs';
 import { TILES_ONE_ROW, fpyStatus, sparkRows, tileRows } from './usage-tiles.mjs';
+import { cutToWidth, displayWidth, padEndTo, padStartTo } from './width.mjs';
 
 export const TABS = Object.freeze(['overview', 'models', 'classes', 'decisions']);
 export const TAB_TITLES = Object.freeze({ overview: 'Overview', models: 'Models', classes: 'Classes', decisions: 'Decisions' });
@@ -96,15 +97,15 @@ export function bar(share, width) {
   return '█'.repeat(filled) + '░'.repeat(w - filled);
 }
 
-/** The text cut to `width` columns, with `…` where it was cut. */
+/** The text cut to `width` terminal columns, with `…` where it was cut; wide characters count two. */
 export function fit(text, width) {
   const s = String(text);
-  if (s.length <= width) return s;
-  return width <= 1 ? s.slice(0, width) : `${s.slice(0, width - 1)}…`;
+  if (displayWidth(s) <= width) return s;
+  return width <= 1 ? cutToWidth(s, width) : `${cutToWidth(s, width - 1)}…`;
 }
 
-const left = (text, width) => fit(text, width).padEnd(width);
-const right = (text, width) => fit(text, width).padStart(width);
+const left = (text, width) => padEndTo(fit(text, width), width);
+const right = (text, width) => padStartTo(fit(text, width), width);
 const cell = (tier, effort) => `${tier ?? 'other'}·${effort ?? '–'}`;
 /** The width the rows are laid out at: at least 60 columns, 80 when none is known. */
 export const layoutWidth = (columns) => Math.min(MAX_COLUMNS, Math.max(MIN_COLUMNS, isNum(columns) && columns > 0 ? Math.floor(columns) : HEADLESS_COLUMNS));
@@ -122,7 +123,7 @@ function wrapParts(prefix, parts, width, indent) {
   for (const [i, part] of parts.entries()) {
     const piece = `${part}${i < parts.length - 1 ? ',' : ''}`;
     const sep = line.trim() === '' || line === prefix ? '' : ' ';
-    if (line.length + sep.length + piece.length > width && line.trim() !== '' && line !== prefix) {
+    if (displayWidth(line) + sep.length + displayWidth(piece) > width && line.trim() !== '' && line !== prefix) {
       lines.push(line);
       line = ' '.repeat(indent) + piece;
     } else {
@@ -137,7 +138,7 @@ function wrapParts(prefix, parts, width, indent) {
 // Tabs
 
 const LABEL = 22;
-const labelled = (label, value, width) => fit(`${label.padEnd(LABEL)}${value}`, width);
+const labelled = (label, value, width) => fit(`${padEndTo(label, LABEL)}${value}`, width);
 
 function statusText(status) {
   if (!status) return 'unknown';
@@ -190,7 +191,7 @@ function overviewRows(data, view, width) {
       const parts = m.isPartial && !m.input && !m.output
         ? [`${fmtTokens(m.tokens)} tokens`]
         : [`${fmtTokens(m.input)} input`, `${fmtTokens(m.output)} output`, `${fmtTokens(m.cacheRead)} cache read`, `${fmtTokens(m.cacheWrite)} cache write`];
-      const head = `${`   ${m.model}:`.padEnd(LABEL)}${m.agents} × `;
+      const head = `${padEndTo(`   ${m.model}:`, LABEL)}${m.agents} × `;
       const lines = wrapParts(head, [...parts.slice(0, -1), `${parts.at(-1)} (${fmtUsd(m.cost)})`], width, LABEL);
       rows.push(...lines.map((l) => row(l)));
     }

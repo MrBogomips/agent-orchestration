@@ -22,9 +22,11 @@ workflow. Decide before the start, pass both values explicitly, and say what you
 1. **An explicit choice by the user wins over everything**, including this grid and the project's defaults.
 2. **The project's defaults.** If the project's instruction file (`AGENTS.md` or `CLAUDE.md`) has a *Model
    routing* section that names this kind of work or this class, use its model and effort.
-3. **An agent definition that fixes its own model keeps it.** Do not pass a model to such an agent; pass only an
-   effort if it has none.
-4. **The grid below.**
+3. **The grid below.**
+
+**An agent definition that fixes its own model keeps it.** Unless the user names a model for it, whatever the
+project's defaults or the grid say, never pass a model to such an agent: pass only the effort they give, and only
+if its definition sets none. Whoever wrote the definition chose that model for that agent's work.
 
 ## The grid
 
@@ -85,10 +87,11 @@ When none fits, pick the closest one; do not invent a class.
 ## Quality hints (optional)
 
 If the file `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/model-router/quality/recommendations.json` exists, read the
-entry for the task's class and treat its model and effort as a hint measured on past work. It never overrides
-the order of precedence above, never lowers the grid's tier or effort for `review-debug` or `design-open`, never
-goes below the project's defaults, and does not apply to a risky start. If the file is missing, unreadable, or has
-no entry for the class, use the grid alone and do not mention it.
+entry for the task's class under `classes` and treat its `tier` (a row of the model table) and its `effort` as a
+hint measured on past work; `source` says whether the entry comes from `data` or repeats the `grid`. It never
+overrides the order of precedence above, never lowers the grid's tier or effort for `review-debug` or
+`design-open`, never goes below the project's defaults, and does not apply to a risky start. If the file is
+missing, unreadable, or has no entry for the class, use the grid alone and do not mention it.
 
 ## What to pass and what to say
 

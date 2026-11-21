@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { STATUS, usageData } from './usage-fixture.mjs';
+import { displayWidth } from './width.mjs';
 import {
   TABS, bar, fit, fmtPct, fmtTokens, fmtUsd, helpText, layoutWidth, noteRows, parseArgs, tabRows, textView,
 } from './usage-view.mjs';
@@ -34,6 +35,25 @@ test('no line is wider than the room, at 60, 80 and 120 columns, in every tab, w
           }
         }
       }
+    }
+  }
+});
+
+test('wide characters in a project root and a model id never make a row wider than the room', () => {
+  const wide = JSON.parse(JSON.stringify(usageData())
+    .replaceAll('/work/shop', '/Users/山田/プロジェクト/とても長いディレクトリ名/サブ')
+    .replaceAll('claude-sonnet-5-5', 'claude-sonnet-5-5-🧪テスト'));
+  for (const columns of [60, 80]) {
+    for (const tab of TABS) {
+      for (const level of ['user', 'project']) {
+        for (const row of tabRows(wide, { tab, window: 'all', level, status: STATUS }, columns)) {
+          assert.ok(displayWidth(row.text) <= columns, `${tab}/${level}@${columns} is ${displayWidth(row.text)} wide: ${row.text}`);
+          assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(row.text), `a split pair in ${row.text}`);
+        }
+      }
+    }
+    for (const line of textView(wide, { tab: null, window: '7d', level: 'project', status: STATUS }, columns).split('\n')) {
+      assert.ok(displayWidth(line) <= columns, `text view @${columns} is ${displayWidth(line)} wide: ${line}`);
     }
   }
 });

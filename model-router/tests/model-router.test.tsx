@@ -387,8 +387,8 @@ describe('measuring', () => {
   test('a subagent write, a typed prompt and the report are recorded', async ($, on) => {
     const w = world(on)
     await $.tool.call({ tool: 'Write', file_path: '/repo/a.ts', content: 'x', agentId: 'ag1' } as any)
-    await $.prompt.submit({ text: 'a.ts is wrong', origin: { kind: 'composer' } } as any)
     await $.agent.report({ agentId: 'ag1', subagentType: 'general-purpose', provider: { plugin: 'engine', tier: 'core' }, status: 'completed', text: 'done' } as any)
+    await $.prompt.submit({ text: 'a.ts is wrong', origin: { kind: 'composer' } } as any)
     const write = w.appended.find((r) => r.type === 'signal' && r.kind === 'write')
     expect(write.agentId).toBe('ag1')
     expect(write.file).toBe('/repo/a.ts')
@@ -397,6 +397,19 @@ describe('measuring', () => {
     expect(report.costUsd).toBe(0.002)
     expect(report.tokens).toBe(15)
     expect(report.effort).toBe('low')
+  })
+
+  test('a prompt typed before any subagent has reported is not stored', async ($, on) => {
+    const w = world(on)
+    await $.prompt.submit({ text: 'please refactor the billing module', origin: { kind: 'composer' } } as any)
+    expect(w.appended.filter((r) => r.kind === 'prompt')).toEqual([])
+  })
+
+  test('after a report only the next two prompts are stored', async ($, on) => {
+    const w = world(on)
+    await $.agent.report({ agentId: 'ag1', subagentType: 'general-purpose', provider: { plugin: 'engine', tier: 'core' }, status: 'completed', text: 'done' } as any)
+    for (const text of ['first', 'second', 'third']) await $.prompt.submit({ text, origin: { kind: 'composer' } } as any)
+    expect(w.appended.filter((r) => r.kind === 'prompt').map((r) => r.text)).toEqual(['first', 'second'])
   })
 
   test('with measure off nothing is written, and routing still works', { options: { measure: false } }, async ($, on) => {

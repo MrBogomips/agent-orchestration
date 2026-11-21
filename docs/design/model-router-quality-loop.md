@@ -53,11 +53,15 @@ All come from mod events and `$` calls; none calls a model.
 | How the run ended | `agent.report`: `status` = `completed` / `failed` / `stopped` | strong |
 | Tool error rate | tool results with `isError`, keyed by `agentId` | medium |
 | Files the subagent wrote | `tool.call` on `Edit`, `Write`, `NotebookEdit` with `agentId` and `file_path` (verified, S12) | needed for rework |
-| Rework | inside the rework window after the report: the main session or any other agent (siblings included) writes one of the same files; a spawn of the same class whose description is similar (redo or escalation); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
+| Rework | inside the rework window after the report: the main session or any other agent (siblings included) writes one of the same files; a spawn of the same class whose description is similar (redo or escalation), unless it is the next item of a batch on other files; the parent sends the same subagent more work (`resume`, a correction); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
 | Re-search | inside the window, for a read-only subagent: the parent starts another read-only subagent of the same class on a similar description, or reads the files the subagent named | weak; shown as such in the report |
 
 *Similar description*: same class and a token-set overlap (Jaccard) of at least 0.5 on the lowercased words of
-the description, stop words removed. Builder may tune; the threshold is an option.
+the description, stop words removed. Builder may tune; the threshold is an option. A similar start is not a redo when it
+is the next item of a batch: both descriptions name files (words with a `.` or `/` inside), they share no base
+name, and the later start names no file the task wrote. So "rename foo in a.ts", then "in b.ts", then "in c.ts" is
+three tasks, while a retry that names no file, or the same file in another form (`src/csv.ts` and
+`/repo/src/csv.ts`), is still a redo.
 
 ## Outcome of one task
 
@@ -155,7 +159,17 @@ their outcomes feed the cells.
 
 `choose-model` also reads a short per-class recommendation (`quality/recommendations.json`, written by compaction
 from release 0.4, so absent before it) so that explicit choices benefit from the data. The skill must work when
-the file is missing. Its shape is fixed in 0.4; the 0.1 skill only reads the entry for the task's class as a hint.
+the file is missing. Its shape is fixed now, so the skill and the writer agree (`recommendationsFile()` in
+`lib/aggregate.mjs`; `grid.test.mjs` checks that the skill names the same fields):
+
+```json
+{ "version": 1, "generatedAt": "2026-11-21T00:00:00.000Z",
+  "classes": { "edit-specified": { "tier": "sonnet", "effort": "low", "source": "data", "n": 12 } } }
+```
+
+`tier` is a row of the grid's model table (not a model id), `source` is `data` (the cheapest cell per successful
+task with enough tasks) or `grid` (the class's default, repeated), and `n` the tasks behind a `data` entry. The
+skill reads the entry for the task's class as a hint.
 
 Everything here fails open: an error leaves the start unchanged and logs `error`.
 
@@ -254,7 +268,9 @@ Choices left to the builder, and where the build departs from the text above.
 - **Window bookkeeping.** `quality/state.json` holds the byte offset of the first record of any task still open
   (a subagent's report can reach the log before its spawn record) and the keys of tasks closed after it. A task
   with no report closes as `cancelled` when its session ends or after 24 hours. A continued subagent
-  (`SendMessage`) stays one task: its latest report gives the cost and starts the window.
+  (`SendMessage`) stays one task: its latest report gives the cost and starts the window. A continuation inside the
+  rework window of an earlier report is a rework signal (`continued after its report`): it is the correction that
+  `choose-model` asks for instead of a new start, which the similar-start signal would have caught.
 - **Compaction** is `scripts/compact.mjs` (Node, no dependencies), started by the mod at `session.start` through
   `$.process.run` without waiting, and by `model-router:report`. It writes the aggregates and `state.json` whole
   (temporary name, then rename) under `quality/.lock`. A stale lock is moved aside by a rename, which only one run
@@ -267,6 +283,10 @@ Choices left to the builder, and where the build departs from the text above.
   and the run closes nothing (its tasks stay behind the offset and are closed, folded and appended by a later
   run). A torn line older than that has no writer left: the run ends it with a newline, so it stays one skipped
   line, and appends its outcomes after it.
+- **Reading a long log.** Nothing reads `events.jsonl` whole. Compaction reads from its stored offset, one chunk at
+  a time. The report and the usage view read the log in chunks too and keep only the records they show: outcomes and
+  decisions, plus, for the view, this session's reports and the spawns of this session's project. Memory follows
+  what is kept, not the size of the log.
 - **Options.** The mod saves the options compaction needs in `<config dir>/model-router/options.json` at each
   session start; compaction and the report read it when no `--options` is given.
 - **Cells** store aged evidence counts (`n`, `success`, `rework`, `failure`) and the means; `alpha` and `beta` are
@@ -279,12 +299,17 @@ Choices left to the builder, and where the build departs from the text above.
   the grid for protected classes; the router does not use it until 0.4.
 - **Project id** comes from the engine's `$.session.repo()` (`origin` URL and root), else the session root.
 - **Privacy.** The prompt signal keeps the first 2,000 characters of a typed prompt, so that compaction can tell
-  whether it is about the task. All of it stays under the config folder.
+  whether it is about the task, and only for the prompts the outcome logic reads: the next two after a subagent of
+  the session reports, inside the rework window. A prompt typed before any report, past the window or after those
+  two is not stored. The count lives in the mod and starts over when the mod reloads. All of it stays under the
+  config folder.
 
 Not built in 0.2 (nor in 0.3):
 
 - *Re-search* by reading the files a read-only subagent named: only the similar-start signal is measured.
-- Pruning of compacted events older than 90 days: rewriting the log could drop a line another session appends.
+- Pruning or rotation of compacted events older than 90 days: rewriting the log could drop a line another session
+  appends, a rename races with a writer's `cat >>`, and the all-time window and the trend read every outcome, so
+  archived outcomes would leave them. The log only grows; the readers above keep its cost to what they hold.
 - The two-level combination (`projectPriorStrength`): the report shows each project's own cells. It is used by
   selection from 0.4.
 - The tool error rate: `tool-error` signals are recorded but play no part in outcomes or the report yet.

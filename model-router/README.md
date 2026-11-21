@@ -70,7 +70,8 @@ transcript.
 
 Each subagent start is one task. Its outcome is fixed when the rework window (30 minutes after its report, or
 the end of the session) closes: `success`, `rework` (the main session or another agent writes one of its files, a
-similar start of the same class follows, or one of the next two prompts you type names its files or its task),
+similar start of the same class follows on the same files, the same subagent is sent a correction after its report,
+or one of the next two prompts you type names its files or its task),
 `failure` (failed, or stopped by its parent and redone) or `cancelled`. Cancelled tasks, risky tasks, tasks with
 no class (no `[mr:<class>]` tag and no judge answer), tasks on a model outside the four families and tasks with no
 known effort are recorded but not learned. Cells of class × tier × effort keep first-pass yield, rework rate,
@@ -213,8 +214,8 @@ Set in `/config` or under `pluginConfigs` in settings.
 The plugin sends what it records nowhere: it all stays under the active config folder
 (`CLAUDE_CONFIG_DIR`, else `~/.claude`) in `model-router/`: `events.jsonl` (decisions; each subagent start with
 its type, name and short description; the paths of files the session and its subagents write; tool names of
-failed subagent calls and stop targets; the first 2,000 characters of the prompts you type; reports with tokens
-and estimated cost), `options.json` (the options compaction uses), `quality/` (aggregates per user and per
+failed subagent calls and stop targets; the first 2,000 characters of the two prompts you type next after a
+subagent reports, inside the rework window, and of no other prompt; reports with tokens and estimated cost), `options.json` (the options compaction uses), `quality/` (aggregates per user and per
 project, with the project's root path) and `report.html`. Nothing is written inside a repository. The judge is one
 fast-tier model call per routed start through your session's own client, counted in the session's cost; it
 receives the subagent type, its short description and the first 4,000 characters of its task.
