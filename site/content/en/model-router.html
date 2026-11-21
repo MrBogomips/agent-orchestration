@@ -1,134 +1,139 @@
 <h1>model-router</h1>
-<p class="lede">Choosing the right model for each subagent, child session, or workflow agent shouldn't rely on guesswork. model-router applies a single written grid, routes spawns that don't specify a model yet, and measures on your machine how well each choice actually performs. Below, you'll find the core idea in plain terms first, followed by every detail of how it works.</p>
+<p class="lede">Choosing the right model for every subagent, child session, or workflow agent should not be guesswork. <code>model-router</code> applies a single written grid, routes launches that do not yet specify a model on the fly, and measures on your machine how well each choice actually paid off.</p>
 
 <h2 id="plain">In plain terms</h2>
-<p>When Claude Code delegates work to a <em>subagent</em>, it spins up a helper with a clean context to handle a single task and report back. Left on its own, though, the main agent launches every helper on its own model and at its own <em>effort</em> level—the amount of reasoning time allowed before answering.</p>
-<p>That creates waste on both ends. A large model is expensive for a simple lookup that a small, cheap one could finish in seconds; conversely, handing a delicate review to an undersized model sends the work back and forces you to redo it.</p>
-<figure class="diagram">{{diagram:d6-router-desk}}<figcaption>model-router as a sorting desk: the grid picks the model and effort for each task handed to a helper, a fast judge steps in only when no model was specified, the helper runs, and the outcome is measured.</figcaption></figure>
-<p>model-router solves this with three mechanisms:</p>
+<p>When Claude Code delegates part of the work to a <em>subagent</em>, it starts a helper with a clean context that performs a single task and reports back. Left alone, however, the main agent launches every helper using its own model and <em>effort</em> level — how long the model thinks before answering.</p>
+<p>The result is waste in both directions:</p>
 <ul>
-  <li><strong>The grid</strong>: gives the agent a short written rulebook so it makes a deliberate choice before spawning a helper and states why.</li>
-  <li><strong>The judge</strong>: catches helpers launched without an explicit model and classifies them on the fly.</li>
-  <li><strong>Measurement</strong>: records, for each task class and combination of model and effort, how often work succeeds on the first try—<a href="#fpy">first-pass yield</a>—and what a good outcome actually costs.</li>
+  <li>using a large, expensive model for a trivial file search that a fast model would finish in a moment;</li>
+  <li>handing a delicate review to a model that is too light, getting back an imprecise result that comes back to be redone.</li>
+</ul>
+<figure class="diagram">{{diagram:d6-router-desk}}<figcaption><code>model-router</code> as a sorting desk: the grid picks model and effort for each task handed to a helper, a fast judge decides only when no model was specified, the helper does the work, and the outcome is measured.</figcaption></figure>
+<p><code>model-router</code> tackles the problem with three complementary mechanisms:</p>
+<ul>
+  <li><strong>The grid</strong>: a short written rulebook that lets the agent choose deliberately before launching a helper and state its reason.</li>
+  <li><strong>The judge</strong>: a fast classifier that catches helpers launched without an explicit model and assigns one on the fly.</li>
+  <li><strong>Measurement</strong>: a local system that records, for every task class and model-and-effort combination, how often the work succeeds on the first try — <a href="#fpy">first-pass yield</a> — and what a good result actually costs.</li>
 </ul>
 <figure class="illus"><img src="{{img:illus-router}}" alt="Illustration: tasks arriving at a sorting point and being routed to models of different sizes" loading="lazy"></figure>
-<p>Let's look at how the plugin's two components put this flow into practice.</p>
+<p>Here is how the plugin's two layers put this flow into practice.</p>
 
 <h2 id="how">How it works</h2>
-<p>model-router separates selection rules from automatic routing into two independent layers; the first works well even without the second.</p>
+<p><code>model-router</code> separates the selection rules from automatic routing into two independent layers: the first works well on its own.</p>
 <ul>
-  <li><strong>The skill, <code>model-router:choose-model</code>.</strong> Loads whenever the agent is about to launch a subagent, child session, or workflow, and exposes the grid. The agent decides before spawning, passes <code>model</code> and <code>effort</code> explicitly, tags the description with the task class, and writes one line explaining the choice. Works even when mods are disabled.</li>
-  <li><strong>The mod, <code>model-router</code>.</strong> When a subagent starts without a specified model, it queries the judge and sets both model and effort. Below each <code>Agent</code> call, it shows the model and effort actually assigned, logs every decision and outcome, and provides the <code>/model-router</code> command. Requires mods enabled and Claude Code 2.1.329 or later.</li>
+  <li><strong>The skill (<code>model-router:choose-model</code>)</strong>: loads whenever the agent is about to launch a subagent, a child session, or a workflow, and presents the grid. The agent decides before launching, passes <code>model</code> and <code>effort</code> explicitly, tags the description with the task class, and prints one line explaining the choice. Works even with mods turned off.</li>
+  <li><strong>The mod (<code>model-router</code>)</strong>: steps in when a subagent starts without a model specified, calls the judge, and applies model and effort. It also displays the actual assigned values beneath each <code>Agent</code> call, records decisions and outcomes locally, and enables the <code>/model-router</code> command. Requires mods enabled and Claude Code <code>2.1.329</code> or later.</li>
 </ul>
-<figure class="diagram">{{diagram:d8-routing}}<figcaption>What happens when a subagent spawns: an explicit model, fork, resume, or fixed agent model is kept; a model-less spawn goes to the judge, and thresholds decide whether to lower, raise, or keep the model.</figcaption></figure>
-<p>Not every spawn is touched: the router always respects choices already made and steps in only when the model is missing.</p>
+<figure class="diagram">{{diagram:d8-routing}}<figcaption>What happens when a subagent launches: an explicit model, a fork, a resume, or an agent's fixed model is kept; a launch without a model goes to the judge, and thresholds decide whether to lower, raise, or keep the model.</figcaption></figure>
+<p>The router never overrides an explicit choice: it only intervenes when the model is missing.</p>
 <table>
-  <thead><tr><th>The spawn</th><th>The router</th></tr></thead>
+  <thead><tr><th>The launch</th><th>Router behavior</th></tr></thead>
   <tbody>
-    <tr><td>already specifies a model, or is a fork or resume</td><td>keeps it</td></tr>
-    <tr><td>names an agent whose definition pins a model, a plugin agent, or one whose definition cannot be read</td><td>keeps it</td></tr>
-    <tr><td>runs with routing disabled or with a session-wide subagent model pinned (<code>CLAUDE_CODE_SUBAGENT_MODEL</code>)</td><td>keeps it</td></tr>
-    <tr><td>specifies no model</td><td>queries the judge, then sets model and effort</td></tr>
+    <tr><td>Already specifies a model, is a fork, or is a resume</td><td>Keeps it</td></tr>
+    <tr><td>Names an agent whose definition fixes a model, a plugin agent, or an agent with an unreadable definition</td><td>Keeps it</td></tr>
+    <tr><td>Runs with routing turned off or with a session-level subagent model set (<code>CLAUDE_CODE_SUBAGENT_MODEL</code>)</td><td>Keeps it</td></tr>
+    <tr><td>Specifies no model</td><td>Calls the judge, then sets model and effort</td></tr>
   </tbody>
 </table>
-<p>The spawn call itself is never mutated: the model is applied when the subagent starts, and effort is applied on each of its model requests. Because of this, routing works under any permission mode, including auto mode. Among built-in subagent types, only <code>general-purpose</code> and <code>Explore</code> are routed.</p>
-<p>Everything rests on clear, verifiable criteria—let's see how the grid is built.</p>
+<p>One important architectural detail: the launch call itself is never altered. The model is applied when the subagent starts, and effort is applied to each of its model requests. Because of this approach, routing works in every permission mode, including auto mode. Among built-in subagent types, only <code>general-purpose</code> and <code>Explore</code> are routed.</p>
+<p>Now let's look at the criteria behind the grid.</p>
 
 <h2 id="grid">The grid: how choices are made</h2>
-<p>To keep documentation, configuration, and behavior from drifting apart over time, the grid has a single machine-readable source: <code>grid.json</code>. The skill renders it in prose, the setup skill lists its values, and a test fails if the three ever diverge.</p>
-<p>On every spawn, the first rule that yields a value wins:</p>
+<p>To keep documentation, configuration, and behavior from drifting apart over time, the grid has a single machine-readable source: <code>grid.json</code>. The skill presents it in words, the setup skill lists its values, and an automated test fails if the three versions diverge.</p>
+<p>At every launch, the first rule in priority order that produces a value wins:</p>
 <ol>
-  <li>An explicit choice from you in the conversation.</li>
-  <li>The project's <code>## Model routing</code> section, when it names the kind of work or task class.</li>
-  <li>An agent definition that pins its own model: the model stays unchanged and only effort is passed.</li>
+  <li>Your explicit choice in the conversation.</li>
+  <li>The project's <code>## Model routing</code> section, if it names that kind of work or task class.</li>
+  <li>An agent definition that fixes its own model (in which case the model stays unchanged and only effort is passed).</li>
   <li>The grid.</li>
 </ol>
-<figure class="diagram">{{diagram:d7-grid}}<figcaption>The grid: model tiers checked in order, four effort questions asked in order, and six task classes, each with its usual pick.</figcaption></figure>
+<figure class="diagram">{{diagram:d7-grid}}<figcaption>The grid: model tiers checked in order, four effort questions asked in order, and six task classes, each with its usual choice.</figcaption></figure>
 <h3>Model tiers</h3>
-<p>Scan the table from top to bottom and stop at the first row that fits the task.</p>
+<p>Scan the table from top to bottom and stop at the first row that fits the task:</p>
 <table>
   <thead><tr><th>Tier</th><th>Fits when</th><th>Examples</th></tr></thead>
   <tbody>
-    <tr><td><code>haiku</code></td><td>Simple, repetitive work that is easy to verify and requires no judgment calls.</td><td>Listing or summarizing files; running a single command; renaming a symbol</td></tr>
-    <tr><td><code>sonnet</code></td><td>The expected outcome fits in a single sentence.</td><td>A well-specified change across a few files; tests for existing code</td></tr>
-    <tr><td><code>fable</code></td><td>Broad <strong>and</strong> open-ended work where judgment and precision truly matter. Both conditions must hold.</td><td>A complex design; an architectural decision with long-term consequences</td></tr>
-    <tr><td><code>opus</code></td><td>Everything else, and whenever you're torn between two tiers.</td><td>A review; debugging when the cause is unknown; most coordination work</td></tr>
+    <tr><td><code>haiku</code></td><td>Simple, repetitive work that is easy to check and requires no judgment calls</td><td>Listing or summarizing files; running a single command; renaming a symbol</td></tr>
+    <tr><td><code>sonnet</code></td><td>The expected result can be described clearly in one sentence</td><td>A well-specified edit across a few files; tests for existing code</td></tr>
+    <tr><td><code>fable</code></td><td>Broad <strong>and</strong> open-ended work where judgment and precision truly matter (both conditions must hold)</td><td>A complex design; an architectural decision with long-term consequences</td></tr>
+    <tr><td><code>opus</code></td><td>Everything else, and whenever you are unsure between two tiers</td><td>A review; debugging when the cause is unknown; most coordination work</td></tr>
   </tbody>
 </table>
-<p>Tier names are aliases: the concrete model mapped to each one depends on your configuration. From cheapest to most expensive: <code>haiku</code> &lt; <code>sonnet</code> &lt; <code>opus</code> &lt; <code>fable</code>.</p>
+<p>Tier names are aliases: the concrete model mapped to each depends on your configuration. In ascending order of price: <code>haiku</code> &lt; <code>sonnet</code> &lt; <code>opus</code> &lt; <code>fable</code>.</p>
 <h3>Effort</h3>
-<p>Answer these questions in order and stop at the first yes:</p>
+<p>Answer the four questions in order and stop at the first yes:</p>
 <ol>
-  <li>Is it a simple task or a quick back-and-forth? → <code>low</code></li>
-  <li>Would an unnoticed mistake cost money, a customer, or a bad decision? → <code>high</code></li>
-  <li>Is it long, hard, and critical, <strong>and</strong> running unattended? All three must hold. → <code>xhigh</code></li>
-  <li>None of the above. → <code>medium</code></li>
+  <li>Is it a simple task or a quick exchange? → <code>low</code></li>
+  <li>Would an unseen mistake cost money, a customer, or a bad decision? → <code>high</code></li>
+  <li>Is it long, hard, and critical, <strong>and</strong> running unsupervised? (All three conditions must hold) → <code>xhigh</code></li>
+  <li>None of the above → <code>medium</code></li>
 </ol>
 <p>The <code>max</code> level is never chosen.</p>
 <h3>Task classes</h3>
-<p>Every task falls into one of the six task classes below, each paired with a usual pick:</p>
+<p>Every task falls into one of six fixed task classes, each paired with a usual choice:</p>
 <table>
-  <thead><tr><th>Class</th><th>Covers</th><th>Usual pick</th></tr></thead>
+  <thead><tr><th>Class</th><th>Covers</th><th>Usual choice</th></tr></thead>
   <tbody>
-    <tr><td><code>read-search</code></td><td>finding files, symbols, or information</td><td>haiku · low</td></tr>
-    <tr><td><code>read-analyze</code></td><td>reading and drawing conclusions: explaining, comparing, summarizing</td><td>sonnet · medium</td></tr>
-    <tr><td><code>edit-mechanical</code></td><td>repetitive edits that are easy to verify</td><td>haiku · low</td></tr>
-    <tr><td><code>edit-specified</code></td><td>an edit whose end state fits in one sentence</td><td>sonnet · medium</td></tr>
-    <tr><td><code>review-debug</code></td><td>code review, or debugging with an unknown cause</td><td>opus · medium</td></tr>
-    <tr><td><code>design-open</code></td><td>open-ended design where judgment matters</td><td>fable · high</td></tr>
+    <tr><td><code>read-search</code></td><td>Finding files, symbols, or information</td><td><code>haiku</code> · <code>low</code></td></tr>
+    <tr><td><code>read-analyze</code></td><td>Reading and drawing conclusions: explaining, comparing, summarizing</td><td><code>sonnet</code> · <code>medium</code></td></tr>
+    <tr><td><code>edit-mechanical</code></td><td>Repetitive edits that are easy to verify</td><td><code>haiku</code> · <code>low</code></td></tr>
+    <tr><td><code>edit-specified</code></td><td>An edit whose end state fits in one sentence</td><td><code>sonnet</code> · <code>medium</code></td></tr>
+    <tr><td><code>review-debug</code></td><td>Review, or debugging with an unknown cause</td><td><code>opus</code> · <code>medium</code></td></tr>
+    <tr><td><code>design-open</code></td><td>Open-ended design where judgment matters</td><td><code>fable</code> · <code>high</code></td></tr>
   </tbody>
 </table>
-<p>Put the task class at the start of the subagent description, such as <code>[mr:read-search]</code>, or <code>[mr:edit-specified!]</code> if the spawn is risky. This tag is what tells measurement what kind of work the task belongs to.</p>
+<p>Place the task class at the start of the subagent description, such as <code>[mr:read-search]</code>, or <code>[mr:edit-specified!]</code> when the launch is risky. This tag is what allows the statistics to classify every task.</p>
 <h3>Rules around the grid</h3>
-<p>Six practical principles round out the tables:</p>
+<p>Six practical principles complete the tables:</p>
 <ul>
-  <li><strong>When in doubt, move up a tier.</strong> Handing work to a model that's too small costs more in rework than it saves.</li>
-  <li><strong>Risk lives in the action, not the topic.</strong> Touching production, moving money, or altering unrecoverable data is risky; writing or testing code about those subjects is not. A risky spawn gets at least <code>high</code> effort and the <code>!</code> marker.</li>
-  <li><strong>Sessions: choose up front.</strong> Never switch the model of an already running session.</li>
-  <li><strong>Escalate one step at a time.</strong> Retry first with sharper instructions; next, bump effort by one notch; finally, spawn at the next tier up with a handoff.</li>
-  <li><strong>Coordinator model.</strong> A session that delegates most of the work runs on <code>opus</code> at <code>medium</code> effort, unless its own design work is complex.</li>
-  <li><strong>Do it directly or delegate; follow up, don't restart.</strong> Handle a small task on files already in context within the current session; send a follow-up on the same topic to the subagent you already started.</li>
+  <li><strong>When in doubt, step up a tier.</strong> Giving work to a model that is too small costs more in rework than it saves.</li>
+  <li><strong>Risk is in the action, not the topic.</strong> Touching production, moving money, or altering unrecoverable data is risky; writing or testing code that deals with those topics is not. A risky launch receives at least <code>high</code> effort and the <code>!</code> marker.</li>
+  <li><strong>Sessions: choose at the start.</strong> A running session's model is never changed.</li>
+  <li><strong>Escalate one step at a time.</strong> Retry first with clearer instructions; then raise effort by one step; finally launch at the next tier with a handoff.</li>
+  <li><strong>The coordinator's model.</strong> A session that delegates most of its work runs on <code>opus</code> at <code>medium</code> effort, unless its own design work is complex.</li>
+  <li><strong>Do it directly or delegate; continue, don't restart.</strong> A small task on files already in context belongs in the current session; a follow-up request on the same topic goes to the subagent already running.</li>
 </ul>
-<p>Before every spawn, the agent states its pick on one line: 🔀, the model, a four-pip effort bar, the effort level, and the reason in under twelve words.</p>
-<pre><code>🔀 opus ▰▰▰▱ high -> review with unknown cause, going up
-🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check</code></pre>
-<p>With the mod enabled, the same line appears in color beneath every <code>Agent</code> call, showing what the subagent actually received and why: <code>explicit</code>, <code>fixed</code>, <code>judge: &lt;class&gt;; lowered from opus</code> (or <code>raised from</code>, <code>kept</code>), <code>judge: risky work; raised from &lt;tier&gt;</code>, or <code>keep: &lt;why&gt;</code>.</p>
-<figure class="shot"><img src="{{img:mr-agent-lines}}" alt="Three Agent calls, each with a colored 🔀 line underneath showing model, effort bar, effort level, and reason" loading="lazy"><figcaption>Model in bold, colored by tier; bar and effort colored by intensity, from green for low to red for xhigh; reason dimmed. <span class="badge demo">Demo data</span></figcaption></figure>
-<p>That covers upfront choices. What happens, though, when a subagent launches with no model specified at all? That's where the judge comes in.</p>
+<p>Before each launch, the agent states its choice on one line — the <code>🔀</code> symbol, model, four-slot effort bar, effort level, and reason in under twelve words:</p>
+<pre><code>🔀 opus ▰▰▰▱ high -&gt; review with unknown cause, going up
+🔀 haiku ▰▱▱▱ low -&gt; mechanical rename, easy to check</code></pre>
+<p>With the mod enabled, the same line appears in color beneath every <code>Agent</code> call, showing what the subagent actually received and why (<code>explicit</code>, <code>fixed</code>, <code>judge: &lt;class&gt;; lowered from opus</code> / <code>raised from</code> / <code>kept</code>, <code>judge: risky work; raised from &lt;tier&gt;</code>, or <code>keep: &lt;why&gt;</code>).</p>
+<figure class="shot">
+  <img src="{{img:mr-agent-lines}}" alt="Three Agent calls, each with a colored 🔀 line underneath showing model, effort bar, effort, and reason" loading="lazy">
+  <figcaption>The model in bold, colored by tier; the bar and effort colored by intensity, from green for <code>low</code> to red for <code>xhigh</code>; the reason dimmed. <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<p>So far we have seen choices made up front. What happens when a subagent launches with no model specified? That is where the judge comes in.</p>
 
 <h2 id="judge">How the judge works</h2>
-<p>When a spawn arrives without a model and doesn't match any of the keep-as-is cases, a quick decision is needed before the subagent starts working. That job belongs to the judge, an internal classifier inside the mod that you never call directly.</p>
-<figure class="diagram">{{diagram:d11-judge}}<figcaption>The judge: a prompt built from grid.json, the task wrapped as data, a time- and token-capped call to the fast tier, a JSON response, and thresholds deciding what changes.</figcaption></figure>
-<h3>What it receives</h3>
-<p>The judge receives the subagent type, the short description, and the first 4,000 characters of the task. To prevent prompt injection, the task text is wrapped as data, any internal closing tags are escaped, and the judge is instructed not to follow instructions found inside the text.</p>
-<h3>Its prompt</h3>
-<p>The prompt is generated directly from <code>grid.json</code>: it includes the tiers mapped to <code>fast</code>, <code>balanced</code>, and <code>deep</code>, the four effort questions numbered 0 through 3, the six task classes, and the rule that risk depends on the action. If you edit the grid, the judge's prompt updates automatically.</p>
-<h3>The call</h3>
-<p>The router makes a single call to the fast tier (the <code>fastModel</code> option, defaulting to <code>haiku</code>) at <code>low</code> effort, capped at 300 output tokens with an 8-second timeout (<code>timeoutMs</code>). The request runs through your session's client like a regular subagent and counts toward session cost.</p>
-<h3>The response</h3>
+<p>When a launch arrives with no model and does not match any of the kept cases, a fast classification is needed before the subagent starts working. That is handled by the <strong>judge</strong>, an internal classifier inside the mod that you never call directly.</p>
+<figure class="diagram">{{diagram:d11-judge}}<figcaption>The judge: a prompt built from <code>grid.json</code>, the task wrapped as data, a call to the <code>fast</code> tier with time and token limits, a JSON response, and thresholds deciding what to change.</figcaption></figure>
+<h3>What it receives and how the prompt is built</h3>
+<p>The judge receives the subagent type, its short description, and the first 4,000 characters of the task. To prevent interference (prompt injection), the task text is wrapped as data, any internal closing tags are escaped, and the judge is explicitly instructed not to execute any instructions contained in the text.</p>
+<p>The system prompt is built directly from <code>grid.json</code>: it includes the three tiers handled by the judge (<code>fast</code>, <code>balanced</code>, <code>deep</code>), the four effort questions numbered <code>0</code> to <code>3</code>, the six task classes, and the rule that risk depends on the action. If you edit the grid, the judge's prompt updates accordingly.</p>
+<h3>The call and the response</h3>
+<p>The router makes a single call to the <code>fast</code> tier (option <code>fastModel</code>, defaulting to <code>haiku</code>), at <code>low</code> effort, with a 300-token output cap and an 8-second timeout (<code>timeoutMs</code>). The call goes through your session's client like a normal subagent and counts toward the session cost.</p>
 <p>The judge returns a single JSON object:</p>
 <pre><code>{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "&lt;class&gt;" }</code></pre>
-<h3>What the router does with it</h3>
-<p>Undershooting ruins the output; overshooting just costs a little extra. For that reason, the router's thresholds are asymmetric:</p>
+<h3>How the router decides</h3>
+<p>Aiming too low ruins the result; aiming too high only costs a bit more. That is why the decision thresholds are asymmetric:</p>
 <table>
   <thead><tr><th>Rule</th><th>Default</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>Lowering the model requires confidence ≥</td><td>0.6</td><td>getting it wrong underpowers the task</td></tr>
-    <tr><td>Raising the model requires confidence ≥</td><td>0.3</td><td>getting it wrong only costs money</td></tr>
-    <tr><td><code>risky</code> above threshold, or <code>!</code> tag</td><td>0.7</td><td>forces the deep tier and at least <code>high</code> effort, bypassing both thresholds</td></tr>
-    <tr><td>Missing confidence</td><td>—</td><td>never changes the model in either direction</td></tr>
+    <tr><td>Lowering the model requires <code>confidence</code> ≥</td><td><code>0.6</code></td><td>Being wrong means giving the task too little</td></tr>
+    <tr><td>Raising the model requires <code>confidence</code> ≥</td><td><code>0.3</code></td><td>Being wrong only costs money</td></tr>
+    <tr><td><code>risky</code> above threshold, or <code>!</code> tag</td><td><code>0.7</code></td><td>Forces the <code>deep</code> tier and at least <code>high</code> effort, ignoring both thresholds</td></tr>
+    <tr><td>Missing <code>confidence</code></td><td>—</td><td>Never changes the model, in either direction</td></tr>
   </tbody>
 </table>
-<p>Comparisons are always made against the parent session's model. Effort likewise changes only when its confidence clears the threshold: <code>low</code> requires the downgrade threshold, while higher levels require the upgrade threshold. If the call already carries an effort level, it is kept, and <code>max</code> is never set. Also, the judge's tiers top out at <code>opus</code>, so the router never picks <code>fable</code>.</p>
+<p>The comparison is always against the parent session's model. Effort also changes only when <code>effort_confidence</code> clears its threshold (the downgrade threshold for <code>low</code>, the upgrade threshold for higher levels). If the call already carries an explicit effort, it is kept, and <code>max</code> is never set. Finally, the judge's tiers top out at <code>deep</code> (<code>opus</code>), so the router never picks <code>fable</code>.</p>
 <h3>When it fails</h3>
-<p>On error, the router <strong>fails open</strong>. A judge failure, timeout, or unreadable response leaves the spawn untouched and logs an <code>error</code>—except when a spawn is marked with <code>!</code>, which still moves up to the deep tier. Every decision is recorded with its action: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>, <code>explicit</code>, <code>forced-risk</code>, or <code>error</code>.</p>
-<p>The defaults handle everyday work well, but every project has its own exceptions and sweet spots—let's see how to configure them.</p>
+<p>The router <strong>fails open</strong>. A judge failure, a timeout, or an unreadable response leaves the launch unchanged and logs an <code>error</code>; the one exception is a launch tagged with <code>!</code>, which still moves up to the <code>deep</code> tier. Every decision is recorded with its action: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>, <code>explicit</code>, <code>forced-risk</code>, or <code>error</code>.</p>
+<p>The defaults work well in most cases, but every repository has its own exceptions: here is how to configure them.</p>
 
 <h2 id="configure">Configuration</h2>
-<p>You can customize model-router at two distinct levels: repository-specific exceptions and global plugin options.</p>
-<h3>Project exceptions: the Model routing section</h3>
-<p>The grid stays the same everywhere; anything that varies from project to project belongs in the <code>## Model routing</code> section of the repository's <code>AGENTS.md</code> (or <code>CLAUDE.md</code>).</p>
-<p>To create or update it, ask to "set up model routing for this project" or state the rule you want right away, such as "always use opus for migrations." <code>model-router:setup</code> locates your instructions file, asks about defaults and exceptions, suggests a few by reading the repository, shows you the exact block, and writes it only after an explicit yes—without committing.</p>
+<p>You can customize <code>model-router</code> at two distinct levels: single-project exceptions and global plugin options.</p>
+<h3>Project exceptions: the <code>Model routing</code> section</h3>
+<p>The grid stays the same everywhere; what varies from one repository to another goes into the <code>## Model routing</code> section of the project's <code>AGENTS.md</code> (or <code>CLAUDE.md</code>) file.</p>
+<p>To create or update it, ask "configure model routing for this project" or state the rule you want right away (for example, "always use opus for migrations"). <code>model-router:setup</code> locates the instruction file, asks you for defaults and exceptions, suggests a few by analyzing the repository, shows you the exact block, and writes it only after your explicit confirmation, without committing.</p>
 <pre><code>## Model routing
 
 Defaults for `model-router:choose-model`. An explicit choice in the conversation still wins; anything not
@@ -141,10 +146,13 @@ listed here follows the grid.
 |---|---|---|---|---|
 | Database migrations | `edit-specified` | `opus` | `high` | data cannot be restored |
 | Bulk renames across the codebase | `edit-mechanical` | `haiku` | `low` | checked by the compiler |</code></pre>
-<p>All values must stay within the grid's bounds: models <code>haiku</code>, <code>sonnet</code>, <code>fable</code>, <code>opus</code>; effort from <code>low</code> to <code>xhigh</code>; and the six task classes. If you specify an unlisted value, the setup skill flags it alongside the closest valid match.</p>
-<figure class="shot"><img src="{{img:mr-config}}" alt="A project's Model routing section in AGENTS.md alongside model-router options in Claude Code configuration" loading="lazy"><figcaption>A project's <code>## Model routing</code> section and plugin options.</figcaption></figure>
+<p>All values must stay within the bounds of the grid: models <code>haiku</code>, <code>sonnet</code>, <code>fable</code>, <code>opus</code>; effort from <code>low</code> to <code>xhigh</code>; the six task classes. If you enter an out-of-list value, it is flagged along with the closest valid alternative.</p>
+<figure class="shot">
+  <img src="{{img:mr-config}}" alt="A project&#x27;s Model routing section in its AGENTS.md, alongside model-router options in Claude Code configuration" loading="lazy">
+  <figcaption>A project's <code>## Model routing</code> section and the plugin options.</figcaption>
+</figure>
 <h3>Plugin options</h3>
-<p>Set plugin options via <code>/config</code> or under <code>pluginConfigs</code> in a settings file, keyed by the installed plugin name:</p>
+<p>Global options are set from <code>/config</code> or under <code>pluginConfigs</code> in a settings file, keyed by the installed plugin:</p>
 <pre><code>{
   "pluginConfigs": {
     "model-router@mrbogomips": {
@@ -155,198 +163,225 @@ listed here follows the grid.
 <table>
   <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>opus</code></td><td>Models mapped to the judge's fast, balanced, and deep tiers; the fast model also runs the judge itself</td></tr>
-    <tr><td><code>minDowngradeConfidence</code></td><td>0.6</td><td>Judge confidence required to lower the model or set <code>low</code> effort</td></tr>
-    <tr><td><code>minUpgradeConfidence</code></td><td>0.3</td><td>Judge confidence required to raise the model or set <code>medium</code>, <code>high</code>, or <code>xhigh</code> effort</td></tr>
-    <tr><td><code>riskThreshold</code></td><td>0.7</td><td>Risk threshold above which the spawn gets the deep tier and at least <code>high</code> effort</td></tr>
-    <tr><td><code>timeoutMs</code></td><td>8,000</td><td>Maximum time for the judge; once exceeded, the spawn stays unchanged</td></tr>
-    <tr><td><code>routeSubagents</code></td><td>true</td><td>Enables or disables routing of subagent spawns altogether</td></tr>
-    <tr><td><code>measure</code></td><td>true</td><td>Records the event log and quality data</td></tr>
-    <tr><td><code>adapt</code></td><td>false</td><td>Picks based on quality data; starting in 0.4, unused earlier</td></tr>
-    <tr><td><code>halfLifeDays</code></td><td>30</td><td>Time decay for quality data</td></tr>
-    <tr><td><code>projectPriorStrength</code></td><td>5</td><td>How many observations the user-level record is worth in a project estimate; starting in 0.4</td></tr>
-    <tr><td><code>exploreCap</code></td><td>0.1</td><td>Maximum share of decisions per class allowed to explore alternatives; starting in 0.4</td></tr>
-    <tr><td><code>reworkWindowMin</code></td><td>30</td><td>Minutes after the report within which redoing the work counts as rework</td></tr>
-    <tr><td><code>similarityThreshold</code></td><td>0.5</td><td>Word overlap above which two descriptions count as the same task</td></tr>
+    <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>opus</code></td><td>Models mapped to the judge's <code>fast</code>, <code>balanced</code>, and <code>deep</code> tiers; <code>fastModel</code> also runs the judge</td></tr>
+    <tr><td><code>minDowngradeConfidence</code></td><td><code>0.6</code></td><td>Confidence required to lower the model or set effort to <code>low</code></td></tr>
+    <tr><td><code>minUpgradeConfidence</code></td><td><code>0.3</code></td><td>Confidence required to raise the model or set effort to <code>medium</code>, <code>high</code>, or <code>xhigh</code></td></tr>
+    <tr><td><code>riskThreshold</code></td><td><code>0.7</code></td><td>Risk threshold above which the launch receives the <code>deep</code> tier and at least <code>high</code> effort</td></tr>
+    <tr><td><code>timeoutMs</code></td><td><code>8,000</code></td><td>Maximum time for the judge; if exceeded, the launch stays unchanged</td></tr>
+    <tr><td><code>routeSubagents</code></td><td><code>true</code></td><td>Turns routing of subagent launches on or off completely</td></tr>
+    <tr><td><code>measure</code></td><td><code>true</code></td><td>Records the event log and quality data</td></tr>
+    <tr><td><code>adapt</code></td><td><code>false</code></td><td>Chooses based on quality data (from version <code>0.4</code>, unused before then)</td></tr>
+    <tr><td><code>halfLifeDays</code></td><td><code>30</code></td><td>Half-life of quality data</td></tr>
+    <tr><td><code>projectPriorStrength</code></td><td><code>5</code></td><td>How many observations the user level is worth in a project's estimate (from <code>0.4</code>)</td></tr>
+    <tr><td><code>exploreCap</code></td><td><code>0.1</code></td><td>Maximum share of decisions per class that may explore alternatives (from <code>0.4</code>)</td></tr>
+    <tr><td><code>reworkWindowMin</code></td><td><code>30</code></td><td>Minutes after the report within which redoing the work counts as rework</td></tr>
+    <tr><td><code>similarityThreshold</code></td><td><code>0.5</code></td><td>Word overlap above which two descriptions count as the same task</td></tr>
   </tbody>
 </table>
-<p>To turn routing off for the current session only, run <code>/model-router off</code> (and <code>on</code> to re-enable it); to disable it permanently, set <code>routeSubagents</code> to false.</p>
-<p>Once routing is active, the key question remains: are those picks paying off on your actual work? Here is how model-router turns session events into statistics.</p>
+<p>To turn routing off for the current session only, type <code>/model-router off</code> (and <code>on</code> to turn it back on); to turn it off permanently, set <code>routeSubagents</code> to <code>false</code>.</p>
+<p>Once routing is active, the key question remains: are the choices paying off on your real work? Here is how <code>model-router</code> turns session events into statistics.</p>
 
 <h2 id="stats">How statistics are collected</h2>
-<p>Grading a subagent's quality without calling another model requires objective signals drawn from real work. model-router collects those signals locally and aggregates them only once it has enough information to close out a task.</p>
-<figure class="diagram">{{diagram:d9-stats}}<figcaption>From events to numbers: the mod appends events, compaction closes each task once the rework window expires, and outcomes roll up into task class × tier × effort cells, both for you overall and per project.</figcaption></figure>
-<h3>Events</h3>
-<p>The mod appends records to <code>events.jsonl</code> inside your configuration directory without ever calling a model for measurement. Each line logs one of these events:</p>
+<p>Measuring a subagent's quality without asking a second model requires objective signals drawn from daily work. <code>model-router</code> collects these signals locally and closes each task's count only when it has enough evidence to evaluate the outcome.</p>
+<figure class="diagram">{{diagram:d9-stats}}<figcaption>From events to numbers: the mod appends events, compaction closes each task when the rework window expires, and outcomes flow into task class × tier × effort cells, for you and for each project.</figcaption></figure>
+<h3>1. Events</h3>
+<p>The mod appends records to <code>events.jsonl</code> inside the Claude Code config directory, without ever calling external models to measure. Each line records one of these events:</p>
 <ul>
   <li><code>decision</code>: every routing decision;</li>
   <li><code>spawn</code>: every subagent launch, with type, name, and short description;</li>
-  <li><code>signal</code>: files written by the session and its subagents, failed tool calls, prompts you type, interrupts, and resumes;</li>
+  <li><code>signal</code>: files written by the session and subagents, failed tool calls, prompts you type, interruptions, and resumes;</li>
   <li><code>report</code>: each subagent's report, complete with tokens and estimated cost;</li>
-  <li><code>session-end</code>: when the session closes.</li>
+  <li><code>session-end</code>: the closing of the session.</li>
 </ul>
-<h3>Tasks and outcomes</h3>
-<p>Every subagent spawn corresponds to one task. Its outcome is locked in once the <strong>rework window</strong> expires: 30 minutes after the subagent reports back, or at session end if that comes first.</p>
+<h3>2. Tasks and outcomes</h3>
+<p>Every subagent launch corresponds to a task. Its outcome is settled when the <strong>rework window</strong> expires: 30 minutes after the subagent's report, or at the end of the session if that comes first.</p>
 <table>
-  <thead><tr><th>Outcome</th><th>When</th></tr></thead>
+  <thead><tr><th>Outcome</th><th>When it is assigned</th></tr></thead>
   <tbody>
-    <tr><td><code>success</code></td><td>the subagent delivered its report and nothing redid its work within the window</td></tr>
-    <tr><td><code>rework</code></td><td>within the window, the main session or another agent rewrote one of its files; a similar spawn of the same class followed; or one of your next two prompts named its files or task</td></tr>
-    <tr><td><code>failure</code></td><td>it failed, or was stopped by the parent session and redone</td></tr>
-    <tr><td><code>cancelled</code></td><td>no report arrived (an unresponsive task closes after 24 hours), or it was stopped</td></tr>
+    <tr><td><code>success</code></td><td>The subagent delivered its report and nothing within the window redid its work</td></tr>
+    <tr><td><code>rework</code></td><td>Within the window, the main session or another agent rewrote one of its files; or a similar launch of the same class followed; or one of the next two prompts you typed named its files or task</td></tr>
+    <tr><td><code>failure</code></td><td>The subagent failed, or was stopped by the parent session and redone</td></tr>
+    <tr><td><code>cancelled</code></td><td>No report (a task that never responds closes after 24 hours), or interrupted</td></tr>
   </tbody>
 </table>
-<p>Two descriptions count as "similar" when the distinct words they share make up at least half of all their distinct words, ignoring common stop words and the task class tag.</p>
-<h3>Cells, metrics, and decay</h3>
-<p>Outcomes roll up into task class × tier × effort <strong>cells</strong>—for example, <code>edit-specified · sonnet · medium</code>. Each cell computes four metrics:</p>
+<p>Two descriptions count as "similar" when the distinct words they share are at least half of all their distinct words (the <code>similarityThreshold</code> threshold), ignoring common words and the task class tag.</p>
+<h3>3. Cells, decay, and compaction</h3>
+<p>Outcomes flow into <strong>cells</strong> of the form task class × tier × effort — for example <code>edit-specified · sonnet · medium</code> — maintained at two levels: <strong>user</strong> (all your projects) and <strong>project</strong> (identified by the git remote or, failing that, the root directory).</p>
 <ul>
-  <li><strong>First-pass yield (FPY)</strong>: success ÷ (success + rework + failure), i.e., how often work succeeded right away (see <a href="#fpy">First-pass yield</a>);</li>
-  <li><strong>rework rate</strong>: rework ÷ (success + rework + failure);</li>
-  <li><strong>cost per task</strong>: average estimated cost, taken from the engine's own estimate;</li>
-  <li><strong>cost per successful task</strong>: cost per task ÷ FPY. A cheap model that often misses can end up with a higher cost per successful task than a pricier one.</li>
+  <li><strong>Time decay</strong>: counts decay with a 30-day half-life (<code>halfLifeDays</code>), so work from a month ago weighs half as much as today's.</li>
+  <li><strong>Exclusions from learning</strong>: cancelled tasks, risky tasks, tasks without a task class, tasks on models outside the four families, and tasks with unknown effort are recorded, but not used for learning.</li>
+  <li><strong>Compaction</strong>: raw events remain open until the rework window closes. Compaction closes expired tasks and updates aggregates at session start, when you open or refresh the usage view, and before generating the report; repeating it is idempotent, because no task is ever counted twice.</li>
 </ul>
-<p>Aggregated data decays with a 30-day <strong>half-life</strong> (<code>halfLifeDays</code>): work from a month ago carries half the weight of work done today. Statistics are maintained at two levels: <strong>user</strong> (you across all projects) and <strong>project</strong> (identified by its git remote, or falling back to its root directory).</p>
-<p>Not everything feeds into recommendations and learning, though:</p>
-<ul>
-  <li><strong>Excluded from learning</strong>: cancelled tasks, risky tasks, untagged tasks without a task class, tasks run on models outside the four families, and tasks without a known effort are logged, but never used for learning.</li>
-  <li><strong>Weak signals</strong>: read-only task classes and cells with fewer than five tasks produce weak signals and are flagged accordingly.</li>
-  <li><strong>Recommended cell</strong>: for each task class, the cell with the lowest cost per successful task among cells with at least three tasks, never dropping below the grid for <code>review-debug</code> and <code>design-open</code>. Through version 0.3 this is informational only: the router does not alter its picks based on it.</li>
-</ul>
-<h3>Compaction</h3>
-<p>Raw events stay open until the rework window closes. Compaction finalizes expired tasks, appends their outcomes, and folds them into the aggregates. It runs at session startup, whenever you open or refresh the usage view, and before generating the report; running it repeatedly is safe because no task is ever counted twice.</p>
-<p>Among all the metrics collected, one sits at the heart of the entire system: first-pass yield.</p>
+<p>Each cell computes four indicators: <strong>first-pass yield (FPY)</strong>, <strong>rework rate</strong>, <strong>cost per task</strong> (engine estimate), and <strong>cost per successful task</strong>. One of them is the linchpin of the entire system: here is why.</p>
 
 <h2 id="fpy">First-pass yield: the number behind every choice</h2>
-<p>A cheap model that keeps getting things wrong doesn't save money—it makes you pay twice for the same job. <strong>First-pass yield</strong> (FPY) comes straight from manufacturing to measure this exact effect. On an assembly line, it tracks the share of units that come out right the first time, with no rework or scrap: at 95% FPY, one unit in twenty has to be redone or thrown away, and a reworked unit never counts as a first-pass success.</p>
-<p>model-router applies the same logic to subagents. Every spawn is a unit: it passes on the first try if nothing had to redo its work over the next half hour.</p>
+<p>A cheap model that often gets things wrong does not save money: it makes you pay twice for the same work. <strong>First-pass yield</strong> (FPY) comes from manufacturing precisely to measure this effect: on a production line, it indicates the share of units that come out right on the first pass, with no rework or scrap. At 95% FPY, one unit in twenty has to be redone or discarded, and a reworked unit never counts as good on the first pass.</p>
+<p><code>model-router</code> applies the same principle to subagents: every launch is a unit, and it succeeded on the first pass if nothing had to redo it in the half hour that followed.</p>
 <h3>How it is calculated</h3>
-<p>For each cell (task class × tier × effort, such as <code>edit-specified · haiku · low</code>):</p>
+<p>For each cell (task class × tier × effort), using time-weighted counts:</p>
 <p><code>FPY = success ÷ (success + rework + failure)</code></p>
 <ul>
-  <li><strong>success</strong> counts toward FPY; <strong>rework</strong> and <strong>failure</strong> count against it. Outcomes follow the rules explained in <a href="#stats">How statistics are collected</a>.</li>
-  <li><strong>cancelled</strong> tasks stay out of both numerator and denominator: a task you stopped yourself, or one that never responded, says nothing about whether the model was up to the job.</li>
-  <li>Counts are <strong>time-weighted</strong> before dividing: with a 30-day half-life, a success from a month ago counts as half a success. FPY therefore reflects how models perform on your work today, not months ago.</li>
+  <li><code>success</code> counts in favor; <code>rework</code> and <code>failure</code> count against.</li>
+  <li><code>cancelled</code> tasks are excluded from both terms: a task you stopped or that never finished says nothing about how well the model fit.</li>
+  <li>Thanks to the 30-day half-life, FPY reflects how models perform on your work today, not months ago.</li>
 </ul>
-<h3>Why FPY instead of price alone</h3>
-<p>A price sheet tells you what it costs to run a task, not what it costs to get a <em>successful</em> one. Work that comes back gets paid for all over again: in the retry, in the main session fixing it up, and in your own time. FPY converts raw price into the number that actually matters, <strong>cost per successful task</strong>:</p>
+<h3>Why FPY and not price alone</h3>
+<p>The price list tells you what it costs to <em>run</em> a task, not what it costs to get a <em>successful</em> one. Work that comes back is paid for again — in the second attempt, in the main session fixing it, and in your own time. FPY turns the price list into the number that actually matters, <strong>cost per successful task</strong>:</p>
 <p><code>cost per successful task = cost per task ÷ FPY</code></p>
 <p>Compare two cells on the same kind of work, with twenty closed tasks each:</p>
 <table>
-  <thead><tr><th>Cell</th><th>success / rework / failure</th><th>FPY</th><th>Cost per task</th><th>Cost per successful task</th></tr></thead>
+  <thead><tr><th>Cell</th><th><code>success / rework / failure</code></th><th>FPY</th><th>Cost per task</th><th>Cost per successful task</th></tr></thead>
   <tbody>
-    <tr><td><code>haiku · low</code></td><td>5 / 12 / 3</td><td>25%</td><td>$0.020</td><td>$0.080</td></tr>
-    <tr><td><code>sonnet · low</code></td><td>18 / 2 / 0</td><td>90%</td><td>$0.050</td><td>$0.056</td></tr>
+    <tr><td><code>haiku · low</code></td><td><code>5 / 12 / 3</code></td><td><code>25%</code></td><td><code>$0.020</code></td><td><code>$0.080</code></td></tr>
+    <tr><td><code>sonnet · low</code></td><td><code>18 / 2 / 0</code></td><td><code>90%</code></td><td><code>$0.050</code></td><td><code>$0.056</code></td></tr>
   </tbody>
 </table>
-<p>Haiku costs less than half as much per individual run, yet every good result ends up costing more because three out of four tasks come back for rework. And the table is still generous: those fifteen redone tasks also burned main-session tokens and your own time, neither of which shows up on any price sheet. The flip side holds too: on a straightforward search, a small model nails it nineteen times out of twenty, so paying for a bigger one buys you nothing.</p>
+<p><code>haiku</code> costs less than half as much per launch, yet each valid result costs more because three tasks out of four come back. And the table is even optimistic, because it does not count the parent session's time or yours. The reverse holds too: for a simple search, a small model gets it right nineteen times out of twenty, and paying for a larger one brings no benefit.</p>
 <h3>How to read it</h3>
 <ul>
-  <li>The Overview tile shows 🟢 from 85% up, 🟡 from 70%, and 🔴 below that. Per-tier and per-effort bars use the same color scale.</li>
-  <li><strong>Rework rate</strong> is the flip side of FPY: <code>rework ÷ (success + rework + failure)</code>. Together, the two add up to 100% minus the failure rate.</li>
-  <li>A cell with fewer than five tasks is a <strong>weak</strong> signal (⚪): 100% across two tasks is luck, not statistics.</li>
-  <li>FPY is also marked weak for <strong>read-only</strong> task classes (<code>read-search</code>, <code>read-analyze</code>). Readers don't write files, so the strongest rework signal—someone editing those same files right afterward—never fires, making a poor search look like a success.</li>
-  <li>Automated signals can misread things: if you edit a file written by a subagent for reasons unrelated to its task, that edit still counts as rework. Across many tasks the noise averages out; across a handful it doesn't, which is why small cells remain marked weak.</li>
+  <li><strong>Color thresholds</strong>: in Overview, the FPY tile is 🟢 from 85%, 🟡 from 70%, 🔴 below; the tier and effort bars use the same scale.</li>
+  <li><strong>Rework rate</strong>: the flip side of FPY (rework ÷ (success + rework + failure)). Together they add up to 100% minus the failure rate.</li>
+  <li><strong>Weak signals (⚪)</strong>: a cell with fewer than five tasks is marked weak — 100% across two tasks is luck, not statistics.</li>
+  <li><strong>Read-only classes</strong>: <code>read-search</code> and <code>read-analyze</code> are also always marked weak. Readers do not write files, so the strongest rework signal (someone rewriting the same files right afterward) never fires, and a poor search tends to look like a success.</li>
+  <li><strong>Inherent noise</strong>: if you edit a file written by a subagent for reasons unrelated to its task, that work is counted as rework. Over large numbers the noise evens out; over small numbers it does not, which is another reason to treat small cells as hints only.</li>
 </ul>
 <h3>How the router uses it</h3>
-<p><strong>Today (versions 0.2 and 0.3), FPY informs rather than steers.</strong> The <code>adapt</code> option is off and the router strictly follows the grid. FPY powers the tiles and bars in <code>/model-router</code>, the report, and—for each task class—a <strong>recommended cell</strong>: the lowest cost per successful task among cells with at least three tasks, never below the grid for <code>review-debug</code> and <code>design-open</code>. When a recommendation consistently diverges from the grid, you can step in and add an exception to the project's <code>## Model routing</code> section.</p>
-<p><strong>Starting in version 0.4 (planned), FPY will steer choices.</strong> With <code>adapt</code> enabled, the router tracks not a single FPY point estimate per cell, but a range of plausible values modeled as a Beta distribution: <code>alpha</code> grows with time-weighted successes, <code>beta</code> with weighted reworks and failures. On each subagent spawn, it draws a plausible FPY from each candidate cell neighboring the grid's pick, divides the cell's cost by that draw, and picks the lowest cost per successful task. This is <strong>Thompson sampling</strong>:</p>
+<p><strong>Today (versions <code>0.2</code> and <code>0.3</code>), FPY informs rather than steers.</strong> The <code>adapt</code> option is off and the router follows only the grid. FPY feeds the <code>/model-router</code> view, the report, and, for each task class, a <strong>recommended cell</strong>: the one with the lowest cost per successful task among cells with at least three tasks, without ever dropping below the grid for <code>review-debug</code> and <code>design-open</code>. If a recommendation consistently diverges from the grid, you can choose to add an exception in <code>## Model routing</code>.</p>
+<p><strong>From version <code>0.4</code> (planned), FPY will steer choices.</strong> With <code>adapt</code> enabled, the router balances exploitation (using what works) and exploration (trying promising alternatives) through <strong>Thompson sampling</strong>:</p>
 <ul>
-  <li>A cell with plenty of data draws values tightly clustered around its measured FPY, so a proven winner keeps winning.</li>
-  <li>A cell with sparse data draws widely spread values, so every now and then it wins the draw and gets tested. That exploration tapers off automatically as evidence accumulates, and is capped at 10% of decisions per task class (<code>exploreCap</code>).</li>
-  <li>Before any data arrives, the grid's pick starts ahead (<code>alpha = 2, beta = 1</code>, an expected FPY of two-thirds) while neighboring cells start even (<code>1, 1</code>): the grid wins until the numbers prove otherwise.</li>
-  <li>A project starts from your user-level record weighted as five tasks (<code>projectPriorStrength</code>); as it accumulates tasks of its own, its own record takes over.</li>
-  <li>Exploration never drops below the grid for <code>review-debug</code> and <code>design-open</code>, never drops below the project's <code>## Model routing</code> defaults, and never touches risky spawns, which are measured but excluded from learning.</li>
+  <li>For each cell it maintains a range of plausible FPY values modeled with a Beta distribution: <code>alpha</code> grows with time-weighted successes, <code>beta</code> with time-weighted rework and failures.</li>
+  <li>At each launch it draws a plausible FPY from each candidate cell near the grid, divides the cell's cost by that value, and picks the one with the lowest cost per successful task.</li>
+  <li>Cells with plenty of data draw values close to their measured FPY (a proven choice keeps winning); cells with little data have wider draws and get tested occasionally, up to a cap of 10% of decisions per class (<code>exploreCap</code>).</li>
+  <li>Without prior data, the grid's choice starts ahead (<code>alpha = 2, beta = 1</code>, an expected FPY of two-thirds) compared to neighboring cells (<code>1, 1</code>): the grid wins until the numbers prove otherwise.</li>
+  <li>A new project inherits your user-level history with weight equal to five tasks (<code>projectPriorStrength</code>), then gradually relies on its own data.</li>
+  <li>Exploration never drops below the grid for <code>review-debug</code> and <code>design-open</code>, never violates values set in <code>## Model routing</code>, and never touches risky launches.</li>
 </ul>
-<div class="note"><p><strong>Why measurement comes first.</strong> Versions 0.2 and 0.3 only measure so you can check in <code>/model-router</code> that the signals make sense for how you work before handing over automated decisions.</p></div>
-<p>Now that you know how to read the numbers, let's walk through the few steps needed to make them show up on your machine.</p>
+<div class="note"><p><strong>Why it only measures first.</strong> Versions <code>0.2</code> and <code>0.3</code> only measure, so you can verify in <code>/model-router</code> that the signals truly reflect how you work before trusting automatic selection.</p></div>
+<p>Now that you know how to interpret the numbers, here are the five steps to make them appear on your machine.</p>
 
-<h2 id="see-stats">Getting statistics to show up</h2>
-<p>Seeing your first numbers takes no special setup, just five conditions in sequence:</p>
-<figure class="diagram">{{diagram:d10-see-stats}}<figcaption>Five steps to see your statistics: install, run Claude Code 2.1.329 or later with mods enabled, work normally, let the rework window close, then open <code>/model-router</code> or the report.</figcaption></figure>
+<h2 id="see-stats">Making statistics appear</h2>
+<p>No special configuration is needed, but five conditions must be met in order:</p>
+<figure class="diagram">{{diagram:d10-see-stats}}<figcaption>Five steps to see your statistics: install, use Claude Code <code>2.1.329</code> or later with mods enabled, work normally, let the rework window close, then open <code>/model-router</code> or the report.</figcaption></figure>
 <ol>
-  <li><strong>Enable mods and run Claude Code 2.1.329 or later.</strong> If <code>/model-router</code> comes back as an unknown command, the mod isn't loaded.</li>
-  <li><strong>Leave <code>measure</code> enabled.</strong> It is on by default.</li>
-  <li><strong>Run subagents.</strong> Only subagent spawns become tasks. Tag spawns when you write them by hand: an untagged spawn that bypasses the judge has no task class and won't be used for learning.</li>
-  <li><strong>Wait for the rework window to close.</strong> A task is tallied 30 minutes after its report, or once the session ends.</li>
-  <li><strong>Open <code>/model-router</code></strong>, or ask for the <em>model-router report</em>. Opening the view runs compaction for up to 3 seconds; press <code>r</code> to refresh.</li>
+  <li><strong>Install <code>model-router</code> and use Claude Code <code>2.1.329</code> or later with mods enabled.</strong> Only the mod records data: if <code>/model-router</code> is unknown, the mod is not loaded.</li>
+  <li><strong>Leave <code>measure</code> enabled</strong> (it is on by default).</li>
+  <li><strong>Work normally, letting subagents run.</strong> Only subagent launches become tasks. If you write a launch by hand, add the class tag: an untagged launch that does not go through the judge stays without a task class and is excluded from learning.</li>
+  <li><strong>Wait for the rework window to close</strong> (30 minutes after the subagent's report, or at the end of the session).</li>
+  <li><strong>Open <code>/model-router</code></strong> or ask for the <em>model-router report</em>. On opening, the view runs compaction for up to 3 seconds; press <code>r</code> to refresh.</li>
 </ol>
-<p>Once your first tasks close, you can inspect everything either in the terminal or in your browser.</p>
+<p>Once the first tasks have closed, you can inspect the data in the terminal or in the browser.</p>
 
 <h2 id="view">The usage view and the report</h2>
-<p>Checking metrics shouldn't clutter your conversation or burn context tokens. Accordingly, <code>/model-router</code> opens a dialog styled like Claude Code's settings, with four tabs, a time window (24h, 7d, 30d, all), and a scope (user or project). What you see stays on your screen—the model never reads it.</p>
+<p>Checking metrics does not clutter the conversation or consume context: <code>/model-router</code> opens an interactive view similar to Claude Code settings, visible only to you and never read by the model. It includes four tabs, a time range (<code>24h</code>, <code>7d</code>, <code>30d</code>, <code>all</code>), and a scope (<code>user</code> or <code>project</code>).</p>
 <table>
   <thead><tr><th>Command</th><th>What it does</th></tr></thead>
   <tbody>
-    <tr><td><code>/model-router</code></td><td>Opens the usage view on Overview, last 7 days, user level</td></tr>
-    <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens it on the specified tab, window, and level, in any order</td></tr>
-    <tr><td><code>/model-router on</code>, <code>off</code></td><td>Enables or disables routing for the current session</td></tr>
-    <tr><td><code>/model-router report</code></td><td>Generates and opens the report page, printing its file path</td></tr>
+    <tr><td><code>/model-router</code></td><td>Opens the usage view on <code>Overview</code>, last 7 days, user scope</td></tr>
+    <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens directly on the specified tab, window, and scope, in any order</td></tr>
+    <tr><td><code>/model-router on</code>, <code>off</code></td><td>Turns routing on or off for the current session</td></tr>
+    <tr><td><code>/model-router report</code></td><td>Generates and opens the HTML report page, printing its path</td></tr>
     <tr><td><code>/model-router help</code></td><td>Lists arguments and keyboard shortcuts</td></tr>
   </tbody>
 </table>
-<p>The Overview tab opens with four summary tiles:</p>
+<p>The <strong>Overview</strong> tab opens with four summary tiles:</p>
 <ul>
   <li><strong>FPY</strong>: 🟢 from 85%, 🟡 from 70%, 🔴 below;</li>
-  <li><strong>Cost per successful task</strong>: 🟢 cheaper or 🔴 pricier than the previous window;</li>
+  <li><strong>Cost per successful task</strong>: 🟢 cheaper or 🔴 more expensive than the previous window;</li>
   <li><strong>Rework</strong>: 🟢 up to 10%, 🟡 up to 25%, 🔴 above;</li>
-  <li><strong>Routed spawns</strong>: ↓ downgraded, ↑ upgraded, = kept.</li>
+  <li><strong>Routed launches</strong>: <code>↓</code> downgraded, <code>↑</code> upgraded, <code>=</code> kept.</li>
 </ul>
-<p>If a tile rests on fewer than five tasks, it displays ⚪ weak—too little data to draw conclusions.</p>
-<figure class="shot"><img src="{{img:mr-overview}}" alt="The Overview tab: status, KPI tiles, sparkline charts, FPY bars by tier and effort, and the current session's subagents and routing decisions" loading="lazy"><figcaption>Overview: tiles, sparklines, and FPY bars for the last 7 days, followed by this session's subagents and decisions. <span class="badge demo">Demo data</span></figcaption></figure>
-<figure class="shot"><img src="{{img:mr-models}}" alt="The Models tab: closed tasks, tokens, cost, FPY, and cost per successful task broken down by tier and effort" loading="lazy"><figcaption>Models: by tier and effort, closed tasks, tokens, cost, FPY with bar, cost per successful task, and observed model IDs. <span class="badge demo">Demo data</span></figcaption></figure>
-<figure class="shot"><img src="{{img:mr-classes}}" alt="The Classes tab: grid pick, best measured cell, warnings, and cells for each task class" loading="lazy"><figcaption>Classes: for each task class, the grid pick next to the best measured cell, weak-signal flags, and individual cells; <code>*</code> marks the recommended one. <span class="badge demo">Demo data</span></figcaption></figure>
-<figure class="shot"><img src="{{img:mr-decisions}}" alt="The Decisions tab: the last twelve routing decisions with action, before and after model, subagent type, and reason" loading="lazy"><figcaption>Decisions: the last twelve routing decisions across sessions (UTC); <code>•</code> marks those from the current session. <span class="badge demo">Demo data</span></figcaption></figure>
-<p>Keyboard shortcuts are active as soon as the view opens: Tab and Shift+Tab switch tabs, ↓ and ↑ cycle through time windows, <code>d</code> <code>w</code> <code>m</code> <code>a</code> jump straight to one, <code>p</code> toggles user/project level, <code>o</code> opens the report, <code>r</code> refreshes, and Esc closes.</p>
-<figure class="shot"><img src="{{img:mr-help}}" alt="/model-router help: usage view arguments and keybindings" loading="lazy"><figcaption><code>/model-router help</code>.</figcaption></figure>
-<p>If you prefer a wider layout, the report page presents the exact same numbers—computed from the same aggregation—alongside weekly trends and a card for each task class. It is written to <code>&lt;config dir&gt;/model-router/report.html</code> and opened locally.</p>
-<figure class="shot"><img src="{{img:mr-report}}" alt="The model-router report page: weekly FPY and cost per successful task trends, plus router decisions by action" loading="lazy"><figcaption>Top half of the report page. <span class="badge demo">Demo data</span></figcaption></figure>
-<p>To give you a concrete sense of how these views evolve over time, let's trace them from initial launch through the first month of use.</p>
+<p>If a tile is based on fewer than five tasks it shows <code>⚪ weak</code>: too little data to draw conclusions.</p>
+<figure class="shot">
+  <img src="{{img:mr-overview}}" alt="The Overview tab: status, KPI tiles, sparklines, FPY bars by tier and effort, subagents, and routing decisions from the current session" loading="lazy">
+  <figcaption>Overview: KPI tiles, sparklines, and FPY bars for the last 7 days, followed by this session's subagents and decisions. <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<figure class="shot">
+  <img src="{{img:mr-models}}" alt="The Models tab: by tier and effort, closed tasks, tokens, cost, FPY, and cost per successful task" loading="lazy">
+  <figcaption>Models: by tier and effort, closed tasks, tokens, cost, FPY with bar, cost per successful task, and observed model IDs. <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<figure class="shot">
+  <img src="{{img:mr-classes}}" alt="The Classes tab: by task class, grid choice, best measured cell, warnings, and cells" loading="lazy">
+  <figcaption>Classes: for each task class, the grid choice next to the best measured cell, weak-signal indicators, and individual cells (<code>*</code> marks the recommended one). <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<figure class="shot">
+  <img src="{{img:mr-decisions}}" alt="The Decisions tab: the last twelve routing decisions with action, before and after model, subagent type, and reason" loading="lazy">
+  <figcaption>Decisions: the last twelve routing decisions across all sessions (UTC); <code>•</code> marks those from the current session. <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<p><strong>Keyboard shortcuts</strong> active as soon as the view opens: <code>Tab</code> and <code>Shift+Tab</code> switch tabs, <code>↓</code> and <code>↑</code> cycle through the time window, <code>d</code> <code>w</code> <code>m</code> <code>a</code> select it directly, <code>p</code> toggles between user and project scope, <code>o</code> opens the report, <code>r</code> refreshes, <code>Esc</code> closes.</p>
+<figure class="shot">
+  <img src="{{img:mr-help}}" alt="/model-router help: arguments and keys for the usage view" loading="lazy">
+  <figcaption><code>/model-router help</code>.</figcaption>
+</figure>
+<p>If you prefer a broader view, the report page presents the same numbers — computed with the same aggregation — accompanied by weekly trends and a card for each task class. It is saved to <code>&lt;config dir&gt;/model-router/report.html</code> and opened locally.</p>
+<figure class="shot">
+  <img src="{{img:mr-report}}" alt="The model-router report page: weekly trend of FPY and cost per successful task, and router decisions by action" loading="lazy">
+  <figcaption>The top of the report page. <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<p>To see how these views fill up in practice, let's follow the progression from first launch to the first month.</p>
 
 <h2 id="real-session">A real session</h2>
-<p>Here is what to expect after installing model-router: right after enabling it, at the end of day one, after a week, and after a month.</p>
-<h3>Getting started</h3>
-<p>Install the plugin, make sure mods are enabled and you're on Claude Code 2.1.329 or later, then start a session. Nothing else needs turning on: routing and measurement are enabled by default. Check that <code>/model-router</code> is recognized; on a fresh machine with no data yet, Overview will tell you no subagents have run in this session.</p>
-<p>From there, work as usual: every subagent spawn shows its 🔀 line, tagged spawns turn into tasks, and numbers fill in as rework windows close.</p>
-<div class="note"><p><strong>Why some screenshots show demo data.</strong> Real measurement on the author's machine began on November 21, 2026, so a full week or month of live data doesn't exist yet. The day-one screenshots below are genuine. The seven- and thirty-day views are built from a synthetic event log, and each carries the <span class="badge demo">Demo data</span> badge.</p></div>
-<div class="timeline">
-  <div><h3>After one day</h3><p>Expect a handful of graded tasks. Tiles show ⚪ weak because each covers fewer than five tasks, and there is no prior window to compare against yet. The Decisions tab already lists every routing decision along with its reason.</p></div>
-  <div><h3>After seven days</h3><p>Tiles begin showing values once they hit five or more tasks; starting in week two, period-over-period comparisons appear as well. The Classes tab fills out and the first cells cross the three-task threshold needed to produce a recommendation.</p></div>
-  <div><h3>After a month</h3><p>Numbers settle down as cells accumulate more tasks, and the 30-day half-life starts kicking in: month-old work now carries half weight. It's a good time to review recommendations that differ from the grid and consider project exceptions in <code>## Model routing</code>.</p></div>
-</div>
+<h3>Activation</h3>
+<p>Install the plugin, verify that mods are enabled on Claude Code <code>2.1.329</code> or later, and start a session. Routing and measurement start out enabled. Check that <code>/model-router</code> responds: on a machine with no history yet, Overview will report that no subagents have run yet.</p>
+<p>From there, work as usual: every subagent launch prints its <code>🔀</code> line, tagged launches become tasks, and numbers appear as rework windows close.</p>
+<div class="note"><p><strong>Why some screenshots show demo data.</strong> Real measurements on the author's machine started on November 21, 2026, so a full week or month of real data does not exist yet. The day-one screenshots below are genuine; the 7-day and 30-day views are built from a demo event log and carry the <strong>Demo data</strong> badge.</p></div>
 <h3>After one day</h3>
-<figure class="shot"><img src="{{img:mr-day1-overview}}" alt="The Overview tab after day one of real usage: a few graded tasks, weak tiles, routed spawns, and session subagents" loading="lazy"><figcaption>Overview after day one, live data. Any tile backed by fewer than five graded tasks shows ⚪ weak.</figcaption></figure>
-<figure class="shot"><img src="{{img:mr-day1-decisions}}" alt="The Decisions tab after day one of real usage: recent routing decisions with action, before and after model, and reason" loading="lazy"><figcaption>Decisions after day one, live data: what the router did on each spawn and why.</figcaption></figure>
+<p>Expect a handful of evaluated tasks. The tiles show <code>⚪ weak</code> because each covers fewer than five tasks, and there is no previous window yet for comparison. The <strong>Decisions</strong> tab already shows every routing decision along with its reason.</p>
+<figure class="shot">
+  <img src="{{img:mr-day1-overview}}" alt="The Overview tab after the first day of real use: a few evaluated tasks, weak tiles, routed launches, and session subagents" loading="lazy">
+  <figcaption>Overview after day one, real data. A tile based on fewer than five evaluated tasks shows <code>⚪ weak</code>.</figcaption>
+</figure>
+<figure class="shot">
+  <img src="{{img:mr-day1-decisions}}" alt="The Decisions tab after the first day of real use: the latest routing decisions with action, before and after model, and reason" loading="lazy">
+  <figcaption>Decisions after day one, real data: what the router did on each launch and why.</figcaption>
+</figure>
 <h3>After seven days <span class="badge demo">Demo data</span></h3>
-<figure class="shot"><img src="{{img:mr-7d-overview}}" alt="The seven-day Overview tab: KPI tiles with week-over-week deltas, daily sparklines, and FPY bars by tier and effort" loading="lazy"><figcaption>Overview over the last 7 days. Demo data: live measurement on the author's machine started on November 21, 2026.</figcaption></figure>
-<h3>After a month <span class="badge demo">Demo data</span></h3>
-<figure class="shot"><img src="{{img:mr-30d-overview}}" alt="The thirty-day Overview tab: KPI tiles, three-day bucketed sparklines, and FPY bars" loading="lazy"><figcaption>Overview over the last 30 days; sparklines bucket data into three-day blocks. Demo data.</figcaption></figure>
-<figure class="shot"><img src="{{img:mr-30d-classes}}" alt="The thirty-day Classes tab: grid pick, best measured cell, and recommendations differing from the grid for each task class" loading="lazy"><figcaption>Classes over the last 30 days, showing recommendations that diverge from the grid. Demo data.</figcaption></figure>
-<h3>A single project vs. everything you do</h3>
-<p>Press <code>p</code> to toggle between the two observation levels:</p>
+<p>Tiles begin showing full values as soon as they reach five or more tasks; from the second week on, the change compared to the previous week appears as well. The <strong>Classes</strong> tab fills in, and the first cells cross the three-task threshold needed to make a recommendation.</p>
+<figure class="shot">
+  <img src="{{img:mr-7d-overview}}" alt="The Overview tab over seven days: KPI tiles with changes from the previous week, daily sparklines, and FPY bars by tier and effort" loading="lazy">
+  <figcaption>Overview over the last 7 days. Demo data: real measurements on the author's machine start from November 21, 2026.</figcaption>
+</figure>
+<h3>After one month <span class="badge demo">Demo data</span></h3>
+<p>The numbers stabilize as each cell accumulates more tasks, and the 30-day half-life starts to show: work from a month ago now carries half the weight. This is the right time to check recommendations that diverge from the grid and consider adding exceptions in <code>## Model routing</code> for the project.</p>
+<figure class="shot">
+  <img src="{{img:mr-30d-overview}}" alt="The Overview tab over thirty days: KPI tiles, three-day bucket sparklines, and FPY bars" loading="lazy">
+  <figcaption>Overview over the last 30 days; sparklines group data into three-day buckets. Demo data.</figcaption>
+</figure>
+<figure class="shot">
+  <img src="{{img:mr-30d-classes}}" alt="The Classes tab over thirty days: by task class, the grid choice, the best measured cell, and recommendations differing from the grid" loading="lazy">
+  <figcaption>Classes over the last 30 days, with recommendations that differ from the grid. Demo data.</figcaption>
+</figure>
+<h3>A single project or everything you do</h3>
+<p>Press <code>p</code> in the view to toggle between the two scopes:</p>
 <ul>
-  <li><strong>User level</strong>: aggregates your data across every project, gives the broadest picture, and fills up first.</li>
-  <li><strong>Project level</strong>: isolates work done in the current repository, identified by its git remote or, failing that, its root directory. Counts are smaller, but they show whether the grid fits this specific codebase well.</li>
+  <li><strong>User scope</strong>: aggregates your data across all projects, offers the broadest picture, and fills up first.</li>
+  <li><strong>Project scope</strong>: isolates work in the current repository (identified by the git remote or root directory). Samples are smaller, but they tell you whether the grid fits this specific codebase.</li>
 </ul>
-<p>If project level comes up empty, your data was recorded under a different directory or git remote.</p>
-<figure class="shot"><img src="{{img:mr-classes-project}}" alt="The project-level Classes tab for the product repository over thirty days" loading="lazy"><figcaption>Project level: Classes for the <code>product</code> repository over 30 days. <span class="badge demo">Demo data</span></figcaption></figure>
-<figure class="shot"><img src="{{img:mr-classes-30d}}" alt="The user-level Classes tab over thirty days" loading="lazy"><figcaption>User level: Classes over 30 days across all projects. <span class="badge demo">Demo data</span></figcaption></figure>
-<p>Two practical topics remain before you dive in: where your data is stored and the current version's limitations.</p>
+<p>If project scope looks empty, the data was recorded under a different directory or remote.</p>
+<figure class="shot">
+  <img src="{{img:mr-classes-project}}" alt="The Classes tab at project scope, for the product repository, over thirty days" loading="lazy">
+  <figcaption>Project scope: Classes for the <code>product</code> repository over 30 days. <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<figure class="shot">
+  <img src="{{img:mr-classes-30d}}" alt="The Classes tab at user scope over thirty days" loading="lazy">
+  <figcaption>User scope: Classes over 30 days, across all projects. <span class="badge demo">Demo data</span></figcaption>
+</figure>
+<p>Two practical points remain before you begin: where your data lives and what the plugin's current limits are.</p>
 
 <h2 id="privacy">Privacy</h2>
-<p>The plugin never sends anything it measures anywhere. All files stay local inside <code>model-router/</code> under your active configuration directory (<code>CLAUDE_CONFIG_DIR</code>, or <code>~/.claude</code> otherwise):</p>
+<p>The plugin sends nothing it measures off your machine. All files stay local inside <code>model-router/</code>, in the active config directory (<code>CLAUDE_CONFIG_DIR</code>, otherwise <code>~/.claude</code>):</p>
 <ul>
-  <li>the event log, which retains the first 2,000 characters of prompts you type;</li>
-  <li>the options used during compaction;</li>
-  <li>user- and project-level aggregates;</li>
-  <li>the report page.</li>
+  <li>the event log (<code>events.jsonl</code>), which keeps the first 2,000 characters of the prompts you type;</li>
+  <li>the options used by compaction;</li>
+  <li>user-level and project-level aggregates;</li>
+  <li>the HTML report page.</li>
 </ul>
-<p>Nothing is ever written inside your repositories. The only outbound call—the judge request on each routed spawn—goes to your model provider just like any other request in your session. To turn logging off, set <code>measure: false</code>; to wipe collected data, delete <code>&lt;config dir&gt;/model-router/</code>.</p>
+<p>Nothing is written inside repositories. The only external call — the judge call for each routed launch — goes to the model provider just like any other request in your session. To turn off recording, set <code>measure: false</code>; to clear history, delete <code>&lt;config dir&gt;/model-router/</code>.</p>
 
-<h2 id="limits">Limitations</h2>
-<p>Keep four limitations of the current version in mind:</p>
+<h2 id="limits">Limits</h2>
+<p>Four limits of the current version to keep in mind:</p>
 <ul>
-  <li>Only spawns made through the <code>Agent</code> tool are routed; plugin-internal agents and workflow agents are measured, but not routed.</li>
-  <li>The router never selects <code>fable</code> and, through version 0.3, does not enforce the grid floor for <code>review-debug</code> and <code>design-open</code>.</li>
-  <li>Costs are engine estimates. Edits made outside the session's tools are not detected.</li>
-  <li>Through 0.3, data is only measured, never used to make decisions. Adaptive selection driven by quality data is planned for 0.4.</li>
+  <li>Only launches made through the <code>Agent</code> tool are routed; internal plugin agents and workflow agents are measured, but not routed.</li>
+  <li>The router never picks <code>fable</code> and, up to version <code>0.3</code>, does not enforce the grid's minimum for <code>review-debug</code> and <code>design-open</code>.</li>
+  <li>Costs are engine estimates; edits made outside the session's tools are not detected.</li>
+  <li>Up to version <code>0.3</code>, data is only measured, not used to decide. Adaptive selection based on quality data is planned for <code>0.4</code>.</li>
 </ul>

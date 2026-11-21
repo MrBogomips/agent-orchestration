@@ -1,226 +1,227 @@
 <h1>Architecture</h1>
-<p class="lede">Here is how the two plugins are built as shipped — session-hub {{version:session-hub}} and model-router {{version:model-router}}: what components make them up, how they talk to each other, what files they store on disk, and how they behave when something goes wrong.</p>
+<p class="lede">This page shows how the two plugins are built in the released version (session-hub {{version:session-hub}} and model-router {{version:model-router}}): what components they consist of, how they interact, what files they store on disk, and how they behave when something goes wrong.</p>
 
 <h2 id="overview">Two plugins, two problems</h2>
-<p>When you work across multiple repositories in Claude Code, you face two distinct needs: coordinating isolated sessions without letting them step on each other's toes, and picking the right model and effort for each delegated task without guesswork. To keep responsibilities cleanly separated, the system is split into two standalone plugins.</p>
-<figure class="diagram">{{diagram:d1-hub}}<figcaption>The master at the hub root spawns one child session per repository; each child is confined to its own write root, while model-router picks the model and effort on every launch.</figcaption></figure>
+<p>When you work across multiple repositories in Claude Code, you face two distinct needs: coordinating multiple isolated sessions so they do not step on each other, and choosing the right model and effort for each delegated task without guessing. To keep responsibilities clearly separated, the system is split into two independent plugins.</p>
+<figure class="diagram">{{diagram:d1-hub}}<figcaption>The master in the hub root starts one child session per repository; each is bound to its own write root, while <code>model-router</code> chooses the model and effort on each spawn.</figcaption></figure>
 <table>
   <thead><tr><th>Plugin</th><th>In one line</th></tr></thead>
   <tbody>
-    <tr><td><code>session-hub</code></td><td>A master session in a repository hub spawns one child session per repository, assigns each a scope, routes requests, and maintains a children record.</td></tr>
-    <tr><td><code>model-router</code></td><td>A single grid picks the model and effort for every subagent, child session, or workflow agent; a mod routes model-less subagent launches and locally measures how well each choice performed.</td></tr>
+    <tr><td><code>session-hub</code></td><td>A master session in the hub root starts one child session per repository, assigns each a scope, dispatches requests, and keeps the children record up to date.</td></tr>
+    <tr><td><code>model-router</code></td><td>A single grid decides the model and effort for every subagent, child session, or workflow agent; a mod routes subagent spawns without a model and measures locally how well each choice performed.</td></tr>
   </tbody>
 </table>
-<p>Because they solve different problems, the two plugins are designed to stay independent while working together seamlessly when you install both.</p>
+<p>Because they solve different problems, the two plugins are designed to stay independent while working together smoothly when you install both.</p>
 
 <h2 id="independence">Independence and shared contract</h2>
-<p>You can use either plugin on its own without installing the other: session-hub never requires model-router, and model-router knows nothing about hubs. At the few integration points, one skill references the other by its full name (<code>&lt;plugin&gt;:&lt;skill&gt;</code>) and checks at runtime whether it is present.</p>
-<p>The grid lives in one place — <code>model-router:choose-model</code> — and session-hub keeps no copy of it. When <code>session-hub:spawn</code> needs to determine the model and effort for a child session, it applies the first rule that yields a value:</p>
+<p>You can use either plugin on its own without installing the other: <code>session-hub</code> never requires <code>model-router</code>, and <code>model-router</code> knows nothing about the existence of a hub. At the few contact points, one skill calls the other by its full name (<code>&lt;plugin&gt;:&lt;skill&gt;</code>) and checks at runtime whether it is installed.</p>
+<p>The grid lives in one place — <code>model-router:choose-model</code> — and <code>session-hub</code> keeps no copy of it. When <code>session-hub:spawn</code> needs to determine the model and effort for a child session, it applies the first rule in priority order that returns a value:</p>
 <ol>
-  <li>What you asked for in the conversation.</li>
+  <li>What you explicitly specified in the conversation.</li>
   <li>The <em>Model</em> and <em>Effort</em> keys configured in the hub, per repository or per type of work.</li>
-  <li><code>model-router:choose-model</code>, if installed, applied to the child's handoff.</li>
-  <li>The master's own <code>--model</code> and <code>--effort</code>; the summary notes that the child inherits them.</li>
+  <li><code>model-router:choose-model</code>, if installed, applied to the child session's handoff.</li>
+  <li>The master's own <code>--model</code> and <code>--effort</code>; the report explicitly notes that the child inherits them.</li>
 </ol>
-<p>To keep changes in one plugin from breaking the other, everything they may assume about each other is locked down in a shared contract in the repository's design docs. Any change goes into the contract first in its own pull request; only then do the plugins adapt to it. The contract defines:</p>
+<p>To prevent one plugin from breaking when the other changes, everything they may assume about each other is fixed in a shared contract in the repository's design documents. Every change goes through the contract first in a dedicated pull request; only after that do the plugins adapt. The contract defines:</p>
 <ul>
-  <li>the precedence order above;</li>
+  <li>the precedence order shown above;</li>
   <li>the <code>--model</code> and <code>--effort</code> launch flags;</li>
-  <li>the fixed <code>SESSION_HUB_*</code> environment variable names;</li>
-  <li>the naming rules and paths where each plugin stores its state.</li>
+  <li>the fixed names of the <code>SESSION_HUB_*</code> environment variables;</li>
+  <li>the naming rules and the paths where each plugin stores its state.</li>
 </ul>
-<p>Every externally visible surface carries the name of the plugin that owns it, so you can always tell where a message or file comes from: the <code>session-hub-scope-guard</code> hook, the <code>session-hub</code> and <code>model-router</code> mods and commands, the <code>[session-hub]</code> prefix on block messages, the 🔀 indicator in router output, the <code>SESSION_HUB_*</code> variables, and the <code>session-hub/</code> and <code>model-router/</code> state directories.</p>
-<p>With the boundary between the two plugins clear, let's look at the pieces inside each one.</p>
+<p>Everything visible outside a plugin carries the name of the plugin that owns it, so you always know where a message or file comes from: the <code>session-hub-scope-guard</code> hook, the <code>session-hub</code> and <code>model-router</code> mods and commands, the <code>[session-hub]</code> prefix in block messages, the <code>🔀</code> indicator in router output, the <code>SESSION_HUB_*</code> variables, and the <code>session-hub/</code> and <code>model-router/</code> state directories.</p>
+<p>With the boundary between the two plugins clear, let's look at the pieces each one is made of.</p>
 
 <h2 id="components">Components</h2>
-<p>Each plugin combines plain-text skills, zero-dependency Node scripts, and — when enabled — a mod that extends Claude Code's UI and hooks.</p>
-<h3>session-hub</h3>
+<p>Each plugin combines text skills, zero-dependency Node scripts, and — when mods are enabled — a mod that extends Claude Code's UI and hooks.</p>
+<h3><code>session-hub</code></h3>
 <table>
   <thead><tr><th>Component</th><th>Type</th><th>Role</th></tr></thead>
   <tbody>
-    <tr><td><code>session-hub:dispatch</code></td><td>skill</td><td>Master side: for each repository, decides whether the master reads, a subagent reads, or a child session does the work; handles messages and routes out-of-scope requests.</td></tr>
-    <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Launches one child session per repository in the detected environment, with scope, model, effort, role variables, and handoff, and adds it to the children record.</td></tr>
-    <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Writes the hub's <code>## Child sessions</code> section only after your explicit confirmation.</td></tr>
+    <tr><td><code>session-hub:dispatch</code></td><td>skill</td><td>Master side: for each repository, decides whether the master reads, a subagent reads, or a child session is needed; handles incoming messages and routes out-of-scope requests.</td></tr>
+    <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Starts one child session per repository in the detected environment, with scope, model, effort, role variables, and handoff, and adds it to the children record.</td></tr>
+    <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Creates or updates the hub's <code>## Child sessions</code> section only after your explicit confirmation.</td></tr>
     <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td><code>PreToolUse</code> on <code>Edit</code>, <code>Write</code>, and <code>NotebookEdit</code>, defined in <code>hooks/hooks.json</code> and implemented in <code>hooks/scope-guard.mjs</code>.</td></tr>
-    <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>Sole writer of the children record: reads the file, merges changes, and rewrites it atomically under a lock.</td></tr>
-    <tr><td><code>session-hub</code></td><td>mod</td><td>Loaded from the same <code>hooks.json</code>: adds the send guard, shell check, origin tagging, scope line, children panel, and <code>/session-hub</code> command.</td></tr>
+    <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>The only component that writes the children record: reads the file, merges changes, and rewrites it atomically under a lock.</td></tr>
+    <tr><td><code>session-hub</code></td><td>mod</td><td>Loaded from the same <code>hooks.json</code>: adds the send guard, shell check, origin tagging, scope line, child sessions panel, and the <code>/session-hub</code> command.</td></tr>
   </tbody>
 </table>
-<h3>model-router</h3>
+<h3><code>model-router</code></h3>
 <table>
   <thead><tr><th>Component</th><th>Type</th><th>Role</th></tr></thead>
   <tbody>
-    <tr><td><code>model-router:choose-model</code></td><td>skill</td><td>Defines the grid and guides the agent to pass an explicit model and effort on every launch.</td></tr>
-    <tr><td><code>model-router:setup</code></td><td>skill</td><td>Writes a project's <code>## Model routing</code> section only after your explicit confirmation.</td></tr>
+    <tr><td><code>model-router:choose-model</code></td><td>skill</td><td>Defines the grid and guides the agent to pass explicit model and effort on every spawn.</td></tr>
+    <tr><td><code>model-router:setup</code></td><td>skill</td><td>Creates or updates a project's <code>## Model routing</code> section only after your explicit confirmation.</td></tr>
     <tr><td><code>model-router:report</code></td><td>skill</td><td>Runs <code>scripts/report.mjs</code> without computing anything itself.</td></tr>
-    <tr><td><code>model-router</code></td><td>mod</td><td><code>hooks/model-router.tsx</code>: routes model-less launches, renders the 🔀 line under <code>Agent</code> lines, logs quality-loop events, and exposes <code>/model-router</code>.</td></tr>
-    <tr><td><code>lib/*.mjs</code></td><td>modules</td><td>ES modules shared between the mod and the scripts: judge prompt and response, routing table, outcomes, aggregates, usage-view rows, and report page.</td></tr>
-    <tr><td><code>scripts/compact.mjs</code>, <code>report.mjs</code>, <code>usage.mjs</code></td><td>scripts</td><td>Zero-dependency Node scripts for compaction, the report page, and usage-view data.</td></tr>
-    <tr><td><code>grid.json</code></td><td>data</td><td>The machine-readable grid with the usual pick for each task class; the judge prompt is generated from this file.</td></tr>
+    <tr><td><code>model-router</code></td><td>mod</td><td><code>hooks/model-router.tsx</code>: routes spawns without a model, shows the <code>🔀</code> line under <code>Agent</code> calls, records quality-loop events, and exposes <code>/model-router</code>.</td></tr>
+    <tr><td><code>lib/*.mjs</code></td><td>modules</td><td>ES modules shared between the mod and the scripts: judge prompt and response, routing table, outcomes, aggregates, usage view rows, and report page.</td></tr>
+    <tr><td><code>scripts/compact.mjs</code>, <code>report.mjs</code>, <code>usage.mjs</code></td><td>scripts</td><td>Zero-dependency Node scripts for compaction, the report page, and usage view data.</td></tr>
+    <tr><td><code>grid.json</code></td><td>data</td><td>The grid in machine-readable format, with the usual choice for each task class; the judge prompt is generated from here.</td></tr>
   </tbody>
 </table>
-<p>In both plugins, skills and the classic hook work even with mods disabled. Mod features require mods to be enabled and Claude Code 2.1.329 or later.</p>
-<p>To enforce checks only where needed — and leave your normal sessions outside the hub untouched — the plugins first have to know for sure what role the current session holds.</p>
+<p>In both plugins, the skills and the classic hook work even with mods disabled. The features introduced by the mods require mods to be enabled and Claude Code <code>2.1.329</code> or later.</p>
+<p>To apply checks only where they are needed — leaving your normal sessions outside the hub untouched — the plugins first need to know with certainty what role the current session has.</p>
 
 <h2 id="roles">Roles</h2>
-<p>A security check cannot guess a session's role from conversation text. Every session is therefore explicitly classified as <strong>master</strong>, <strong>child session</strong>, or <strong>neither</strong>.</p>
+<p>A security check cannot guess a session's role by reading the conversation. Every session is therefore explicitly classified as a <strong>child session</strong>, a <strong>master</strong>, or <strong>neither</strong>.</p>
 <table>
-  <thead><tr><th>Role</th><th>How a session gets it</th><th>What the plugins do</th></tr></thead>
+  <thead><tr><th>Role</th><th>How a session takes it</th><th>What the plugins do</th></tr></thead>
   <tbody>
-    <tr><td>Child</td><td>The launch command sets <code>SESSION_HUB_ROLE=child</code>; <code>spawn</code> handles this.</td><td>The scope guard checks every file edit; with mods enabled, the send guard, shell check, origin tagging, and scope line are added.</td></tr>
-    <tr><td>Master</td><td>No variable needed: any session in the hub that runs <code>dispatch</code> or <code>spawn</code>. With mods enabled, also any session that invokes the registry script with a literal absolute path or whose directory already has child sessions in the record.</td><td>Skills spawn child sessions and update the record; with mods enabled, the children panel and scope line are added.</td></tr>
-    <tr><td>Neither</td><td>Everything else.</td><td>The scope guard exits immediately without reading input; the mod neither blocks nor tags anything.</td></tr>
+    <tr><td>Child</td><td>The launch command sets <code>SESSION_HUB_ROLE=child</code> (handled by <code>spawn</code>).</td><td>The scope guard checks every file edit; with mods enabled, the send guard, shell check, origin tagging, and scope line are also added.</td></tr>
+    <tr><td>Master</td><td>No variable is needed: it is a session in the hub running <code>dispatch</code> or <code>spawn</code>. With mods enabled, this also includes a session that invokes the registry script with a literal absolute path or whose directory already has child sessions in the record.</td><td>The skills start child sessions and update the record; with mods enabled, the child sessions panel and scope line are also added.</td></tr>
+    <tr><td>Neither</td><td>Any other case.</td><td>The scope guard exits immediately without reading input; the mod neither blocks nor tags anything.</td></tr>
   </tbody>
 </table>
-<p>Environment variables are parsed conservatively so a typo can never disable the guards:</p>
+<p>Environment variables are read conservatively so a typo can never disable the checks:</p>
 <ul>
-  <li><code>SESSION_HUB_ROLE</code> is read case-insensitively with leading and trailing whitespace trimmed.</li>
-  <li>Any value other than an empty string, <code>none</code>, <code>master</code>, or <code>child</code> causes every guard to block.</li>
-  <li>The other variables propagated to a child session are <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code>, and <code>SESSION_HUB_GUARDS</code>.</li>
+  <li><code>SESSION_HUB_ROLE</code> is read case-insensitively, ignoring leading or trailing whitespace.</li>
+  <li>Any value other than an empty string, <code>none</code>, <code>master</code>, or <code>child</code> triggers blocking on all guards.</li>
+  <li>The other variables propagated to the child session are <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code>, and <code>SESSION_HUB_GUARDS</code>.</li>
 </ul>
-<p>With components and roles in place, let's trace what happens step by step from the moment you hand work to the master.</p>
+<p>With components and roles in place, let's trace step by step what happens from the moment you give the master a task.</p>
 
 <h2 id="spawn-flow">The spawn flow</h2>
-<p>When you ask the master to work on one or more repositories, launching a child session follows a strict eight-step sequence:</p>
+<p>When you ask the master to work on one or more repositories, starting a child session goes through eight ordered steps:</p>
 <ol>
-  <li>You ask the master for work touching repositories; <code>dispatch</code> determines that a child session is needed.</li>
-  <li>The master reconciles the children record against live session names: any session no longer live is marked <code>lost</code>.</li>
-  <li>It verifies that no active duplicate exists, then picks the environment, name, worktree, write root, and scope.</li>
-  <li>It resolves model and effort from your request or the hub keys; if neither specifies them, it consults <code>model-router:choose-model</code> (when installed); failing that as well, it inherits the master's model and effort.</li>
+  <li>You give the master a task that touches repositories; <code>dispatch</code> decides that a child session is needed.</li>
+  <li>The master reconciles the children record against the names of currently active sessions: any that are no longer running are marked as <code>lost</code>.</li>
+  <li>It checks that no active duplicate exists, then determines the environment, name, optional worktree, write root, and scope.</li>
+  <li>It derives the model and effort from what you asked for or from the hub keys; if missing, it consults <code>model-router:choose-model</code> (if installed); if that is also missing, it inherits the master's model and effort.</li>
   <li>It writes the handoff outside the hub (to a file, or inline for the desktop app).</li>
-  <li>It launches the child session with the propagated flags, the child-specific flags, and the <code>SESSION_HUB_*</code> variables; Claude Code starts in the repository and reads the handoff.</li>
-  <li>It records the child session as <code>running</code> and shows you a summary for each child: repository, write root, model and effort, environment, and any warnings.</li>
-  <li>From then on, every <code>Edit</code>, <code>Write</code>, and <code>NotebookEdit</code> call in the child passes through the scope guard.</li>
+  <li>It launches the child session with the propagated flags, child-specific flags, and <code>SESSION_HUB_*</code> variables; Claude Code starts in the repository and reads the handoff.</li>
+  <li>It records the child session as <code>running</code> and shows you a summary for each one: repository, write root, model and effort, environment, and any warnings.</li>
+  <li>From that point on, every <code>Edit</code>, <code>Write</code>, and <code>NotebookEdit</code> call from the child session goes through the scope guard.</li>
 </ol>
 <p>The children record never blocks a launch: if <code>registry.mjs</code> returns an error, <code>spawn</code> warns you and starts the child session anyway.</p>
-<p>Conversely, when a child session needs something outside its scope, the request travels back the other way, always going through the master:</p>
-<figure class="diagram">{{diagram:d5-out-of-scope}}<figcaption>Routing an out-of-scope request: if a decision is needed, it goes to you; master-only work or an allowed read is handled by the master; otherwise a follow-up goes to an active child that owns the repository, or a new child is spawned. The requesting child always gets confirmation of what will happen.</figcaption></figure>
-<p>The final step of the flow hands boundary enforcement over to an automated technical check: here is how the scope guard works in detail.</p>
+<p>When a child session needs something outside its own scope, the request travels in the opposite direction, always going through the master.</p>
+<figure class="diagram">{{diagram:d5-out-of-scope}}<figcaption>Routing an out-of-scope request: if a decision is needed, you are asked; a master-only task or an allowed read is handled by the master; otherwise a follow-up is sent to an active child session that owns the repository, or a new one is started. The requesting child session always receives confirmation of what will happen.</figcaption></figure>
+<p>The final step of the flow hands boundary enforcement over to an automatic technical check: here is how the scope guard works in detail.</p>
 
 <h2 id="scope-guard">The scope guard</h2>
-<p>Instructions in the handoff tell a child session where it should work, but they do not physically prevent an out-of-bounds write. To turn scope into a hard boundary, the hook runs <code>node "${CLAUDE_PLUGIN_ROOT}/hooks/scope-guard.mjs"</code> before every <code>Edit</code>, <code>Write</code>, and <code>NotebookEdit</code> call, with a 10-second timeout. It runs in every session, but acts only in child sessions: it exits with code 0 to allow the call, or code 2 to block it and explain the reason to the model.</p>
-<figure class="diagram">{{diagram:d4-scope-guard}}<figcaption>Scope guard decision: outside a child session it allows immediately; inside a child, any failed check blocks the call, and only a real path under the real write root is allowed.</figcaption></figure>
+<p>The instructions in the handoff tell the child session where it should work, but they do not physically prevent an out-of-bounds write. To turn scope into a real boundary, the hook runs <code>node "${CLAUDE_PLUGIN_ROOT}/hooks/scope-guard.mjs"</code> before every call to <code>Edit</code>, <code>Write</code>, and <code>NotebookEdit</code>, with a 10-second timeout. It runs in all sessions, but intervenes only in child sessions: it exits with code <code>0</code> to allow the call, or with code <code>2</code> to block it and explain why to the model.</p>
+<figure class="diagram">{{diagram:d4-scope-guard}}<figcaption>Scope guard decision: outside a child session it allows immediately; inside one, any failed check blocks the call and only a real path under the real write root is allowed.</figcaption></figure>
 <ul>
-  <li><strong>Real paths.</strong> Both the write root and the target are resolved component by component, following symbolic links: a symlink inside the root that points outside is blocked. A path counts as inside only if it matches the root or starts with the root followed by a path separator.</li>
+  <li><strong>Real paths.</strong> Both the write root and the target are resolved component by component following symlinks: a symlink inside the root that points outside is blocked. A path is considered inside only if it equals the root or starts with the root followed by a separator.</li>
   <li><strong>Absolute paths only.</strong> A relative target or one starting with <code>~</code> is blocked; setting <code>/</code> or the home directory as the write root is treated as a configuration error.</li>
-  <li><strong>Fails closed.</strong> An unknown role, a missing or invalid root, unreadable input, a call with no path, an unresolvable path, or an internal error always blocks. If <code>node</code> itself fails to start, the shell wrapper in <code>hooks.json</code> checks the role and blocks unless the session is not a child session or guards are disabled.</li>
-  <li><strong>Early self-timeout.</strong> Claude Code treats a timed-out hook as a non-blocking error; to make sure nothing slips through, the scope guard blocks on its own after 7 seconds.</li>
+  <li><strong>Fails closed.</strong> An unknown role, a missing or invalid root, unreadable input, a call without a path, an unresolvable path, or an internal error always causes a block. If <code>node</code> itself fails to start, the shell wrapper in <code>hooks.json</code> checks the role and blocks unless the session is not a child session or guards are disabled.</li>
+  <li><strong>Pre-empting the timeout.</strong> Claude Code treats a hook that exceeds its timeout as a non-blocking error; so that nothing slips through, the scope guard blocks on its own after 7 seconds.</li>
 </ul>
-<p>The scope guard protects file-editing tools even without mods. When mods are enabled, session-hub extends coverage to cross-session messages, the shell, and the UI.</p>
+<p>The scope guard protects file-editing tools even without mods. When mods are enabled, <code>session-hub</code> extends coverage to inter-session messages, the shell, and the UI.</p>
 
-<h2 id="sh-mod">The session-hub mod</h2>
-<p>A child session could still try to write through the shell or contact a sibling session directly, while you in the master need to keep an eye on the sessions you launched. The session-hub mod handles all of this, loaded from the <code>modules</code> entry of the same <code>hooks/hooks.json</code> with its logic in plain <code>.mjs</code> modules.</p>
-<p>The mod writes no files to disk: it reads the children record, keeps everything else in session memory, and rebuilds it when a session is resumed.</p>
+<h2 id="sh-mod">The <code>session-hub</code> mod</h2>
+<p>A child session can still try to write through the shell or contact a sibling session directly, while in the master you need to keep an eye on the status of the sessions you started. The <code>session-hub</code> mod handles all of this, loaded from the <code>modules</code> entry of the same <code>hooks/hooks.json</code> with its logic in plain <code>.mjs</code> modules.</p>
+<p>The mod writes no files to disk: it reads the children record, keeps the rest in session memory, and rebuilds it when the session is resumed.</p>
 <table>
   <thead><tr><th>Feature</th><th>Where</th><th>Event</th><th>Behavior</th></tr></thead>
   <tbody>
-    <tr><td>Send guard</td><td>child session</td><td><code>session.send</code></td><td>Allows sending only to the master and the session's own subagents; rejects any other recipient and names the master in the reason.</td></tr>
-    <tr><td>Shell check</td><td>child session</td><td><code>tool.call</code> on <code>Bash</code></td><td>Best-effort: denies redirections and file-writing commands targeting paths outside the write root.</td></tr>
-    <tr><td>Origin tagging</td><td>child session</td><td><code>session.receive</code>, <code>prompt.submit</code></td><td>Adds a line to every message received from another session: informational only, not authorization.</td></tr>
-    <tr><td>Scope line</td><td>child session, master</td><td><code>prompt.compose</code>, <code>prompt.submit</code></td><td>Injects role and scope (or the record) into the system prompt and as context after startup, compaction, and <code>/clear</code>.</td></tr>
-    <tr><td>Children panel</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Shows one row per child session with live status from the session list; refreshes on <code>/session-hub</code> and every 30 seconds.</td></tr>
+    <tr><td>Send guard</td><td>child session</td><td><code>session.send</code></td><td>Allows sending only to the master and the session's own subagents; rejects any other recipient, naming the master in the reason.</td></tr>
+    <tr><td>Shell check</td><td>child session</td><td><code>tool.call</code> on <code>Bash</code></td><td>Best-effort: denies redirections and file-writing commands whose target is outside the write root.</td></tr>
+    <tr><td>Origin tagging</td><td>child session</td><td><code>session.receive</code>, <code>prompt.submit</code></td><td>Adds a line to every message received from another session to remind the model that it is informational only, never authorization.</td></tr>
+    <tr><td>Scope line</td><td>child session, master</td><td><code>prompt.compose</code>, <code>prompt.submit</code></td><td>Inserts role and scope (or the record) into the system prompt and as context after startup, compaction, and <code>/clear</code>.</td></tr>
+    <tr><td>Child sessions panel</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Shows one row per child session with live status from the session list; refreshes with <code>/session-hub</code> and every 30 seconds.</td></tr>
   </tbody>
 </table>
-<p>The send guard and shell check fail closed; origin tagging, the scope line, and the panel are informational only and never block. If an organization-managed mod runs first and skips an event, the mod falls back to sending the scope line as context.</p>
-<p>Both session-hub's skills and its mod read and update a single shared store: the children record.</p>
+<p>The send guard and the shell check fail closed; origin tagging, the scope line, and the panel are informational only and never block. If an organization-managed mod runs first and skips an event, the mod falls back to sending the scope line as context.</p>
+<p>Both the skills and the <code>session-hub</code> mod read and update a single shared store: the children record.</p>
 
 <h2 id="record">The children record</h2>
-<p>To track child sessions without cluttering the hub or repositories — and avoid corruption when multiple commands access the same file — session-hub stores the record at <code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code>.</p>
-<p>The hub ID is the first 16 hex digits of the SHA-256 hash of the hub's real path normalized to Unicode NFC, so the same hub reached via a symlink gets the same ID. The directory is created with mode <code>0700</code>, and the record file and its lock with mode <code>0600</code>.</p>
+<p>To track child sessions without cluttering the hub or the repositories — and to avoid corruption when multiple commands access the same file — <code>session-hub</code> stores the record at:</p>
+<pre><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></pre>
+<p>The <code>&lt;hub id&gt;</code> identifier is the first 16 hexadecimal digits of the SHA-256 of the hub's real path normalized to Unicode NFC, so the same hub reached through a symlink always gets the same ID. The directory is created with <code>0700</code> permissions, and the record file and its lock with <code>0600</code>.</p>
 <ul>
-  <li><strong>Commands:</strong> <code>path</code>, <code>read</code>, <code>upsert</code>, <code>status</code>, <code>request</code>, and <code>reconcile</code>, each with <code>--hub</code> or <code>--file</code>.</li>
-  <li><strong>Locking:</strong> an exclusive <code>&lt;record&gt;.lock</code> file; writers wait up to 5 seconds, and a lock older than 30 seconds is treated as stale.</li>
+  <li><strong>Commands:</strong> <code>path</code>, <code>read</code>, <code>upsert</code>, <code>status</code>, <code>request</code>, and <code>reconcile</code>, each taking <code>--hub</code> or <code>--file</code>.</li>
+  <li><strong>Lock:</strong> an exclusive <code>&lt;record&gt;.lock</code> file; writers wait up to 5 seconds, and a lock older than 30 seconds is treated as stale.</li>
   <li><strong>Atomic writes:</strong> write to a temporary file in the same directory, flush to disk, and rename over the record.</li>
-  <li><strong>Never overwritten if unreadable:</strong> a file that does not contain valid JSON, or belongs to a newer format version, is reported and left untouched so you can inspect it.</li>
-  <li><strong>Statuses:</strong> <code>running</code> → <code>waiting-user</code>, <code>done</code>, <code>abandoned</code>, or <code>lost</code>; <code>reconcile</code> marks an active entry missing from the session list as <code>lost</code> and rejects an empty list.</li>
+  <li><strong>Never overwritten when unreadable:</strong> a file that does not contain valid JSON, or that belongs to a newer format version, is reported and left untouched so you can inspect it.</li>
+  <li><strong>States:</strong> <code>running</code> → <code>waiting-user</code>, <code>done</code>, <code>abandoned</code>, or <code>lost</code>; <code>reconcile</code> marks an active entry missing from the session list as <code>lost</code> and rejects an empty list.</li>
 </ul>
-<p>The record wraps up session-hub's side of the architecture. Now let's turn to model-router, starting with the file every decision stems from: the grid.</p>
+<p>The record closes out the <code>session-hub</code> side. Let's move on to <code>model-router</code>, starting from the file where all of its decisions originate: the grid.</p>
 
-<h2 id="grid">The grid and grid.json</h2>
-<p>Model selection rules are needed in three different places: the prose skills, the judge prompt, and the quality loop. Keeping them in sync by hand would be brittle, so <code>grid.json</code> serves as the machine-readable source for the whole plugin. It holds:</p>
+<h2 id="grid">The grid and <code>grid.json</code></h2>
+<p>The model-selection rules are needed in three different places: the prose skills, the judge prompt, and the quality loop. Keeping them in sync by hand would be fragile, so <code>grid.json</code> serves as the machine-readable source for the entire plugin. It contains:</p>
 <ul>
   <li>the tiers in check order and price order;</li>
   <li>the effort values and their questions;</li>
-  <li>the six task classes with each class's usual pick;</li>
-  <li>the tag format and the judge mapping: <code>fast</code> = <code>haiku</code>, <code>balanced</code> = <code>sonnet</code>, <code>deep</code> = <code>opus</code>.</li>
+  <li>the six task classes with the usual choice for each;</li>
+  <li>the tag format and the judge mapping (<code>fast</code> = <code>haiku</code>, <code>balanced</code> = <code>sonnet</code>, <code>deep</code> = <code>opus</code>).</li>
 </ul>
 <figure class="diagram">{{diagram:d7-grid}}<figcaption>The grid: four tiers, four effort questions, six task classes.</figcaption></figure>
-<p><code>choose-model</code> exposes the same grid in prose for the agent, while <code>setup</code> lists the values a project can configure. To keep the three files from drifting apart, <code>grid.test.mjs</code> fails as soon as they fall out of sync, so any change to the grid updates <code>grid.json</code> and both skills together.</p>
-<p>At runtime, the router mod reads tiers, effort questions, and task classes from <code>grid.json</code> to build the judge prompt, while the quality loop uses each task class's usual pick as its prior.</p>
-<p>Now let's see how the router mod applies this grid when a subagent starts and how it collects quality data.</p>
+<p><code>choose-model</code> presents the same grid in prose for the agent, while <code>setup</code> lists the values a project can configure. To prevent the three files from drifting apart, <code>grid.test.mjs</code> fails as soon as they fall out of sync: every change to the grid therefore updates <code>grid.json</code> and both skills together.</p>
+<p>At runtime, the router mod reads tiers, effort questions, and task classes from <code>grid.json</code> to build the judge prompt, while the quality loop uses the usual choice for each task class as its prior.</p>
+<p>Now let's look at how the router mod applies this grid when a subagent starts and how it collects quality data.</p>
 
 <h2 id="router-mod">The router mod</h2>
-<p>The model-router mod coordinates three jobs: routing launches without an explicit model, calling the judge to classify the work, and logging the events that feed the quality loop.</p>
+<p>The <code>model-router</code> mod performs three coordinated jobs: it routes spawns that have no explicit model, calls the judge to classify the work, and records the events that feed the quality loop.</p>
 <h3>Routing</h3>
-<p>When a subagent starts via the <code>Agent</code> tool, the mod cannot simply rewrite the input in a single hook: in auto permission mode, Claude Code rejects a call whose input was modified by a hook after review. Instead, the work is split into three steps:</p>
+<p>When a subagent starts via the <code>Agent</code> tool, the mod cannot simply rewrite the input in a single hook: in automatic permission mode, Claude Code rejects a call whose input was modified by a hook after review. For that reason, the work is split into three steps:</p>
 <ol>
   <li>A <code>tool.call</code> hook evaluates the case, calls the judge if needed, and forwards the call unchanged.</li>
-  <li>The subsequent <code>agent.spawn</code> hook sets the model relative to the caller's model and logs the decision.</li>
+  <li>The subsequent <code>agent.spawn</code> hook sets the model relative to the caller's model and records the decision.</li>
   <li>A <code>turn.step</code> hook applies the chosen effort to each model request made by the subagent.</li>
 </ol>
-<figure class="diagram">{{diagram:d8-routing}}<figcaption>Routing cases: explicit model, fork, resume, fixed-model or plugin agent, and disabled routing pass through unchanged; a model-less launch goes through the judge and thresholds are applied.</figcaption></figure>
+<figure class="diagram">{{diagram:d8-routing}}<figcaption>Routing cases: explicit model, fork, resume, fixed-model or plugin agent, and disabled routing are left unchanged; a spawn without a model goes through the judge and the thresholds are applied.</figcaption></figure>
 <h3>The judge</h3>
-<p>Classifying a task on the fly has to cost little, finish within seconds, and resist manipulation by the task text. The judge meets those constraints as follows:</p>
+<p>Classifying a task on the fly must cost little, finish in a few seconds, and resist manipulation from the task text. The judge meets these constraints in four ways:</p>
 <ul>
-  <li><strong>Tight budget:</strong> a single call on the fast tier at low effort, capped at 300 tokens and within 8 seconds.</li>
-  <li><strong>Safe prompt:</strong> generated from <code>grid.json</code>; the task text is truncated to 4,000 characters, wrapped as a data block, and has closing tags escaped.</li>
+  <li><strong>Tight budget:</strong> a single call on the <code>fast</code> tier, with <code>low</code> effort, capped at 300 tokens and within 8 seconds.</li>
+  <li><strong>Safe prompt:</strong> generated from <code>grid.json</code>; the task text is truncated to 4,000 characters, wrapped as a data block, with closing tags escaped.</li>
   <li><strong>Structured response:</strong> a JSON object with tier, confidence, effort, effort confidence, risk, and task class.</li>
-  <li><strong>Conservative thresholds:</strong> stepping down a tier requires 0.6 confidence, while stepping up takes only 0.3; risk above 0.7, or a <code>!</code> tag, forces the deep tier and at least <code>high</code> effort.</li>
+  <li><strong>Conservative thresholds:</strong> stepping down a tier requires confidence ≥ 0.6, while stepping up only needs ≥ 0.3; risk above 0.7, or a <code>!</code> tag, forces the <code>deep</code> tier and at least <code>high</code> effort.</li>
 </ul>
 <figure class="diagram">{{diagram:d11-judge}}<figcaption>The judge from input to decision.</figcaption></figure>
 <h3>The quality loop</h3>
-<p>A routing choice should be judged by actual results, not just initial intuition. For that reason, the mod appends <code>decision</code>, <code>spawn</code>, <code>signal</code>, <code>report</code>, and <code>session-end</code> events to <code>events.jsonl</code>.</p>
-<p>Compaction — run at session start, from the usage view, and from the report — turns those events into usable statistics:</p>
+<p>A routing choice should be judged by real results, not just initial intuition. To do this, the mod appends <code>decision</code>, <code>spawn</code>, <code>signal</code>, <code>report</code>, and <code>session-end</code> events to <code>events.jsonl</code>.</p>
+<p>Compaction — run on session start, from the usage view, and by the report — turns these events into usable statistics:</p>
 <ol>
-  <li>It determines the outcome of every task whose rework window has closed and appends it as an <code>outcome</code> entry.</li>
-  <li>It folds outcomes into task class × tier × effort cells across two scopes (user and project), with time decay and the grid as prior.</li>
+  <li>Determines the outcome of every task whose rework window has closed and appends it as an <code>outcome</code> entry.</li>
+  <li>Folds outcomes into task class × tier × effort cells across two scopes (user and project), with time decay and the grid as the prior.</li>
 </ol>
-<p>The report page and the usage view share the same aggregation logic, <code>lib/usage-data.mjs</code>, so the numbers always match. Up through 0.3, the router only collects and displays this data without using it to change routing decisions.</p>
+<p>The report page and the usage view share the same aggregation logic (<code>lib/usage-data.mjs</code>), so the numbers always match. Through version <code>0.3</code>, the router only collects and displays these data without using them to change decisions.</p>
 <figure class="diagram">{{diagram:d9-stats}}<figcaption>Events, outcomes, cells: how the quality loop turns subagent runs into numbers.</figcaption></figure>
-<p><strong>Planned for 0.4 (still provisional):</strong> with <code>adapt</code> enabled, Thompson sampling across the grid pick and adjacent cells using the grid as prior; exploration capped at 10% of recent decisions for a task class and no exploration on risky launches; writing <code>recommendations.json</code> during compaction so <code>choose-model</code> can read it.</p>
-<p>Every file produced by the record and the quality loop has a specific home outside your repositories: here they are in a single table.</p>
+<p><strong>Planned for <code>0.4</code> (still tentative):</strong> with <code>adapt</code> enabled, selection via Thompson sampling between the grid's choice and adjacent cells, using the grid as the prior; exploration capped at 10% of recent decisions for a task class and no exploration on risky spawns; writing <code>recommendations.json</code> during compaction so <code>choose-model</code> can read it.</p>
+<p>All files produced by the record and the quality loop have a fixed location outside your repositories: let's see them in a single table.</p>
 
 <h2 id="state">State on disk</h2>
-<p>Neither plugin writes state files inside a hub or a repository, so working trees stay clean. All state lives in the active config directory: <code>CLAUDE_CONFIG_DIR</code> if set, otherwise <code>~/.claude</code>.</p>
+<p>Neither plugin writes state files inside a hub or inside a repository, so working trees stay clean. All state lives under the active configuration directory (<code>CLAUDE_CONFIG_DIR</code> if set, otherwise <code>~/.claude</code>), except for temporary handoffs.</p>
 <table>
   <thead><tr><th>Path</th><th>Plugin</th><th>Contents</th></tr></thead>
   <tbody>
-    <tr><td><code>session-hub/children-&lt;hub id&gt;.json</code> and <code>.lock</code></td><td>session-hub</td><td>The children record and its lock</td></tr>
-    <tr><td><code>&lt;scratchpad or mktemp -d&gt;/&lt;name&gt;-handoff.md</code></td><td>session-hub</td><td>One handoff per child session, saved outside the hub</td></tr>
-    <tr><td><code>model-router/events.jsonl</code></td><td>model-router</td><td>Decisions, spawns, signals, reports, session ends, and outcomes; append-only</td></tr>
-    <tr><td><code>model-router/quality/user.json</code>, <code>quality/projects/&lt;id&gt;.json</code></td><td>model-router</td><td>Per-user and per-project quality aggregates</td></tr>
-    <tr><td><code>model-router/quality/state.json</code>, <code>quality/.lock</code></td><td>model-router</td><td>Compaction cursor and its lock (stale after 2 minutes)</td></tr>
-    <tr><td><code>model-router/options.json</code></td><td>model-router</td><td>Options used by compaction and the report</td></tr>
-    <tr><td><code>model-router/report.html</code></td><td>model-router</td><td>The local report page</td></tr>
-    <tr><td><code>model-router/quality/recommendations.json</code></td><td>model-router</td><td>Per-task-class recommendations, read if present and written starting in 0.4</td></tr>
+    <tr><td><code>session-hub/children-&lt;hub id&gt;.json</code> and <code>.lock</code></td><td><code>session-hub</code></td><td>The children record and its lock</td></tr>
+    <tr><td><code>&lt;scratchpad or mktemp -d&gt;/&lt;name&gt;-handoff.md</code></td><td><code>session-hub</code></td><td>One handoff file per child session, saved outside the hub</td></tr>
+    <tr><td><code>model-router/events.jsonl</code></td><td><code>model-router</code></td><td>Decisions, spawns, signals, reports, session ends, and outcomes (append-only)</td></tr>
+    <tr><td><code>model-router/quality/user.json</code>, <code>quality/projects/&lt;id&gt;.json</code></td><td><code>model-router</code></td><td>Quality aggregates per user and per project</td></tr>
+    <tr><td><code>model-router/quality/state.json</code>, <code>quality/.lock</code></td><td><code>model-router</code></td><td>Compaction position and its lock (stale after 2 minutes)</td></tr>
+    <tr><td><code>model-router/options.json</code></td><td><code>model-router</code></td><td>The options used by compaction and the report</td></tr>
+    <tr><td><code>model-router/report.html</code></td><td><code>model-router</code></td><td>The local report page</td></tr>
+    <tr><td><code>model-router/quality/recommendations.json</code></td><td><code>model-router</code></td><td>Recommendations per task class, read if present and written starting in <code>0.4</code></td></tr>
   </tbody>
 </table>
 <p>The only writes that can touch a hub or a project are two configuration sections — <code>## Child sessions</code> in the hub and <code>## Model routing</code> in the project — both created only after your explicit confirmation and never committed.</p>
-<p>Understanding how the hooks work and where files live helps explain why the two plugins react in opposite ways when something goes wrong.</p>
+<p>Knowing how the hooks work and where the files live helps explain why the two plugins react in opposite ways when something goes wrong.</p>
 
 <h2 id="failure">Failure behavior</h2>
-<p>Not all errors carry the same weight: violating a repository's scope can damage code, whereas skipping a model optimization at worst makes a call slower or more expensive. By design, the two plugins therefore fail in opposite directions.</p>
-<div class="cards two">
-  <article class="card"><span class="num">session-hub</span><h3>Fails closed</h3><p>A guard that cannot evaluate a call in a child session blocks it and explains why. A corrupt record, a newer format version, or a lock that cannot be acquired stops the write and leaves the file as is. The record itself, however, never stops work: skills warn you and continue without recording.</p></article>
-  <article class="card"><span class="num">model-router</span><h3>Fails open</h3><p>An error never stops work. A judge error, timeout, or unreadable response leaves the launch unchanged; every hook has a catch that lets the event proceed. If the recommendations file is missing, the grid alone decides. An interrupted compaction can be rerun safely.</p></article>
-</div>
-<p>The underlying logic is simple: a guard that accidentally lets a write through violates the scope it exists to defend, whereas a router that accidentally blocks a launch stops work it exists only to optimize.</p>
+<p>Not all errors carry the same weight: violating a repository's scope can damage code, whereas skipping a model optimization at worst makes a call slower or more expensive. By design, the two plugins therefore behave in opposite ways.</p>
+<h3><code>session-hub</code>: fails closed</h3>
+<p>A guard that cannot evaluate a call in a child session blocks it and explains why. A corrupt record, a newer format, or a lock that cannot be acquired stops the write and leaves the file as it is. The record itself never stops work, however: the skills warn you and continue without recording.</p>
+<h3><code>model-router</code>: fails open</h3>
+<p>An error never stops work. A judge failure, a timeout, or an unreadable response leaves the spawn unchanged; every hook has a <code>catch</code> that lets the event proceed. If the recommendations file is missing, the grid alone decides. An interrupted compaction can be safely repeated.</p>
+<p>The underlying logic is simple: a guard that accidentally lets a write through breaks the scope it exists to defend, whereas a router that accidentally blocks a spawn stops work it only exists to optimize.</p>
 <p>To wrap up, let's look at which Claude Code versions and environments meet the requirements for everything described above.</p>
 
 <h2 id="compatibility">Compatibility</h2>
-<p>Here are the minimum environment requirements and what has been verified on recent Claude Code releases.</p>
+<p>Here are the minimum environment requirements and what has been verified on recent Claude Code versions.</p>
 <table>
   <thead><tr><th>Requirement</th><th>Value</th></tr></thead>
   <tbody>
-    <tr><td>Tested Claude Code version</td><td>2.1.329 (and 2.1.330)</td></tr>
-    <tr><td>Cross-session messaging, for session-hub</td><td>Claude Code 2.1.224 or later</td></tr>
-    <tr><td>Mods</td><td>Available since Claude Code 2.1.287; both mods declare <code>engines["claude-code"]: "&gt;=2.1.329"</code></td></tr>
-    <tr><td><code>node</code></td><td>On PATH, for the scope guard, the registry script, the panel, and all model-router scripts; zero dependencies</td></tr>
-    <tr><td>Operating system</td><td>macOS and Linux: the hook wrapper is a POSIX <code>sh</code> command, and the report opens with <code>open</code> or <code>xdg-open</code></td></tr>
+    <tr><td>Tested Claude Code version</td><td><code>2.1.329</code> and <code>2.1.330</code></td></tr>
+    <tr><td>Inter-session messaging, for <code>session-hub</code></td><td>Claude Code <code>2.1.224</code> or later</td></tr>
+    <tr><td>Mods</td><td>Available since Claude Code <code>2.1.287</code>; both mods declare <code>engines["claude-code"]: "&gt;=2.1.329"</code></td></tr>
+    <tr><td><code>node</code></td><td>On <code>PATH</code>, for the scope guard, the registry script, the panel, and all <code>model-router</code> scripts; zero dependencies</td></tr>
+    <tr><td>Operating system</td><td>macOS and Linux: the hook wrapper is a POSIX <code>sh</code> command and the report opens with <code>open</code> or <code>xdg-open</code></td></tr>
   </tbody>
 </table>
 <ul>
-  <li><strong>Verified on 2.1.329:</strong> <code>--effort</code> in the launch command and the <code>SESSION_HUB_*</code> variables reach the child session in <code>-p</code>, <code>--bg</code>, tmux, and Herdr; a session in a repository nested inside the hub loads both the hub's instruction file and its own.</li>
-  <li><strong>Verified on 2.1.330:</strong> routing works in both auto permission mode and default mode.</li>
-  <li><strong>Unverified:</strong> the desktop app launch tool (role variables, model, and effort).</li>
+  <li><strong>Verified on <code>2.1.329</code>:</strong> <code>--effort</code> in the launch command and the <code>SESSION_HUB_*</code> variables reach the child session in <code>-p</code>, <code>--bg</code>, tmux, and Herdr; a session in a repository nested inside the hub loads both the hub's instruction file and its own.</li>
+  <li><strong>Verified on <code>2.1.330</code>:</strong> routing works in both automatic permission mode and default mode.</li>
+  <li><strong>Not verified:</strong> the desktop app's launch tool (role variables, model, and effort).</li>
 </ul>
