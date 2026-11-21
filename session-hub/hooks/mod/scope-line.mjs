@@ -55,6 +55,12 @@ export function roleSummary({ role, master }) {
   if (role.kind === 'invalid') {
     return [`Role: unknown value "${role.raw}" for SESSION_HUB_ROLE`, 'Guards: blocking writes and messages'];
   }
-  if (master) return ['Role: master', `Children record: ${or(master.record ?? master.hub, 'default path')}`];
+  if (master) {
+    return [
+      'Role: master',
+      ...(master.hub ? [`Hub: ${master.hub}`] : []),
+      `Children record: ${or(master.record, 'default path for the hub')}`,
+    ];
+  }
   return ['This session has no session-hub role. It becomes a master when it uses session-hub:spawn or session-hub:dispatch.'];
 }
