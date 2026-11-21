@@ -5,7 +5,7 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
 
 ## model-router 0.3.10
 
-2026-11-21 · pull request #PR
+2026-11-21 · pull request #69
 
 ### Fixed
 
