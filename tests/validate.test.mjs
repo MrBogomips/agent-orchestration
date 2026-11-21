@@ -85,6 +85,22 @@ test('a folded or literal description with no text is reported', () => {
   }
 });
 
+test('a plugin version that differs from its newest CHANGELOG heading is reported', () => {
+  const changelog = '# Changelog\n\n## alpha 1.2.2\n\n- Older.\n\n## alpha 1.2.1\n';
+  const r = validate(repo({ skill: GOOD, changelog }));
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /alpha: version 1\.2\.3 differs from the newest CHANGELOG\.md heading \(alpha 1\.2\.2\)/);
+});
+
+test('a plugin with no CHANGELOG heading, or no CHANGELOG at all, is reported', () => {
+  const none = validate(repo({ skill: GOOD, changelog: '# Changelog\n\n## beta 1.2.3\n' }));
+  assert.equal(none.code, 1, none.out);
+  assert.match(none.out, /alpha: no "## alpha X\.Y\.Z" heading in CHANGELOG\.md/);
+  const missing = validate(repo({ skill: GOOD, changelog: null }));
+  assert.equal(missing.code, 1, missing.out);
+  assert.match(missing.out, /CHANGELOG\.md is missing/);
+});
+
 test('a frontmatter with no closing --- is reported', () => {
   const r = validate(repo({ skill: '---\nname: run\ndescription: Runs the thing.\n\nBody.\n' }));
   assert.equal(r.code, 1, r.out);

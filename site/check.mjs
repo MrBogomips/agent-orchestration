@@ -14,7 +14,8 @@ import { readTranslationHeader } from './lib/text.mjs';
 
 const LANGUAGE_NAMES = { en: 'English', it: 'Italian' };
 
-const FORBIDDEN = [
+/** AI attribution and AI-service links: never in the site, the commits or the pull request (tests/pr-checks.mjs). */
+export const FORBIDDEN = [
   /claude\.ai\/(code|chat|artifact)/i, /anthropic\.com/i, /co-authored-by/i, /generated (with|by) (claude|ai|chatgpt|codex|gemini)/i,
   /claude-session/i, /🤖/u,
 ];

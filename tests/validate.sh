@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Structural checks that `claude plugin validate --strict` does not make: every top-level folder with a
 # .claude-plugin/plugin.json is a plugin named after its folder, with a semver version, no `skills` field and no
-# marketplace.json; every skills/<name>/SKILL.md has a frontmatter `name` equal to its directory and a description.
+# marketplace.json, whose version is the newest "## <plugin> X.Y.Z" heading of CHANGELOG.md; every
+# skills/<name>/SKILL.md has a closed frontmatter with a `name` equal to its directory and a description.
 #
 # Usage: bash tests/validate.sh [repo-root]    (requires jq; bash 3.2 compatible)
 set -euo pipefail
@@ -55,6 +56,15 @@ for manifest in "$ROOT"/*/.claude-plugin/plugin.json; do
     [ "$(jq 'has("skills")' "$manifest")" = "false" ] || error "$folder: plugin.json must not have a skills field"
     [ -e "$dir/.claude-plugin/marketplace.json" ] && error "$folder: stray marketplace.json"
     [ -f "$dir/README.md" ] || error "$folder: README.md is missing"
+    if [ -f "$ROOT/CHANGELOG.md" ]; then
+        # The newest release of a plugin is its first "## <plugin> X.Y.Z" heading: it must be the manifest's version.
+        logged="$(awk -v p="$name" '$1 == "##" && $2 == p { print $3; exit }' "$ROOT/CHANGELOG.md")"
+        if [ -z "$logged" ]; then
+            error "$folder: no \"## $name X.Y.Z\" heading in CHANGELOG.md"
+        elif [ "$logged" != "$version" ]; then
+            error "$folder: version $version differs from the newest CHANGELOG.md heading ($name $logged)"
+        fi
+    fi
     if [ -d "$dir/skills" ]; then
         for sdir in "$dir"/skills/*/; do
             [ -d "$sdir" ] || continue
@@ -70,5 +80,6 @@ for manifest in "$ROOT"/*/.claude-plugin/plugin.json; do
 done
 
 [ "$PLUGINS" -gt 0 ] || error "no plugin folder found under $ROOT"
+[ -f "$ROOT/CHANGELOG.md" ] || error "CHANGELOG.md is missing"
 if [ "$ERRORS" -gt 0 ]; then echo "$ERRORS error(s)"; exit 1; fi
 echo "OK: $PLUGINS plugin(s) checked"

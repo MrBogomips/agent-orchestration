@@ -2,11 +2,15 @@
 
 ## Requirements
 
+The `validate` check of a pull request runs the structural checks, the unit tests, the manifest validation, the mod
+tests, the version-bump and attribution checks of commits and pull request text, and the site check. The rest is
+checked by hand.
+
 - [ ] Structural checks pass: `bash tests/validate.sh`
 - [ ] Unit tests pass: `node --test` on every `*.test.mjs`
 - [ ] Manifests are valid: `claude plugin validate ./session-hub --strict` and `claude plugin validate ./model-router --strict`
 - [ ] Mod tests pass, for a plugin that has a mod: `claude plugin test ./<plugin>`
-- [ ] A pull request that changes a plugin bumps `version` in its `plugin.json` (see `AGENTS.md`)
+- [ ] A pull request that changes a plugin bumps `version` in its `plugin.json` (see `AGENTS.md`), and the newest `## <plugin> X.Y.Z` heading of `CHANGELOG.md` is that version
 - [ ] A change to what one plugin assumes about the other is in `docs/design/shared-contract.md` first
 - [ ] A design change is reflected in `docs/design/`; a spike that was run has its result recorded in `docs/design/spikes.md` with the Claude Code version
 - [ ] Manual scenarios touched by the change were run and their outcome noted in the pull request
