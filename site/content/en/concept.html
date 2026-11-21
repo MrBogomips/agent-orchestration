@@ -1,0 +1,53 @@
+<h1>Concept</h1>
+<p class="lede">Two separate problems show up once a team works with Claude Code across several repositories: sessions that need limits, and agents that need the right model. session-hub answers the first, model-router the second. This page explains the ideas behind both before any command.</p>
+
+<h2 id="problem">The problem</h2>
+<p>An agent loads the instructions, skills and agents of the folder it runs in. A product that spans a backend, a frontend, a design repository and the docs therefore needs a session started <em>in</em> each repository: a single session at the root, a subagent, or <code>--add-dir</code> all run from the wrong folder and miss the repository's own rules.</p>
+<p>Once several such sessions run at the same time, they need limits. What may each one change? Whom does it talk to? Where does a request outside its task go? Which model does it spend? Without answers, parallel sessions step on each other's files and pass requests sideways that nobody approved.</p>
+<p>Inside each session there is a second, quieter cost. An agent left to itself starts every subagent on its own model and effort. A file search runs on the most expensive model; a hard review sometimes runs on a cheap one and comes back for rework. Nobody sees which choice worked, because nothing measures it.</p>
+
+<h2 id="hub">Hub, master and children</h2>
+<p>session-hub turns a folder of repositories into a <strong>hub</strong>. The session you open at the hub's root is the <strong>master</strong>. It coordinates, and it never writes in a child repository. For work in a repository, the master starts a <strong>child</strong>: a full Claude Code session whose working folder is that repository (or a worktree of it), so it loads that repository's rules.</p>
+<figure class="diagram">{{diagram:d1-hub}}<figcaption>A hub at a glance: the master at the root, one child per repository, each held to its own write root.</figcaption></figure>
+<p>Children run in parallel. That is the point: you can work directly in the child whose work you know, steering it as you would any session, while the master keeps the other children going and routes what passes between them. <a href="{{link:scenarios}}">Ways of working</a> shows this for one person and for a team.</p>
+
+<h2 id="scope">Scope and the write root</h2>
+<p>Every child gets a written <strong>scope</strong> at launch, in its <strong>handoff</strong>: its goal, what it may change, what it may only read, its siblings, and the rules for messages. The one folder where a child may create and change files is its <strong>write root</strong>: its repository, or a worktree in a sibling folder made by the master.</p>
+<p>The write root is not only a rule in the handoff. A hook, the <em>scope guard</em>, checks every file edit a child makes, resolves its real path through links and <code>..</code>, and blocks a write outside the root. When it cannot decide, it blocks and says why: it <strong>fails closed</strong>. A child that needs a change elsewhere sends an <code>out-of-scope</code> message to the master instead.</p>
+<figure class="diagram">{{diagram:d5-out-of-scope}}<figcaption>A request outside the scope goes up to the master, never sideways: the master asks the user if needed, then passes it to the child that owns the repository, starts one, or does a read itself.</figcaption></figure>
+
+<h2 id="messages">Messages are information, not authorization</h2>
+<p>Children talk to the master only, and every message starts with a fixed prefix, <code>[&lt;task&gt; &lt;repo&gt;] &lt;type&gt;: &lt;text&gt;</code>, where the type is <code>question</code>, <code>out-of-scope</code>, <code>pr</code>, <code>done</code> or <code>abandoned</code>. The master's messages start with <code>[master]</code>.</p>
+<p>A message between sessions carries information. It never carries authority: no session merges, pushes, deletes or changes settings because another session asked. Approval comes from a person, in their own session. With mods on, the session-hub mod enforces the master-only channel and puts a line in front of every message from another session that says it is information, not authorization.</p>
+
+<h2 id="routing">Routing per task</h2>
+<p>model-router gives the agent one short <strong>grid</strong> to choose a model and an effort for each piece of work it delegates. Four model tiers, checked in order: <code>haiku</code> for simple work that is easy to check, <code>sonnet</code> when what done looks like fits in one sentence, <code>fable</code> for large and open-ended work where judgment really matters, and <code>opus</code> for everything else, and whenever you hesitate. Four questions pick the effort, from <code>low</code> to <code>xhigh</code>. Six <strong>task classes</strong> name the kind of work.</p>
+<figure class="diagram">{{diagram:d6-router-desk}}<figcaption>model-router as a dispatch desk: the grid picks a model and an effort for each task, a quick judge decides only when no model was given, and the outcome is measured.</figcaption></figure>
+<p>The agent writes one line for every start, so you see the choice the moment it is made:</p>
+<pre><code>🔀 opus ▰▰▰▱ high -> review with unknown cause, going up
+🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check</code></pre>
+<p>When a built-in subagent start still carries no model, a fast <strong>judge</strong> model classifies the task and sets one. If anything goes wrong, the start goes ahead unchanged: the router <strong>fails open</strong>. The two plugins fail in opposite directions on purpose: a guard that lets a write through is worse than one that blocks, while a router that blocks work is worse than one that leaves it alone.</p>
+
+<h2 id="measurement">Measurement</h2>
+<p>A grid is a guess until it is checked against real work. model-router counts each subagent start as one task and decides its outcome once a rework window has closed: right the first time, redone, failed or cancelled. From those outcomes it keeps, for each task class, model tier and effort, the <strong>first-pass yield</strong> (how often the work was right the first time), the <strong>rework rate</strong> and the <strong>cost per successful task</strong>, which counts the price of rework too.</p>
+<p>The numbers are kept for you across all projects and for each project, aged so that old work weighs less, and they stay under your Claude Code config folder. Up to release 0.3 the router only measures; choosing from the data is planned for 0.4.</p>
+
+<h2 id="glossary">Glossary</h2>
+<table>
+  <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>Hub</td><td>A folder that holds several git repositories, each with its own instructions, skills and agents.</td></tr>
+    <tr><td>Master</td><td>The session opened in the hub. It coordinates and never writes in a child repository.</td></tr>
+    <tr><td>Child</td><td>A Claude Code session started by the master in a repository (or a worktree of it), so that it loads that repository's rules.</td></tr>
+    <tr><td>Write root</td><td>The one folder where a child may create and change files.</td></tr>
+    <tr><td>Handoff</td><td>What the master writes for each child: role, goal, scope, references, siblings, message rules, first step.</td></tr>
+    <tr><td>Children record</td><td>A JSON file, kept by the master outside the hub, with one entry per child.</td></tr>
+    <tr><td>Scope guard</td><td>The hook that blocks a child's file edits outside its write root, and blocks when it cannot decide.</td></tr>
+    <tr><td>Mod</td><td>A module a plugin loads into Claude Code to change its interface or behaviour: a panel, a command, a hook on a tool call. Needs mods turned on.</td></tr>
+    <tr><td>Grid</td><td>The rules model-router uses to choose a model tier and an effort level.</td></tr>
+    <tr><td>Task class</td><td>One of six fixed labels for the kind of work, such as <code>read-search</code> or <code>review-debug</code>.</td></tr>
+    <tr><td>Judge</td><td>One call to a fast model that classifies a subagent start carrying no model and proposes a tier, an effort and a class.</td></tr>
+    <tr><td>First-pass yield (FPY)</td><td>The share of tasks that were right the first time.</td></tr>
+    <tr><td>Rework window</td><td>The time after a subagent's report (30 minutes by default, or the end of the session) during which a redo still counts against it.</td></tr>
+  </tbody>
+</table>

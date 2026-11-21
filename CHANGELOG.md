@@ -1,0 +1,167 @@
+# Changelog
+
+What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
+listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
+
+## model-router 0.3.7
+
+2026-11-21 · pull request #18
+
+### Changed
+
+- README: the privacy line no longer says that nothing leaves the machine; the judge's one call goes through the
+  session's own client. The repository home page now leads with what each plugin does.
+
+## model-router 0.3.6
+
+2026-11-21 · pull request #17
+
+### Fixed
+
+- `report.mjs`, `usage.mjs` and `compact.mjs` run when the plugin path passes through a symbolic link. Before,
+  they exited with no output and the report key logged an empty path; an empty path from `report.mjs` now counts
+  as a failure.
+
+## model-router 0.3.5
+
+2026-11-21 · pull request #16
+
+### Changed
+
+- The report path is written as a line in the session instead of a toast.
+
+## model-router 0.3.4
+
+2026-11-21 · pull request #15
+
+### Added
+
+- The choose-model line `🔀 opus ▰▰▰▱ high -> reason`, with a four-cell effort bar.
+- With the mod on, the same line drawn in colour under each `Agent` call's row, with the model and effort the
+  subagent actually got and the routing reason; the row is drawn alone on any error.
+
+### Changed
+
+- 🔀 becomes the plugin's mark in the usage view, its answers, the help and the report page title.
+- Manual screenshots retaken with demonstration data.
+
+## model-router 0.3.3
+
+2026-11-21 · pull request #14
+
+### Added
+
+- KPI tiles in Overview (first-pass yield, cost per success, rework, routed starts) with changes against the
+  previous window and status dots; sparklines and FPY bars coloured by threshold.
+
+### Changed
+
+- The usage view follows Claude Code's Settings dialog: a tab row, a window and level row, a footer of key hints.
+  Tab and Shift+Tab switch tabs, Down and Up step the window, with no click needed.
+
+## session-hub 0.2.4
+
+2026-11-21 · pull request #13
+
+### Added
+
+- A user manual for both plugins, as a PDF built from `docs/manual/manual.html`, with screenshots.
+
+### Fixed
+
+- `/session-hub` names the hub and the record path separately.
+
+## model-router 0.3.2
+
+2026-11-21 · pull request #12
+
+### Fixed
+
+- Routing works in auto permission mode. The subagent's effort is set on each of its model requests, never on the
+  `Agent` call, which the engine refused to run after a hook changed it.
+
+## session-hub 0.2.3
+
+2026-11-21 · pull request #11
+
+### Fixed
+
+- The shell check follows `cd` and `pushd` to a literal folder, so `cd <root> && echo x >> link/f` is judged
+  where the link lands.
+- A denial names where a linked path resolves.
+
+## session-hub 0.2.2 and model-router 0.3.1
+
+2026-11-21 · pull request #9
+
+### Changed
+
+- session-hub: skill review of `dispatch` and `spawn`; the children record commands and rules move to a reference
+  both skills read; the idle notice is renewed after each notice.
+- model-router: the report skill suggests `/model-router report`, says a rerun is safe and lists cancelled tasks as
+  not learned.
+
+## session-hub 0.2.1 and model-router 0.3.0
+
+2026-11-20 · pull request #8
+
+### Added
+
+- model-router: `/model-router` opens a tabbed usage view (Overview, Models, Classes, Decisions) on the same
+  aggregation as the report page, with a text fallback where no pane fits.
+- session-hub: `/session-hub help`; the command's answers are for the person only.
+
+### Fixed
+
+- model-router: argument lookup, a distinct report error, one refresh at a time.
+
+## session-hub 0.2.0
+
+2026-11-20 · pull request #7
+
+### Added
+
+- The `session-hub` mod: the send guard, a best-effort shell check on `Bash`, origin marking of messages from
+  other sessions, the scope line, the children panel and the `/session-hub` command.
+
+### Fixed
+
+- Gaps found in review of the mod guards: here-documents, line continuations, `Monitor` commands, links and `..`
+  in the shell check; delivery of `name [ref]` to the bare name in the send guard.
+
+## model-router 0.2.0
+
+2026-11-20 · pull request #6
+
+### Added
+
+- The router mod: a judge for subagent starts that carry no model, the event log and `/model-router`.
+- Compaction of the quality loop and the local report page; the `model-router:report` skill.
+
+### Fixed
+
+- Compaction reruns are safe, a stale lock is taken over, the options are saved for compaction, and resumed
+  sessions close their tasks at the next end.
+
+## session-hub 0.1.0
+
+2026-11-20 · pull request #4
+
+### Added
+
+- The `spawn`, `dispatch` and `setup` skills.
+- The scope guard hook for child sessions.
+- The children record helper, with a lock and atomic writes.
+
+### Fixed
+
+- The scope guard is hardened against relative paths, roots that are too wide, role spelling and timeouts.
+
+## model-router 0.1.0
+
+2026-11-20 · pull request #3
+
+### Added
+
+- The grid, with `grid.json` as its single source, and the `choose-model` skill.
+- The `setup` skill for a project's `## Model routing` section.

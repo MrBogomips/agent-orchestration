@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 490" role="img">
+  <title>You talk to the master session and work directly in one child session; the master starts one child per repository, each in its own terminal pane and write root, and a child that needs a change elsewhere asks the master.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+    <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-strong"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-cyan"/></marker>
+  </defs>
+
+  <!-- you -->
+  <circle cx="70" cy="226" r="19" class="d-human"/>
+  <path d="M32 292Q32 256 70 256Q108 256 108 292Z" class="d-human"/>
+  <text x="70" y="318" class="d-title">You</text>
+  <text x="70" y="336" class="d-note">one person</text>
+
+  <!-- master -->
+  <rect x="330" y="24" width="280" height="96" rx="14" class="d-node d-primary"/>
+  <text x="470" y="56" class="d-title">Master session</text>
+  <text x="470" y="80" class="d-note">coordinates the children</text>
+  <text x="470" y="98" class="d-note">and keeps a record of them</text>
+
+  <!-- you and the sessions -->
+  <g class="d-edge cyan">
+    <path d="M84 204C100 120 200 72 324 72" marker-start="url(#c)" marker-end="url(#c)"/>
+    <path d="M112 282C150 292 170 334 204 334" marker-start="url(#c)" marker-end="url(#c)"/>
+  </g>
+  <text x="150" y="58" class="d-elabel ink">asks and decides</text>
+  <text x="16" y="380" class="d-elabel ink">works hands-on</text>
+  <text x="16" y="396" class="d-elabel ink">in the repository</text>
+  <text x="16" y="412" class="d-elabel ink">you know best</text>
+
+  <!-- master starts the children -->
+  <g class="d-edge">
+    <path d="M470 120V172M320 172H790"/>
+    <path d="M320 172V246" marker-end="url(#a)"/>
+    <path d="M555 172V246" marker-end="url(#a)"/>
+    <path d="M790 172V246" marker-end="url(#a)"/>
+  </g>
+  <text x="484" y="142" class="d-elabel">starts each child and</text>
+  <text x="484" y="158" class="d-elabel">sends it [master] messages</text>
+
+  <!-- a child asks the master -->
+  <g class="d-edge dashed strong"><path d="M876 248C876 150 760 64 616 64" marker-end="url(#s)"/></g>
+  <text x="906" y="24" class="d-elabel d-end">asks the master for a change</text>
+  <text x="906" y="40" class="d-elabel d-end">in another repository</text>
+
+  <!-- child panes -->
+  <rect x="210" y="250" width="220" height="150" rx="12" class="d-node"/>
+  <path d="M210 274V262a12 12 0 0 1 12-12h196a12 12 0 0 1 12 12v12z" class="d-bar"/>
+  <circle cx="226" cy="262" r="4" class="d-dot"/><circle cx="240" cy="262" r="4" class="d-dot"/><circle cx="254" cy="262" r="4" class="d-dot"/>
+  <text x="420" y="266" class="d-cap d-end">pane 1</text>
+  <rect x="222" y="284" width="196" height="104" rx="10" class="d-zone"/>
+  <text x="320" y="312" class="d-title">Child · api</text>
+  <text x="320" y="333" class="d-note">its own rules</text>
+  <text x="320" y="350" class="d-note">already loaded</text>
+  <text x="230" y="376" class="d-zone-label" style="font-size:11px">write root: api/</text>
+
+  <rect x="445" y="250" width="220" height="150" rx="12" class="d-node"/>
+  <path d="M445 274V262a12 12 0 0 1 12-12h196a12 12 0 0 1 12 12v12z" class="d-bar"/>
+  <circle cx="461" cy="262" r="4" class="d-dot"/><circle cx="475" cy="262" r="4" class="d-dot"/><circle cx="489" cy="262" r="4" class="d-dot"/>
+  <text x="655" y="266" class="d-cap d-end">pane 2</text>
+  <rect x="457" y="284" width="196" height="104" rx="10" class="d-zone"/>
+  <text x="555" y="312" class="d-title">Child · web</text>
+  <text x="555" y="333" class="d-note">its own rules</text>
+  <text x="555" y="350" class="d-note">already loaded</text>
+  <text x="465" y="376" class="d-zone-label" style="font-size:11px">write root: web/</text>
+
+  <rect x="680" y="250" width="220" height="150" rx="12" class="d-node"/>
+  <path d="M680 274V262a12 12 0 0 1 12-12h196a12 12 0 0 1 12 12v12z" class="d-bar"/>
+  <circle cx="696" cy="262" r="4" class="d-dot"/><circle cx="710" cy="262" r="4" class="d-dot"/><circle cx="724" cy="262" r="4" class="d-dot"/>
+  <text x="890" y="266" class="d-cap d-end">pane 3</text>
+  <rect x="692" y="284" width="196" height="104" rx="10" class="d-zone"/>
+  <text x="790" y="312" class="d-title">Child · docs</text>
+  <text x="790" y="333" class="d-note">its own rules</text>
+  <text x="790" y="350" class="d-note">already loaded</text>
+  <text x="700" y="376" class="d-zone-label" style="font-size:11px">write root: docs/</text>
+
+  <path d="M210 422V430H900V422" class="d-rule"/>
+  <text x="555" y="454" class="d-label d-mid b">The children run in parallel, one per repository.</text>
+  <text x="555" y="474" class="d-label d-mid">They never message each other: every request goes through the master.</text>
+</svg>

@@ -23,6 +23,8 @@ marketplace (`~/git/MrBogomips/claude-plugins`).
   `tests/scenarios/<skill>/`: manual scenario checklists.
 - `docs/design/` (authoritative), `docs/research/` (reference), `docs/manual/` (user manual), `drafts/` (working
   material, committed).
+- `site/`: the documentation site (GitHub Pages, English and Italian), built by `site/build.mjs`; see
+  `site/README.md`.
 
 ## Working documents
 
@@ -32,6 +34,7 @@ marketplace (`~/git/MrBogomips/claude-plugins`).
 | `docs/research/` | Research behind the design; reference only. | committed |
 | `docs/architecture.md` | Product architecture, written from the released code. | committed |
 | `docs/manual/` | User manual: `manual.html` (source), `images/`, `user-manual.pdf` (built by `build.sh`), `tools/` (screenshot helpers). Update it with the code it describes. | committed |
+| `site/` | Documentation site: pages, diagrams, screenshots, illustrations and its build. Update it with the code and the manual it describes. `site/dist/` is the build output. | committed (`site/dist/` ignored) |
 | `drafts/` | Drafts and working documents that later sessions need. | committed |
 | `.handoff/` | The original handoff zip. | ignored |
 
@@ -76,6 +79,7 @@ bash tests/validate.sh
 node --test $(find . -path ./node_modules -prune -o -name '*.test.mjs' -print)
 claude plugin validate ./session-hub --strict
 claude plugin validate ./model-router --strict
+node site/check.mjs                       # documentation site: build, links, images, translations
 claude plugin test ./model-router        # once the mod exists; same for session-hub
 ```
 

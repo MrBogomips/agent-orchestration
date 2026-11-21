@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 490" role="img">
+  <title>Five steps to see your statistics: install model-router; use Claude Code 2.1.329 or later with mods turned on, because only the mod records; work as usual and let the agent start subagents; let the rework window close, 30 minutes after a subagent reports or when the session ends; then open /model-router or ask for the model-router report. A cell with fewer than five tasks is a weak signal.</title>
+  <path d="M50 52V384" class="d-rule"/>
+
+  <circle cx="50" cy="52" r="18" class="d-fill"/><text x="50" y="57" class="d-num">1</text>
+  <rect x="90" y="24" width="810" height="56" rx="12" class="d-node"/>
+  <text x="110" y="48" class="d-label b">Install model-router</text>
+  <text x="110" y="68" class="d-cap d-start">/plugin install model-router@mrbogomips</text>
+
+  <circle cx="50" cy="134" r="18" class="d-fill"/><text x="50" y="139" class="d-num">2</text>
+  <rect x="90" y="96" width="810" height="76" rx="12" class="d-node d-primary"/>
+  <text x="110" y="122" class="d-label b">Use Claude Code 2.1.329 or later, with mods turned on</text>
+  <text x="110" y="142" class="d-note d-start">Only the mod records: the skills work without it, but nothing is measured.</text>
+  <text x="110" y="160" class="d-note d-start">To check: if /model-router is an unknown command, the mod is not loaded.</text>
+
+  <circle cx="50" cy="216" r="18" class="d-fill"/><text x="50" y="221" class="d-num">3</text>
+  <rect x="90" y="188" width="810" height="56" rx="12" class="d-node"/>
+  <text x="110" y="212" class="d-label b">Work as usual</text>
+  <text x="110" y="232" class="d-note d-start">Let the agent start subagents: each start counts as one task.</text>
+
+  <circle cx="50" cy="298" r="18" class="d-fill"/><text x="50" y="303" class="d-num">4</text>
+  <rect x="90" y="260" width="810" height="76" rx="12" class="d-node"/>
+  <text x="110" y="286" class="d-label b">Let the rework window close</text>
+  <text x="110" y="306" class="d-note d-start">It closes 30 minutes after a subagent reports,</text>
+  <text x="110" y="324" class="d-note d-start">or when you end the session.</text>
+
+  <circle cx="50" cy="380" r="18" class="d-fill"/><text x="50" y="385" class="d-num">5</text>
+  <rect x="90" y="352" width="810" height="56" rx="12" class="d-node d-allow"/>
+  <text x="110" y="376" class="d-label b">Open /model-router</text>
+  <text x="110" y="396" class="d-note d-start">or ask for the model-router report</text>
+
+  <rect x="90" y="428" width="810" height="48" rx="12" class="d-weak"/>
+  <text x="110" y="457" class="d-label">⚪ A cell with fewer than five tasks, or a read-only class, is a weak signal: read it as a hint.</text>
+</svg>

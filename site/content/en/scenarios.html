@@ -1,0 +1,86 @@
+<h1>Ways of working</h1>
+<p class="lede">session-hub is built on one idea: a person works directly in the session whose work they are competent in, and leaves the master to coordinate the other sessions in parallel. Here is what that looks like for one person wearing two or three hats, for two colleagues pairing with agents, and for a whole product team.</p>
+
+<h2 id="principle">The principle behind every scenario</h2>
+<p>A child is a full Claude Code session, opened in one repository with that repository's instructions, skills and agents loaded. You can type into it like into any session. What makes it a child is the scope it was given at launch: a write root it cannot leave, a master it reports to, and five message types it uses to do so.</p>
+<p>So the split of work is natural. You sit in the child that matches your role and steer it closely. The other children run in parallel on their own tasks. When the child you are in needs something outside its repository, even when you ask it yourself, it sends an <code>out-of-scope</code> message to the master, and the master routes it: to the child that owns that repository, to a new child, or to you for a decision.</p>
+<div class="note">
+  <p><strong>Messages are information, not authorization.</strong> Neither side merges, pushes, deletes or changes settings because another session asked. Approval comes from a person, in that person's session. With mods on, every message from another session carries a line that says so.</p>
+</div>
+
+<h2 id="double-hat">1. The double hat: analyst and UI/UX designer</h2>
+<p>One person carries two roles on the same feature: they write the analysis, and they are responsible for the user experience. The hub holds two repositories, <code>design</code> for the analysis and <code>prototype</code> for a working prototype of the interface.</p>
+<figure class="diagram">{{diagram:d2-double-hat}}<figcaption>One person, two hats: they work in the design child, while the master keeps the prototype child going in parallel.</figcaption></figure>
+<p>The person opens the master in the hub and asks for the feature. The master's <code>dispatch</code> skill decides that both repositories will be written, and starts one child in each with a single <code>spawn</code> call, so each child's handoff names the other as a sibling. The person then moves into the design child and writes the analysis with it. Meanwhile the prototype child builds screens from what the analysis already says.</p>
+<p>When the analysis changes something the prototype depends on, the design child does not edit the prototype: its scope guard would block the write. It sends an <code>out-of-scope</code> message to the master, which passes it to the prototype child as a <code>[master]</code> follow-up. The person keeps one train of thought, the analysis, and the other hat is worn by a session that reports back.</p>
+<figure class="illus"><img src="{{img:illus-double-hat}}" alt="Illustration: one person wearing two hats, one for analysis and one for design, with two sessions working in parallel" loading="lazy"></figure>
+
+<h2 id="three-hats">2. Developer, analyst and UI/UX designer</h2>
+<p>The same idea with three repositories: <code>design</code> (requirements and analysis), <code>prototype</code> (the interface, built and runnable) and <code>product</code> (the code that ships). One person moves between three roles; three children work in parallel.</p>
+<figure class="diagram">{{diagram:d3-three-hats}}<figcaption>Three hats, three repositories, three children. The person steps into whichever child needs a human; the master holds the others.</figcaption></figure>
+<p>Each child loads its own repository's rules: the product child follows the product's testing and branching conventions, the prototype child the prototype's. The hub's <em>Model</em> and <em>Effort</em> keys can give each repository its own default, for example <code>design: opus</code> and <code>product: sonnet</code>, and with model-router installed the grid chooses for the children the keys leave open.</p>
+<p>A hub's <em>Scope</em> key lets a child read named paths outside its write root. The product child can be given read access to the design documents and to the prototype, so it builds against them, but it still cannot change them.</p>
+<pre><code>## Child sessions
+- Repositories:
+  - `design/`: requirements, analysis and API documents, base branch `main`
+  - `prototype/`: the runnable UI prototype, base branch `main`
+  - `product/`: the product code, base branch `develop`
+- Model: design: opus; prototype: sonnet; product: sonnet
+- Scope:
+  - product: `design/docs/`, `prototype/`
+- Layout: panes</code></pre>
+<p>A section like this is written by <code>session-hub:setup</code>, which proposes values from what it finds in the hub and writes only after your explicit yes.</p>
+
+<h2 id="pair">3. AI pair programming, evolved</h2>
+<p>Classic AI pair programming is one person and one agent. Here two colleagues with different roles work at the same time on the same piece of work, each in a different session. Each forms a pair, a builder and an agent, and a master agent coordinates the flow between the two pairs.</p>
+<figure class="diagram">{{diagram:d12-pair}}<figcaption>Two pairs, builder and agent, each in their own child session, and a master agent routing what one pair needs from the other.</figcaption></figure>
+<p>Say one colleague works on the API in <code>design</code> and the other implements it in <code>product</code>. Each drives their own child directly. When the implementer's child finds that the API document is ambiguous, it sends a <code>question</code> or an <code>out-of-scope</code> message to the master; the master routes it to the design child, where the other colleague sees it and decides. Neither pair edits the other's repository, and neither has to stop to explain context: the message carries it.</p>
+<h3>How it runs today: one shared host</h3>
+<p>Today this setup runs on <strong>one shared host</strong>. Both colleagues attach over SSH to the same tmux or Herdr session on that machine, and each drives their own pane. All the sessions run under that host's Claude Code login.</p>
+<p>The reason is how sessions find each other. A child is started the way the master was started, with the same account and configuration folder, because two sessions with different configuration folders cannot message each other. The master hears its children only for sessions on its own machine. So the colleagues share the machine, not a login of their own each.</p>
+<figure class="shot">
+  <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>ssh · shared session</span></div>
+  <img src="{{img:pair-shared}}" alt="Two colleagues' terminals attached over SSH to the same multiplexer session, each driving a different child pane" loading="lazy">
+  <figcaption>Two terminals attached to the same session on the shared host. Each colleague drives their own pane; the master runs in a third.</figcaption>
+</figure>
+<figure class="illus"><img src="{{img:illus-pair}}" alt="Illustration: two people, each paired with an agent, connected through a coordinating agent" loading="lazy"></figure>
+
+<h2 id="team">4. The AI-assisted, AI-mediated product team</h2>
+<p>This is the scenario the whole design points to: a product team in which every person works with agents, and the agents carry the coordination between people.</p>
+<h3>The premise: the prototype replaces the hand-made mock-up</h3>
+<p>Detailed UI/UX mock-ups drawn by hand are costly to make and to keep current. In this team they are replaced by a <strong>prototype</strong>: a runnable interface built by a child session from the requirements and the design. The UI/UX designer is responsible for the starting <strong>Design System</strong> and for the <strong>Principles &amp; Patterns</strong> that both the prototype and the product follow. The prototype is fed by the product manager, the analysts and the designers; the builder consults it, together with the documentation, while building the product.</p>
+<figure class="diagram">{{diagram:d13-team}}<figcaption>The product manager in the master; analyst, architect and designer on design and prototype; the fullstack developer on the product; every request between them routed by the master.</figcaption></figure>
+<h3>Who works where</h3>
+<table>
+  <thead><tr><th>Person</th><th>Session</th><th>Repository and work</th></tr></thead>
+  <tbody>
+    <tr><td>Product Manager</td><td>the master</td><td>the hub: priorities, decisions, approvals; routes every request between the children</td></tr>
+    <tr><td>Analyst, Architect, UI/UX Designer</td><td>the design child</td><td><code>design</code>: requirements, PRD, architecture, UI/UX design, the Design System and the Principles &amp; Patterns</td></tr>
+    <tr><td>Analyst, Architect, UI/UX Designer</td><td>the prototype child</td><td><code>prototype</code>: the runnable interface that replaces the mock-ups, following the Design System</td></tr>
+    <tr><td>Fullstack Developer (Builder)</td><td>the product child</td><td><code>product</code>: the code that ships, built against the documentation and the prototype</td></tr>
+  </tbody>
+</table>
+<h3>A day in the team</h3>
+<p>The product manager asks the master for a weekly view. <code>dispatch</code> decides which repositories the work touches and starts the children. In the design child, the architect drafts a <code>/week</code> API. The API is a shared interface: the product child will build on it and the prototype will call it, so the design child does not just publish it. It sends the proposal to the master, and the master asks the product manager.</p>
+<figure class="shot">
+  <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>herdr · product team</span></div>
+  <img src="{{img:team-herdr}}" alt="Herdr: the product manager's master session putting a decision to them; the design, prototype and product children run on the right" loading="lazy">
+  <figcaption>The master brings the product manager the decisions that are theirs, such as approving the <code>/week</code> API or merging the three feature branches. The design, prototype and product children keep their panes on the right.</figcaption>
+</figure>
+<p>The approval is the product manager's, given in the master. A request that changes a shared interface goes to the interface's owner, and the decision goes back to every sibling that uses it: the master sends a <code>[master]</code> follow-up to the prototype and product children. The prototype child wires the new view; the builder, in the product child, reads the approved API document and the running prototype, both within the product child's read scope, and implements the endpoint with the product's own rules and tests.</p>
+<figure class="shot">
+  <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>prototype · browser</span></div>
+  <img src="{{img:prototype-browser}}" alt="The prototype built by the prototype child, open in a web browser" loading="lazy">
+  <figcaption>The prototype, built by the prototype child, in a browser. The builder consults it alongside the documentation while building the product.</figcaption>
+</figure>
+<p>When a child opens a pull request it sends <code>pr</code> with the link, and <code>done</code> when finished; the master records both in the children record and follows the hub's rules for closing. The product manager follows the whole flow from the children panel, without asking anyone for a status.</p>
+<figure class="illus"><img src="{{img:illus-team}}" alt="Illustration: a product team, each person working with an agent, coordinated through a central session" loading="lazy"></figure>
+
+<h2 id="limits">What to keep in mind</h2>
+<ul>
+  <li><strong>The guards hold the scope, the people hold the decisions.</strong> The scope guard blocks file edits outside a child's write root, also with mods off. The send guard and the shell check need mods on; the shell check is best effort.</li>
+  <li><strong>One machine.</strong> The master hears children on its own machine, and children use the master's account and configuration folder. Teams share one host today, as in scenario 3.</li>
+  <li><strong>The desktop app has no guard.</strong> A child started there gets no role variables, so its scope holds by the handoff alone; <code>spawn</code> says so in its report.</li>
+  <li><strong>Trust is per repository.</strong> The first time a child runs in a repository nested in a trusted hub, it may stop at the trust prompt. That prompt is yours to answer.</li>
+</ul>
+<p>The mechanics behind all of this are described in <a href="{{link:session-hub}}">session-hub in detail</a>; how each child gets its model is in <a href="{{link:model-router}}">model-router</a>.</p>

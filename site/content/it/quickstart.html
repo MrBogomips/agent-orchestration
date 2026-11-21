@@ -1,0 +1,83 @@
+<!-- translated-from: en/quickstart.html sha256:6ed048f3ada5 -->
+<h1>Guida rapida</h1>
+<p class="lede">Partiamo da zero fino ad avere un hub con due sessioni figlie che lavorano in parallelo e le prime decisioni di routing sullo schermo. Ogni passaggio ti dice cosa dovresti vedere, così sai che tutto ha funzionato prima di andare avanti.</p>
+
+<h2 id="requirements">Requisiti</h2>
+<table>
+  <thead><tr><th>Requisito</th><th>Valore</th></tr></thead>
+  <tbody>
+    <tr><td>Claude Code, per le mod</td><td>2.1.329 o successiva; entrambi i plugin dichiarano <code>engines["claude-code"]: "&gt;=2.1.329"</code> e sono stati testati sulla 2.1.329 e 2.1.330</td></tr>
+    <tr><td>Claude Code, per i messaggi tra sessioni (session-hub)</td><td>2.1.224 o successiva</td></tr>
+    <tr><td>Mod</td><td>Attive, sia per la mod session-hub (protezione sugli invii, controllo della shell, marcatura dell'origine, riga dello scope, pannello delle sessioni figlie, <code>/session-hub</code>) sia per la mod model-router (routing, misurazioni, la riga 🔀 sotto le chiamate Agent, <code>/model-router</code>)</td></tr>
+    <tr><td><code>node</code></td><td>Presente nel PATH: la protezione dello scope, lo script del registro, il pannello e tutti gli script di model-router girano su Node, senza dipendenze</td></tr>
+    <tr><td>Sistema operativo</td><td>macOS o Linux</td></tr>
+  </tbody>
+</table>
+<p>Le skill e l'hook a protezione dello scope funzionano anche con le mod disattivate. Perdi però le protezioni sui messaggi e sui comandi shell, il pannello, il routing all'avvio dei subagent, le misurazioni ed entrambi i comandi.</p>
+
+<h2 id="install">Installazione dal marketplace</h2>
+<p>Entrambi i plugin si trovano nel marketplace <code>mrbogomips</code>. Da dentro Claude Code:</p>
+<pre><code>/plugin marketplace add MrBogomips/claude-plugins
+/plugin install session-hub@mrbogomips
+/plugin install model-router@mrbogomips</code></pre>
+<p>Oppure dal terminale:</p>
+<pre><code>claude plugin marketplace add MrBogomips/claude-plugins
+claude plugin install session-hub@mrbogomips
+claude plugin install model-router@mrbogomips</code></pre>
+<p>Ogni plugin funziona anche da solo. Se li installi entrambi, <code>session-hub:spawn</code> carica <code>model-router:choose-model</code> per scegliere il modello e l'effort di ogni sessione figlia; senza model-router, la sessione figlia eredita modello ed effort del master, e <code>spawn</code> lo segnala nel suo report.</p>
+
+<h2 id="mods">Controlla che le mod siano attive</h2>
+<p>Digita <code>/session-hub</code> o <code>/model-router</code>. Se Claude Code non riconosce il comando, la mod non è caricata: o le mod sono disattivate, oppure la versione di Claude Code è precedente alla 2.1.329 (controlla con <code>claude --version</code>). In una sessione senza ruolo nell'hub, <code>/session-hub</code> risponde:</p>
+<pre><code>session-hub: This session has no session-hub role. It becomes a master when it uses session-hub:spawn or session-hub:dispatch.</code></pre>
+
+<h2 id="hub">Configura un hub</h2>
+<p>Un hub è una cartella qualsiasi che raccoglie diversi repository git, come sottocartelle o submodule. Apri Claude Code nella cartella radice e chiedi in linguaggio naturale:</p>
+<pre><code>set up session-hub for this hub</code></pre>
+<p><code>session-hub:setup</code> analizza l'hub (sottocartelle con <code>.git</code>, <code>.gitmodules</code>, il branch di base di ogni repository, le regole per i worktree), propone una sezione <code>## Child sessions</code> per il file <code>AGENTS.md</code> (o <code>CLAUDE.md</code>) dell'hub, te la mostra e la scrive solo dopo una tua conferma esplicita. Non esegue commit. Ogni chiave è facoltativa: senza questa sezione, <code>spawn</code> usa i valori predefiniti e nel report ti propone di eseguire <code>setup</code>.</p>
+<div class="tip"><p>Tieni gli hub di test dentro la tua cartella home. Durante i test, un hub messo nella cartella temporanea di sistema non caricava alcun file di istruzioni del progetto.</p></div>
+
+<h2 id="spawn">Il tuo primo spawn</h2>
+<p>Se puoi, avvia il master dentro Herdr o tmux: in questo modo <code>spawn</code> apre ogni sessione figlia in un pane accanto al tuo, con la protezione dello scope attiva. Chiedi un'attività che tocca due repository:</p>
+<pre><code>T-42: add GET /export to product (CSV, at most 10 000 rows) and document the limit in design/docs/api/export.md.</code></pre>
+<p>Si carica <code>dispatch</code>, dichiara la sua decisione in una breve tabella (una sessione figlia in scrittura per <code>product</code>, una per <code>design</code>), poi chiama <code>spawn</code> una sola volta per entrambe, così ogni handoff cita l'altra come sessione sorella. Il report elenca per ogni sessione figlia il nome, il repository, la radice di scrittura, il modello e l'effort, l'ambiente, come aprirla ed eventuali avvertenze.</p>
+<div class="tabs" style="margin-top: 24px">
+  <input type="radio" name="qs-hub" id="qs-hub-herdr" checked><label for="qs-hub-herdr">Herdr</label>
+  <input type="radio" name="qs-hub" id="qs-hub-tmux"><label for="qs-hub-tmux">tmux</label>
+  <div class="tab">
+    <figure class="shot"><img src="{{img:hub-herdr}}" alt="Herdr con il master a sinistra e due sessioni figlie appena avviate a destra" loading="lazy"><figcaption>In Herdr: il master a sinistra, le due sessioni figlie a destra.</figcaption></figure>
+  </div>
+  <div class="tab">
+    <figure class="shot"><img src="{{img:hub-tmux}}" alt="tmux con il master nel pane di sinistra e due sessioni figlie nei pane di destra" loading="lazy"><figcaption>In tmux: la prima sessione figlia si apre a destra del master, la successiva subito sotto.</figcaption></figure>
+  </div>
+</div>
+<div class="note"><p><strong>Primo avvio in un repository.</strong> L'autorizzazione della cartella non si propaga automaticamente ai repository annidati dentro un hub già autorizzato. Una sessione figlia potrebbe fermarsi al prompt di autorizzazione nel proprio pane, mentre <code>claude --bg</code> fallisce con l'errore <code>Workspace not trusted</code>. Rispondi al prompt (oppure apri il repository una volta con <code>claude</code>) e poi fai riprovare il master.</p></div>
+
+<h2 id="session-hub-command">Controlla le sessioni figlie: /session-hub</h2>
+<p>Nel master, <code>/session-hub</code> mostra il percorso del registro e una tabella delle sessioni figlie: stato nel registro, stato in tempo reale dall'elenco delle sessioni, modello ed effort, ultimo messaggio. Apre anche il pannello delle sessioni figlie accanto alla chat, aggiornato ogni 30 secondi. In una sessione figlia, lo stesso comando ne mostra il ruolo, la radice di scrittura, l'handoff e indica se le protezioni sono attive.</p>
+<figure class="shot"><img src="{{img:sh-master}}" alt="/session-hub nel master: la tabella delle sessioni figlie con stato, stato in tempo reale, modello ed effort e ultimo messaggio" loading="lazy"><figcaption><code>/session-hub</code> nel master. Una sessione figlia che ha terminato ed è uscita dall'elenco delle sessioni riporta <code>not listed</code>.</figcaption></figure>
+
+<h2 id="first-route">La tua prima decisione di routing</h2>
+<p>Con model-router installato, <code>choose-model</code> entra in gioco ogni volta che l'agente sta per avviare un subagent. Chiedi un'operazione che ne richieda uno, ad esempio una ricerca su un repository di grandi dimensioni. Prima dell'avvio, l'agente scrive una riga:</p>
+<pre><code>🔀 haiku ▰▱▱▱ low -> find callers of parseConfig, easy to check</code></pre>
+<p>La riga indica: il modello, una barra dell'effort da quattro tacche (da una per <code>low</code> a quattro per <code>xhigh</code>), l'effort e il motivo in meno di dodici parole. Con la mod attiva, la stessa riga compare a colori sotto la chiamata <code>Agent</code>, con il modello e l'effort effettivamente assegnati al subagent dopo il routing:</p>
+<pre><code>⏺ Agent([mr:read-search] Find the CSV writer)
+  ⎿  🔀 haiku  ▰▱▱▱ low    -> judge: read-search; lowered from sonnet</code></pre>
+<figure class="shot"><img src="{{img:mr-agent-lines}}" alt="Tre chiamate Agent con la riga 🔀 colorata sotto ciascuna: il modello, la barra dell'effort, l'effort e il motivo del routing" loading="lazy"><figcaption>Tre subagent avviati da una sessione sonnet: il judge ha abbassato il primo a haiku, il secondo richiedeva esplicitamente opus ed è stato mantenuto, il terzo ha tenuto sonnet ricevendo l'impostazione dell'effort. <span class="badge demo">Dati demo</span></figcaption></figure>
+<p>Più chiamate <code>Agent</code> effettuate in uno stesso messaggio vengono raggruppate in un'unica riga "background agents launched"; premi ctrl+o per espandere ogni chiamata con la relativa riga.</p>
+
+<h2 id="model-router-command">Consulta le misurazioni: /model-router</h2>
+<p><code>/model-router</code> apre la vista d'uso sulla scheda Overview, ultimi 7 giorni, a livello utente. Con Tab e Shift+Tab ti sposti tra Overview, Models, Classes e Decisions; <code>d</code>, <code>w</code>, <code>m</code>, <code>a</code> selezionano l'intervallo temporale; <code>p</code> alterna tra i tuoi dati globali e quelli del progetto corrente; <code>o</code> genera e apre la pagina del report; Esc chiude la vista.</p>
+<p>Non aspettarti numeri fin da subito. Un'attività viene conteggiata solo quando si chiude la sua finestra di rilavorazione, cioè 30 minuti dopo il report del subagent oppure a fine sessione. In <a href="{{link:model-router}}#real-session">una sessione reale</a> puoi vedere cosa aspettarti dopo un giorno, una settimana e un mese.</p>
+
+<h2 id="project-defaults">Registra le eccezioni di un progetto: model-router:setup</h2>
+<p>In un progetto in cui certe attività richiedono più di quanto assegni la griglia, o in cui basta meno, chiedi:</p>
+<pre><code>set up model routing for this project</code></pre>
+<p><code>model-router:setup</code> ti chiede quali valori predefiniti ed eccezioni vuoi impostare, ne suggerisce alcune analizzando il repository (migrazioni, infrastruttura, fatturazione, codice generato, refactoring massivi), ti mostra la sezione <code>## Model routing</code> esatta e la scrive nel file <code>AGENTS.md</code> del progetto solo dopo un tuo sì esplicito. Trovi tutti i dettagli nella <a href="{{link:model-router}}#configure">pagina di model-router</a>.</p>
+
+<div class="cta-band">
+  <div>
+    <h2>Tieni il manuale a portata di mano.</h2>
+    <p>Tutti i comandi, i tasti e le opzioni di entrambi i plugin, un esempio completo e una sezione per la risoluzione dei problemi, in un unico PDF.</p>
+  </div>
+  <a class="btn btn-primary" href="{{download:user-manual.pdf}}">{{s:cta.manual}}</a>
+</div>

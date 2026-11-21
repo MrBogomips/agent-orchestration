@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 736" role="img">
+  <title>The scope guard checks every file edit: outside a child it allows at once; in a child it blocks whenever it cannot decide, finds where the path really leads, allows the edit inside the write root and blocks it outside, telling the child to ask the master. With mods on, a best-effort check also watches the shell.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+  </defs>
+
+  <!-- main path: questions, top to bottom -->
+  <rect x="20" y="16" width="450" height="56" rx="28" class="d-node d-primary"/>
+  <text x="245" y="40" class="d-title">The agent is about to edit a file</text>
+  <text x="245" y="60" class="d-cap">Edit · Write · NotebookEdit</text>
+
+  <rect x="20" y="96" width="450" height="84" rx="12" class="d-node"/>
+  <text x="245" y="128" class="d-title">Is this a child session?</text>
+  <text x="245" y="152" class="d-note">and are its guards turned on?</text>
+
+  <rect x="20" y="204" width="450" height="84" rx="12" class="d-node"/>
+  <text x="245" y="234" class="d-title">Can the guard check this edit?</text>
+  <text x="245" y="256" class="d-note">a readable request, a valid write root,</text>
+  <text x="245" y="273" class="d-note">an absolute path, an answer within 7 s</text>
+
+  <rect x="20" y="312" width="450" height="84" rx="12" class="d-node"/>
+  <text x="245" y="342" class="d-title">Find where the path really leads</text>
+  <text x="245" y="364" class="d-note">it follows links and “..” the way</text>
+  <text x="245" y="381" class="d-note">the file system does</text>
+
+  <rect x="20" y="420" width="450" height="84" rx="12" class="d-node"/>
+  <text x="245" y="450" class="d-title">Is it inside the write root?</text>
+  <text x="245" y="472" class="d-note">the real path, compared with</text>
+  <text x="245" y="489" class="d-note">the real write root</text>
+
+  <rect x="20" y="528" width="450" height="56" rx="12" class="d-node d-allow"/>
+  <text x="245" y="561" class="d-title">Allowed: the edit goes ahead</text>
+
+  <g class="d-edge">
+    <path d="M245 72V92" marker-end="url(#a)"/>
+    <path d="M245 180V200" marker-end="url(#a)"/>
+    <path d="M245 288V308" marker-end="url(#a)"/>
+    <path d="M245 396V416" marker-end="url(#a)"/>
+    <path d="M245 504V524" marker-end="url(#a)"/>
+  </g>
+  <text x="256" y="195" class="d-elabel">yes</text>
+  <text x="256" y="303" class="d-elabel">yes</text>
+  <text x="256" y="519" class="d-elabel">yes</text>
+
+  <!-- the exits on the right -->
+  <rect x="540" y="96" width="360" height="84" rx="12" class="d-node d-allow"/>
+  <text x="720" y="128" class="d-title">Allowed at once</text>
+  <text x="720" y="150" class="d-note">outside a child, the guard</text>
+  <text x="720" y="167" class="d-note">never gets in the way</text>
+
+  <rect x="540" y="204" width="360" height="84" rx="12" class="d-node d-block"/>
+  <text x="720" y="234" class="d-title">Blocked, and it says why</text>
+  <text x="720" y="256" class="d-note">when it cannot decide, it blocks:</text>
+  <text x="720" y="273" class="d-note">the guard fails closed</text>
+
+  <rect x="540" y="420" width="360" height="84" rx="12" class="d-node d-block"/>
+  <text x="720" y="450" class="d-title">Blocked: outside the write root</text>
+  <text x="720" y="472" class="d-note">the child asks the master with</text>
+  <text x="720" y="489" class="d-note">an out-of-scope message instead</text>
+
+  <g class="d-edge">
+    <path d="M470 138H536" marker-end="url(#a)"/>
+    <path d="M470 246H536" marker-end="url(#a)"/>
+    <path d="M470 462H536" marker-end="url(#a)"/>
+  </g>
+  <text x="503" y="130" class="d-elabel d-mid">no</text>
+  <text x="503" y="238" class="d-elabel d-mid">no</text>
+  <text x="503" y="454" class="d-elabel d-mid">no</text>
+
+  <!-- the shell -->
+  <rect x="20" y="608" width="880" height="112" rx="14" class="d-zone"/>
+  <text x="40" y="638" class="d-label b">With mods on, a best-effort check also watches the shell.</text>
+  <text x="40" y="660" class="d-label">It denies redirections and commands such as tee, cp, mv, rm or sed -i</text>
+  <text x="40" y="680" class="d-label">when they would write outside the write root; targets in variables or globs are not judged.</text>
+  <text x="40" y="700" class="d-label">With mods off, only the handoff forbids writing through the shell.</text>
+</svg>

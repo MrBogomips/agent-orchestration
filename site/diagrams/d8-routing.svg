@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 680" role="img">
+  <title>When a subagent starts, the router keeps the request as it is if it already carries a model or is a fork or a resume, if its agent fixes its own model, or if routing is off; otherwise one call to the judge lowers, raises or escalates the model, and any error leaves the request unchanged. The model is set when the subagent starts, the effort on each of its requests.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+  </defs>
+  <rect x="210" y="16" width="400" height="46" rx="23" class="d-node d-primary"/>
+  <text x="410" y="45" class="d-title">A subagent starts (Agent tool)</text>
+
+  <!-- three reasons to leave it alone -->
+  <rect x="200" y="88" width="420" height="62" rx="12" class="d-node"/>
+  <text x="410" y="114" class="d-title">Does it already carry a model?</text>
+  <text x="410" y="136" class="d-note">or is it a fork, or a resume?</text>
+  <rect x="200" y="174" width="420" height="62" rx="12" class="d-node"/>
+  <text x="410" y="200" class="d-title">Does its agent fix its own model?</text>
+  <text x="410" y="222" class="d-note">or is it a plugin’s agent, or unreadable?</text>
+  <rect x="200" y="260" width="420" height="62" rx="12" class="d-node"/>
+  <text x="410" y="286" class="d-title">Is routing turned off?</text>
+  <text x="410" y="308" class="d-note">or is a session-wide subagent model set?</text>
+
+  <rect x="690" y="88" width="210" height="234" rx="14" class="d-node d-allow"/>
+  <text x="795" y="194" class="d-big d-mid">Keep</text>
+  <text x="795" y="218" class="d-note">the request goes</text>
+  <text x="795" y="235" class="d-note">on unchanged</text>
+
+  <g class="d-edge">
+    <path d="M410 62V84" marker-end="url(#a)"/><path d="M410 150V170" marker-end="url(#a)"/>
+    <path d="M410 236V256" marker-end="url(#a)"/><path d="M410 322V352" marker-end="url(#a)"/>
+    <path d="M620 119H686" marker-end="url(#a)"/><path d="M620 205H686" marker-end="url(#a)"/><path d="M620 291H686" marker-end="url(#a)"/>
+  </g>
+  <text x="653" y="111" class="d-elabel d-mid">yes</text><text x="653" y="197" class="d-elabel d-mid">yes</text><text x="653" y="283" class="d-elabel d-mid">yes</text>
+  <text x="422" y="341" class="d-elabel">no</text>
+
+  <!-- the judge, inside the fail-open zone -->
+  <rect x="20" y="356" width="880" height="226" rx="16" class="d-zone"/>
+  <rect x="250" y="370" width="320" height="62" rx="12" class="d-node d-primary"/>
+  <text x="410" y="396" class="d-title">Ask the judge</text>
+  <text x="410" y="418" class="d-note">one call to the fast tier, 8 s at most</text>
+  <g class="d-edge">
+    <path d="M320 432C320 452 165 446 165 466" marker-end="url(#a)"/>
+    <path d="M440 432V466" marker-end="url(#a)"/>
+    <path d="M520 432C520 452 745 446 745 466" marker-end="url(#a)"/>
+  </g>
+  <rect x="40" y="470" width="270" height="56" rx="12" class="d-node"/>
+  <text x="175" y="494" class="d-title">Lower the model</text>
+  <text x="175" y="514" class="d-note">confidence 0.6 or more</text>
+  <rect x="325" y="470" width="270" height="56" rx="12" class="d-node"/>
+  <text x="460" y="494" class="d-title">Raise the model</text>
+  <text x="460" y="514" class="d-note">confidence 0.3 or more</text>
+  <rect x="610" y="470" width="270" height="72" rx="12" class="d-node d-block"/>
+  <text x="745" y="494" class="d-title">Risky work</text>
+  <text x="745" y="514" class="d-note">risk above 0.7, or a ! tag:</text>
+  <text x="745" y="531" class="d-note">deep tier, effort ≥ high</text>
+  <text x="40" y="552" class="d-label b">It fails open: any error leaves the request unchanged.</text>
+  <text x="40" y="570" class="d-label">That covers a timeout and an unreadable answer too; a ! tag still goes to the deep tier.</text>
+
+  <!-- when each part is applied -->
+  <rect x="20" y="604" width="430" height="62" rx="12" class="d-node d-accent"/>
+  <text x="235" y="630" class="d-title">Model: set when it starts</text>
+  <text x="235" y="651" class="d-note">at agent.spawn</text>
+  <rect x="470" y="604" width="430" height="62" rx="12" class="d-node d-accent"/>
+  <text x="685" y="630" class="d-title">Effort: set on each of its requests</text>
+  <text x="685" y="651" class="d-note">at each turn.step, never on the start call</text>
+</svg>

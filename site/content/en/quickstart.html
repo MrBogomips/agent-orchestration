@@ -1,0 +1,82 @@
+<h1>Quickstart</h1>
+<p class="lede">From nothing to a hub with two children working in parallel, and your first routing decisions on screen. Each step says what you should see, so you know it worked before you move on.</p>
+
+<h2 id="requirements">Requirements</h2>
+<table>
+  <thead><tr><th>Requirement</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Claude Code, for the mods</td><td>2.1.329 or later; both plugins declare <code>engines["claude-code"]: "&gt;=2.1.329"</code> and were tested on 2.1.329 and 2.1.330</td></tr>
+    <tr><td>Claude Code, for messages between sessions (session-hub)</td><td>2.1.224 or later</td></tr>
+    <tr><td>Mods</td><td>Turned on, for the session-hub mod (send guard, shell check, origin marking, scope line, children panel, <code>/session-hub</code>) and the model-router mod (routing, measurement, the 🔀 line under Agent calls, <code>/model-router</code>)</td></tr>
+    <tr><td><code>node</code></td><td>On your PATH: the scope guard, the record script, the panel and every model-router script run on Node, with no dependencies</td></tr>
+    <tr><td>Operating system</td><td>macOS or Linux</td></tr>
+  </tbody>
+</table>
+<p>The skills and the scope guard hook work with mods turned off. You lose the guards on messages and shell commands, the panel, the routing of subagent starts, the measurements and both commands.</p>
+
+<h2 id="install">Install from the marketplace</h2>
+<p>Both plugins are listed in the <code>mrbogomips</code> marketplace. Inside Claude Code:</p>
+<pre><code>/plugin marketplace add MrBogomips/claude-plugins
+/plugin install session-hub@mrbogomips
+/plugin install model-router@mrbogomips</code></pre>
+<p>Or from a shell:</p>
+<pre><code>claude plugin marketplace add MrBogomips/claude-plugins
+claude plugin install session-hub@mrbogomips
+claude plugin install model-router@mrbogomips</code></pre>
+<p>Each plugin works without the other. Installed together, <code>session-hub:spawn</code> loads <code>model-router:choose-model</code> to choose each child's model and effort; without model-router, a child inherits the master's model and effort, and <code>spawn</code> says so in its report.</p>
+
+<h2 id="mods">Check that the mods are on</h2>
+<p>Type <code>/session-hub</code> or <code>/model-router</code>. If Claude Code does not know the command, the mod is not loaded: mods are off, or Claude Code is older than 2.1.329 (check with <code>claude --version</code>). In a session with no hub role, <code>/session-hub</code> answers:</p>
+<pre><code>session-hub: This session has no session-hub role. It becomes a master when it uses session-hub:spawn or session-hub:dispatch.</code></pre>
+
+<h2 id="hub">Set up a hub</h2>
+<p>A hub is any folder that holds several git repositories, as subfolders or submodules. Open Claude Code at its root and ask in plain words:</p>
+<pre><code>set up session-hub for this hub</code></pre>
+<p><code>session-hub:setup</code> looks at the hub (child folders with <code>.git</code>, <code>.gitmodules</code>, each repository's base branch, worktree rules), proposes a <code>## Child sessions</code> section for the hub's <code>AGENTS.md</code> (or <code>CLAUDE.md</code>), shows it, and writes it only after your explicit yes. It does not commit. Every key is optional: without the section, <code>spawn</code> uses the defaults and offers <code>setup</code> in its report.</p>
+<div class="tip"><p>Keep test hubs under your home folder. A hub under the system temporary folder loaded no project instruction file at all in testing.</p></div>
+
+<h2 id="spawn">Your first spawn</h2>
+<p>Run the master inside Herdr or tmux if you can: <code>spawn</code> then opens each child in a pane beside you, with the scope guard active. Ask for a task that touches two repositories:</p>
+<pre><code>T-42: add GET /export to product (CSV, at most 10 000 rows) and document the limit in design/docs/api/export.md.</code></pre>
+<p><code>dispatch</code> loads, states its decision in a short table (one editing child for <code>product</code>, one for <code>design</code>), then calls <code>spawn</code> once for both, so each handoff names the other as a sibling. The report lists each child's name, repository, write root, model and effort, environment, how to open it, and any caveats.</p>
+<div class="tabs" style="margin-top: 24px">
+  <input type="radio" name="qs-hub" id="qs-hub-herdr" checked><label for="qs-hub-herdr">Herdr</label>
+  <input type="radio" name="qs-hub" id="qs-hub-tmux"><label for="qs-hub-tmux">tmux</label>
+  <div class="tab">
+    <figure class="shot"><img src="{{img:hub-herdr}}" alt="Herdr with the master on the left and two freshly started children on the right" loading="lazy"><figcaption>In Herdr: the master on the left, the two children on the right.</figcaption></figure>
+  </div>
+  <div class="tab">
+    <figure class="shot"><img src="{{img:hub-tmux}}" alt="tmux with the master in the left pane and two children in the right panes" loading="lazy"><figcaption>In tmux: the first child opens to the right of the master, the next one below it.</figcaption></figure>
+  </div>
+</div>
+<div class="note"><p><strong>First run in a repository.</strong> Folder trust is not inherited by a repository nested in a trusted hub. A child may stop at the trust prompt in its own pane, and <code>claude --bg</code> fails with <code>Workspace not trusted</code>. Answer the prompt (or open the repository once with <code>claude</code>), then let the master retry.</p></div>
+
+<h2 id="session-hub-command">See your children: /session-hub</h2>
+<p>In the master, <code>/session-hub</code> shows the record's path and a table of the children: status in the record, live status from the session list, model and effort, last message. It also opens the children panel beside the chat, refreshed every 30 seconds. In a child, the same command shows its role, write root, handoff and whether the guards are on.</p>
+<figure class="shot"><img src="{{img:sh-master}}" alt="/session-hub in the master: the children table with status, live status, model and effort and last message" loading="lazy"><figcaption><code>/session-hub</code> in the master. A child that finished and left the session list reads <code>not listed</code>.</figcaption></figure>
+
+<h2 id="first-route">Your first routing decision</h2>
+<p>With model-router installed, <code>choose-model</code> loads whenever the agent is about to start a subagent. Ask for something that needs one, for example a search across a large repository. Before the start, the agent writes one line:</p>
+<pre><code>🔀 haiku ▰▱▱▱ low -> find callers of parseConfig, easy to check</code></pre>
+<p>The line reads: the model, an effort bar of four cells (one for <code>low</code> to four for <code>xhigh</code>), the effort, and the reason in under twelve words. With the mod on, the same line is drawn in colour under the <code>Agent</code> call's row, with the model and effort the subagent actually got after routing:</p>
+<pre><code>⏺ Agent([mr:read-search] Find the CSV writer)
+  ⎿  🔀 haiku  ▰▱▱▱ low    -> judge: read-search; lowered from sonnet</code></pre>
+<figure class="shot"><img src="{{img:mr-agent-lines}}" alt="Three Agent calls with the coloured 🔀 line under each: the model, the effort bar, the effort and the routing reason" loading="lazy"><figcaption>Three subagents started from a sonnet session: the judge lowered the first to haiku, the second named opus explicitly and was kept, the third kept sonnet and got its effort set. <span class="badge demo">Demo data</span></figcaption></figure>
+<p>Several <code>Agent</code> calls made in one message are drawn as one "background agents launched" row; press ctrl+o to see each call with its line.</p>
+
+<h2 id="model-router-command">See the measurements: /model-router</h2>
+<p><code>/model-router</code> opens the usage view on Overview, last 7 days, user level. Tab and Shift+Tab switch between Overview, Models, Classes and Decisions; <code>d</code>, <code>w</code>, <code>m</code>, <code>a</code> pick the window; <code>p</code> switches between your data across projects and this project's; <code>o</code> writes and opens the report page; Esc closes.</p>
+<p>Do not expect numbers at once. A task counts only once its rework window has closed, 30 minutes after the subagent's report or at the end of the session. What to expect after one day, a week and a month is shown in <a href="{{link:model-router}}#real-session">a real session</a>.</p>
+
+<h2 id="project-defaults">Record a project's exceptions: model-router:setup</h2>
+<p>In a project where some work needs more than the grid gives, or can take less, ask:</p>
+<pre><code>set up model routing for this project</code></pre>
+<p><code>model-router:setup</code> asks about defaults and exceptions, suggests some from the repository (migrations, infrastructure, billing, generated code, bulk refactors), shows the exact <code>## Model routing</code> section and writes it to the project's <code>AGENTS.md</code> only after your clear yes. Details are on the <a href="{{link:model-router}}#configure">model-router page</a>.</p>
+
+<div class="cta-band">
+  <div>
+    <h2>Keep the manual at hand.</h2>
+    <p>Every command, key and option of both plugins, a worked example and a troubleshooting section, in one PDF.</p>
+  </div>
+  <a class="btn btn-primary" href="{{download:user-manual.pdf}}">{{s:cta.manual}}</a>
+</div>

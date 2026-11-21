@@ -11,6 +11,9 @@ Two plugins for teams that have outgrown one session in one repository:
 
 Each plugin works on its own and does more alongside the other.
 
+🌐 **[Documentation site](https://mrbogomips.github.io/agent-orchestration/)**, in English and Italian: concept, scenarios,
+quickstart and architecture.
+
 📘 **[Read the user manual (PDF)](docs/manual/user-manual.pdf)**: every feature, with examples and screenshots.
 
 ---
@@ -104,6 +107,7 @@ turned on: in `session-hub` the send guard, the shell check, message marking and
 
 | Document | For |
 |---|---|
+| [Documentation site](https://mrbogomips.github.io/agent-orchestration/) | The plugins explained: concept, ways of working, quickstart, model-router in depth, architecture. Source: `site/`, see `site/README.md`. |
 | [User manual (PDF)](docs/manual/user-manual.pdf) | Using both plugins: features, commands, examples, screenshots. Source: `docs/manual/manual.html`, built with `docs/manual/build.sh`. |
 | [`session-hub` README](session-hub/README.md), [`model-router` README](model-router/README.md) | Each plugin's components, commands and options. |
 | [Architecture](docs/architecture.md) | How both plugins work, as built, and what is planned. |

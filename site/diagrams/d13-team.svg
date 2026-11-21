@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 604" role="img">
+  <title>A team in one hub, each person in their own session: the Product Manager drives the master session, which coordinates three child sessions; analyst, architect and UI/UX designer work in design, which holds the requirements, the architecture and the Design System; the prototype, fed through the master, replaces hand-made mock-ups; the fullstack developer builds the product and consults the prototype and the documentation read-only. Prototype and product both follow the Design System.</title>
+  <defs>
+    <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-strong"/></marker>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-ah-cyan"/></marker>
+  </defs>
+
+  <!-- the premise -->
+  <text x="460" y="24" class="d-label d-mid b">The prototype replaces hand-made UI/UX mock-ups.</text>
+  <text x="460" y="44" class="d-label d-mid">Instead, the designer supplies the Design System and Principles &amp; Patterns,</text>
+  <text x="460" y="62" class="d-label d-mid">and both the prototype and the product follow them.</text>
+
+  <!-- PM and master -->
+  <circle cx="230" cy="108" r="14" class="d-human"/>
+  <path d="M204 152Q204 128 230 128Q256 128 256 152Z" class="d-human"/>
+  <text x="230" y="174" class="d-label d-mid b">Product Manager</text>
+  <g class="d-edge cyan"><path d="M262 134H316" marker-end="url(#c)"/></g>
+  <rect x="320" y="84" width="280" height="106" rx="14" class="d-node d-primary"/>
+  <text x="460" y="110" class="d-title">Master session</text>
+  <text x="460" y="134" class="d-note">coordinates the three children,</text>
+  <text x="460" y="152" class="d-note">relays decisions and requests,</text>
+  <text x="460" y="170" class="d-note">keeps the record and the panel</text>
+
+  <g class="d-edge strong">
+    <path d="M390 190C390 212 155 206 155 228" marker-start="url(#s)" marker-end="url(#s)"/>
+    <path d="M460 190V228" marker-start="url(#s)" marker-end="url(#s)"/>
+    <path d="M530 190C530 212 765 206 765 228" marker-start="url(#s)" marker-end="url(#s)"/>
+  </g>
+
+  <!-- design -->
+  <rect x="20" y="232" width="270" height="252" rx="16" class="d-zone"/>
+  <circle cx="48" cy="256" r="12" class="d-human"/>
+  <path d="M26 292Q26 272 48 272Q70 272 70 292Z" class="d-human"/>
+  <text x="80" y="262" class="d-label b">Analyst · Architect</text>
+  <text x="80" y="280" class="d-label b">UI/UX Designer</text>
+  <rect x="30" y="300" width="250" height="96" rx="12" class="d-node"/>
+  <text x="155" y="324" class="d-title">Child · design</text>
+  <text x="155" y="345" class="d-note">requirements, PRD,</text>
+  <text x="155" y="362" class="d-note">architecture,</text>
+  <text x="155" y="379" class="d-note">UI/UX design</text>
+  <rect x="30" y="408" width="250" height="50" rx="12" class="d-node d-accent"/>
+  <text x="155" y="429" class="d-title">Design System</text>
+  <text x="155" y="448" class="d-note">+ Principles &amp; Patterns</text>
+  <text x="36" y="476" class="d-zone-label">write root design/</text>
+
+  <!-- prototype -->
+  <rect x="325" y="232" width="270" height="252" rx="16" class="d-zone"/>
+  <text x="460" y="262" class="d-note">fed by the PM, analysts</text>
+  <text x="460" y="280" class="d-note">and designers, via the master</text>
+  <rect x="335" y="300" width="250" height="96" rx="12" class="d-node"/>
+  <text x="460" y="340" class="d-title">Child · prototype</text>
+  <text x="460" y="362" class="d-note">the UI, without mock-ups</text>
+  <rect x="340" y="416" width="240" height="32" rx="16" class="d-node d-accent"/>
+  <text x="460" y="437" class="d-elabel ink d-mid">follows the Design System</text>
+  <text x="341" y="476" class="d-zone-label">write root prototype/</text>
+
+  <!-- product -->
+  <rect x="630" y="232" width="270" height="252" rx="16" class="d-zone"/>
+  <circle cx="658" cy="256" r="12" class="d-human"/>
+  <path d="M636 292Q636 272 658 272Q680 272 680 292Z" class="d-human"/>
+  <text x="690" y="262" class="d-label b">Fullstack Developer</text>
+  <text x="690" y="280" class="d-note d-start">the Builder</text>
+  <rect x="640" y="300" width="250" height="96" rx="12" class="d-node"/>
+  <text x="765" y="340" class="d-title">Child · product</text>
+  <text x="765" y="362" class="d-note">builds the product</text>
+  <rect x="645" y="416" width="240" height="32" rx="16" class="d-node d-accent"/>
+  <text x="765" y="437" class="d-elabel ink d-mid">follows the Design System</text>
+  <text x="646" y="476" class="d-zone-label">write root product/</text>
+
+  <!-- the Design System guides both -->
+  <g class="d-edge strong">
+    <path d="M280 432H336" marker-end="url(#s)"/>
+    <path d="M580 432H641" marker-end="url(#s)"/>
+  </g>
+  <!-- the Builder consults, read-only -->
+  <g class="d-edge dashed">
+    <path d="M585 348H636" marker-end="url(#a)"/>
+    <path d="M155 484V506H765V490" marker-end="url(#a)"/>
+  </g>
+  <text x="460" y="526" class="d-elabel d-mid">the Builder consults the prototype and the documentation, read-only</text>
+
+  <path d="M20 544V552H900V544" class="d-rule"/>
+  <text x="460" y="574" class="d-label d-mid b">A change in another repository goes to the master as an out-of-scope request.</text>
+  <text x="460" y="594" class="d-label d-mid">Children never write each other’s repositories; each person works in their own session.</text>
+</svg>

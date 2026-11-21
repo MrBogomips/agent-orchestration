@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 600" role="img">
+  <title>The grid asks its questions in order and stops at the first yes: haiku for simple, repetitive work that is easy to check, sonnet when done fits in one sentence, fable for large open-ended work where judgment and accuracy both matter, opus for everything else and whenever in doubt; effort is low for a simple task, high when a missed mistake would be costly, xhigh for long, hard, critical and unattended work, medium otherwise, and never max. Every start also names one of six task classes.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+  </defs>
+  <text x="20" y="30" class="d-head">Model: the first fit wins</text>
+  <text x="470" y="30" class="d-head">Effort: the first yes wins</text>
+
+  <!-- model -->
+  <rect x="20" y="48" width="430" height="66" rx="12" class="d-node"/>
+  <text x="36" y="76" class="d-label b">Simple, repetitive work?</text>
+  <text x="36" y="96" class="d-note d-start">easy to check, no judgment calls</text>
+  <rect x="348" y="64" width="88" height="34" rx="17" class="d-node d-primary"/><text x="392" y="86" class="d-elabel ink d-mid">haiku</text>
+
+  <rect x="20" y="146" width="430" height="66" rx="12" class="d-node"/>
+  <text x="36" y="174" class="d-label b">Does done fit in one sentence?</text>
+  <text x="36" y="194" class="d-note d-start">a clear, well-specified change</text>
+  <rect x="348" y="162" width="88" height="34" rx="17" class="d-node d-primary"/><text x="392" y="184" class="d-elabel ink d-mid">sonnet</text>
+
+  <rect x="20" y="244" width="430" height="66" rx="12" class="d-node"/>
+  <text x="36" y="272" class="d-label b">Large and open-ended?</text>
+  <text x="36" y="292" class="d-note d-start">both judgment and accuracy matter</text>
+  <rect x="348" y="260" width="88" height="34" rx="17" class="d-node d-primary"/><text x="392" y="282" class="d-elabel ink d-mid">fable</text>
+
+  <rect x="20" y="342" width="430" height="66" rx="12" class="d-node d-accent"/>
+  <text x="36" y="370" class="d-label b">Everything else</text>
+  <text x="36" y="390" class="d-note d-start">and whenever you are in doubt</text>
+  <rect x="348" y="358" width="88" height="34" rx="17" class="d-node d-primary"/><text x="392" y="380" class="d-elabel ink d-mid">opus</text>
+
+  <g class="d-edge"><path d="M60 114V142" marker-end="url(#a)"/><path d="M60 212V240" marker-end="url(#a)"/><path d="M60 310V338" marker-end="url(#a)"/></g>
+  <text x="70" y="133" class="d-elabel">no</text><text x="70" y="231" class="d-elabel">no</text><text x="70" y="329" class="d-elabel">no</text>
+
+  <!-- effort -->
+  <rect x="470" y="48" width="430" height="66" rx="12" class="d-node"/>
+  <text x="486" y="86" class="d-label b">Simple, or a quick exchange?</text>
+  <rect x="798" y="64" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="86" class="d-elabel ink d-mid">low</text>
+
+  <rect x="470" y="146" width="430" height="66" rx="12" class="d-node"/>
+  <text x="486" y="174" class="d-label b">Costly if a mistake slips by?</text>
+  <text x="486" y="194" class="d-note d-start">money, a client, a wrong decision</text>
+  <rect x="798" y="162" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="184" class="d-elabel ink d-mid">high</text>
+
+  <rect x="470" y="244" width="430" height="66" rx="12" class="d-node"/>
+  <text x="486" y="272" class="d-label b">Long, hard and critical?</text>
+  <text x="486" y="292" class="d-note d-start">and unattended: all of them</text>
+  <rect x="798" y="260" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="282" class="d-elabel ink d-mid">xhigh</text>
+
+  <rect x="470" y="342" width="430" height="66" rx="12" class="d-node d-accent"/>
+  <text x="486" y="370" class="d-label b">None of the above</text>
+  <text x="486" y="390" class="d-note d-start">max is never used</text>
+  <rect x="798" y="358" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="380" class="d-elabel ink d-mid">medium</text>
+
+  <g class="d-edge"><path d="M510 114V142" marker-end="url(#a)"/><path d="M510 212V240" marker-end="url(#a)"/><path d="M510 310V338" marker-end="url(#a)"/></g>
+  <text x="520" y="133" class="d-elabel">no</text><text x="520" y="231" class="d-elabel">no</text><text x="520" y="329" class="d-elabel">no</text>
+
+  <!-- price -->
+  <text x="20" y="450" class="d-head">Price: cheapest first</text>
+  <text x="290" y="450" class="d-label b">haiku  &lt;  sonnet  &lt;  opus  &lt;  fable</text>
+  <text x="900" y="450" class="d-note d-end">when in doubt, go up</text>
+
+  <!-- classes -->
+  <text x="20" y="494" class="d-head">Task classes</text>
+  <text x="900" y="494" class="d-cap d-end">tag [mr:&lt;class&gt;], or [mr:&lt;class&gt;!] when risky</text>
+  <rect x="20" y="508" width="284" height="34" rx="17" class="d-node"/><text x="162" y="530" class="d-elabel ink d-mid">read-search</text>
+  <rect x="318" y="508" width="284" height="34" rx="17" class="d-node"/><text x="460" y="530" class="d-elabel ink d-mid">read-analyze</text>
+  <rect x="616" y="508" width="284" height="34" rx="17" class="d-node"/><text x="758" y="530" class="d-elabel ink d-mid">edit-mechanical</text>
+  <rect x="20" y="554" width="284" height="34" rx="17" class="d-node"/><text x="162" y="576" class="d-elabel ink d-mid">edit-specified</text>
+  <rect x="318" y="554" width="284" height="34" rx="17" class="d-node d-accent"/><text x="460" y="576" class="d-elabel ink d-mid">review-debug</text>
+  <rect x="616" y="554" width="284" height="34" rx="17" class="d-node d-accent"/><text x="758" y="576" class="d-elabel ink d-mid">design-open</text>
+</svg>
