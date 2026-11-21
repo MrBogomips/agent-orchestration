@@ -3,6 +3,18 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.10
+
+2026-11-21 · pull request #69
+
+### Fixed
+
+- The effort question for `xhigh` (long, hard, critical and unattended) is asked before the one for `high`. A
+  critical task almost always also answers yes to the `high` question, so `xhigh` was practically unreachable.
+- An agent definition is no longer read from a file that declares another agent's `name`. Claude Code names an
+  agent type after its frontmatter `name`, not its file, so such a file could make an agent with a fixed model
+  look routable; the start is now kept.
+
 ## session-hub 0.3.0
 
 2026-11-21 · pull request #68

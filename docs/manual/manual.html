@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>session-hub and model-router: user manual</title>
-<meta name="description" content="User manual for the session-hub 0.3.0 and model-router 0.3.5 Claude Code plugins.">
+<meta name="description" content="User manual for the session-hub 0.3.0 and model-router 0.3.10 Claude Code plugins.">
 <style>
 :root {
   --fg: #1d1d1b; --muted: #5f5f5a; --line: #d9d8d2; --accent: #2f5f9e; --code-bg: #f4f3ef; --note-bg: #eef3fa;
@@ -71,7 +71,7 @@ dl.faq dd { margin: 2pt 0 0 0; }
   <table>
     <tr><th>Plugin</th><th>Version</th><th>Marketplace</th></tr>
     <tr><td><code>session-hub</code></td><td>0.3.0</td><td><code>mrbogomips</code></td></tr>
-    <tr><td><code>model-router</code></td><td>0.3.5</td><td><code>mrbogomips</code></td></tr>
+    <tr><td><code>model-router</code></td><td>0.3.10</td><td><code>mrbogomips</code></td></tr>
   </table>
   <p class="small">Claude Code 2.1.329 or later for the mods; tested on 2.1.329 and 2.1.330. Source:
   <code>docs/manual/manual.html</code> in the plugins' repository; rebuild the PDF with
@@ -138,7 +138,7 @@ subagent records. Paths in them are shortened the same way.</p>
       record of its children.</td>
       <td>Your work spans several repositories kept side by side in one folder, each with its own instructions,
       skills and agents.</td></tr>
-  <tr><td><code>model-router</code> 0.3.5</td>
+  <tr><td><code>model-router</code> 0.3.10</td>
       <td>One written grid guides the choice of model and effort level for subagents, child sessions and workflow
       agents. A mod routes the subagent starts (through the <code>Agent</code> tool) that carry no model, and measures on your machine how often each choice was
       right the first time and what a successful task cost.</td>
@@ -652,8 +652,8 @@ order.</p>
 <p>Ask in order and stop at the first yes:</p>
 <ol>
   <li>Is it a simple task or a quick exchange? → <code>low</code></li>
-  <li>Would an unnoticed mistake cost money, a client or a wrong decision? → <code>high</code></li>
   <li>Is it long, hard and critical, <strong>and</strong> does it run unattended? All three. → <code>xhigh</code></li>
+  <li>Would an unnoticed mistake cost money, a client or a wrong decision? → <code>high</code></li>
   <li>None of the above. → <code>medium</code></li>
 </ol>
 <p>Never <code>max</code>.</p>
@@ -769,7 +769,7 @@ through the <code>Agent</code> tool:</p>
 <table>
   <thead><tr><th>The start</th><th style="width:50%">The router</th></tr></thead>
   <tr><td>carries a model, is a fork or a resume</td><td>keeps it</td></tr>
-  <tr><td>names an agent whose definition fixes a model, a plugin's agent, or one whose definition it cannot read</td><td>keeps it</td></tr>
+  <tr><td>names an agent whose definition fixes a model, a plugin's agent, or one whose definition it cannot read (a file under the agent's name that declares another <code>name</code> is not its definition)</td><td>keeps it</td></tr>
   <tr><td>runs with routing off, or under a session-wide subagent model (<code>CLAUDE_CODE_SUBAGENT_MODEL</code>)</td><td>keeps it</td></tr>
   <tr><td>carries no model</td><td>asks the judge, then sets the model and the effort</td></tr>
 </table>

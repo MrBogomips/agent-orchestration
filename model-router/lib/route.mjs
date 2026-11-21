@@ -7,19 +7,25 @@ export const INHERITING_BUILTINS = Object.freeze(['general-purpose', 'Explore'])
 
 /**
  * Whether an agent type leaves the model to the caller: `inherit` (routable), `fixed` (its definition names a
- * model) or `unknown` (no readable definition). `definitionText` is the agent's definition file, when found.
+ * model) or `unknown` (no readable definition, or a file that declares another agent's name). `definitionText` is
+ * the file found under the type's name, when there is one.
  */
 export function definitionCase(subagentType, definitionText) {
   if (INHERITING_BUILTINS.includes(subagentType)) return 'inherit';
   if (typeof definitionText !== 'string') return 'unknown';
   const lines = definitionText.split('\n');
   if (lines[0]?.trim() !== '---') return 'inherit';
+  let model = null;
   for (const line of lines.slice(1)) {
     if (line.trim() === '---') break;
+    // Claude Code names an agent type after its frontmatter `name`, not its file name: a file found under the
+    // type's name that declares another name is some other agent, and the type's own definition is unknown.
+    const name = line.match(/^name\s*:\s*["']?([^"'#]*?)["']?\s*(#.*)?$/);
+    if (name && name[1] && name[1] !== subagentType) return 'unknown';
     const m = line.match(/^model\s*:\s*["']?([^"'#\s]*)["']?/);
-    if (m) return m[1] === '' || m[1] === 'inherit' ? 'inherit' : 'fixed';
+    if (m && model === null) model = m[1];
   }
-  return 'inherit';
+  return model === null || model === '' || model === 'inherit' ? 'inherit' : 'fixed';
 }
 
 /**

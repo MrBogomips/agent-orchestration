@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 600" role="img">
-  <title>The grid asks its questions in order and stops at the first yes: haiku for simple, repetitive work that is easy to check, sonnet when done fits in one sentence, fable for large open-ended work where judgment and accuracy both matter, opus for everything else and whenever in doubt; effort is low for a simple task, high when a missed mistake would be costly, xhigh for long, hard, critical and unattended work, medium otherwise, and never max. Every start also names one of six task classes.</title>
+  <title>The grid asks its questions in order and stops at the first yes: haiku for simple, repetitive work that is easy to check, sonnet when done fits in one sentence, fable for large open-ended work where judgment and accuracy both matter, opus for everything else and whenever in doubt; effort is low for a simple task, xhigh for long, hard, critical and unattended work, high when a missed mistake would be costly, medium otherwise, and never max. Every start also names one of six task classes.</title>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
   </defs>
@@ -36,14 +36,14 @@
   <rect x="798" y="64" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="86" class="d-elabel ink d-mid">low</text>
 
   <rect x="470" y="146" width="430" height="66" rx="12" class="d-node"/>
-  <text x="486" y="174" class="d-label b">Costly if a mistake slips by?</text>
-  <text x="486" y="194" class="d-note d-start">money, a client, a wrong decision</text>
-  <rect x="798" y="162" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="184" class="d-elabel ink d-mid">high</text>
+  <text x="486" y="174" class="d-label b">Long, hard and critical?</text>
+  <text x="486" y="194" class="d-note d-start">and unattended: all of them</text>
+  <rect x="798" y="162" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="184" class="d-elabel ink d-mid">xhigh</text>
 
   <rect x="470" y="244" width="430" height="66" rx="12" class="d-node"/>
-  <text x="486" y="272" class="d-label b">Long, hard and critical?</text>
-  <text x="486" y="292" class="d-note d-start">and unattended: all of them</text>
-  <rect x="798" y="260" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="282" class="d-elabel ink d-mid">xhigh</text>
+  <text x="486" y="272" class="d-label b">Costly if a mistake slips by?</text>
+  <text x="486" y="292" class="d-note d-start">money, a client, a wrong decision</text>
+  <rect x="798" y="260" width="88" height="34" rx="17" class="d-node d-primary"/><text x="842" y="282" class="d-elabel ink d-mid">high</text>
 
   <rect x="470" y="342" width="430" height="66" rx="12" class="d-node d-accent"/>
   <text x="486" y="370" class="d-label b">None of the above</text>

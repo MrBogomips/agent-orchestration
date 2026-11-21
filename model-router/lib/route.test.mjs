@@ -31,6 +31,15 @@ test('definitionCase: inheriting built-ins and model-less definitions are routab
   assert.equal(definitionCase('reviewer', '---\nname: reviewer\nmodel: inherit\n---\nbody'), 'inherit');
 });
 
+test('definitionCase: a file that declares another name is not the definition of the type', () => {
+  // Claude Code names an agent type after the frontmatter name, not the file name (checked on 2.1.330).
+  assert.equal(definitionCase('bar', '---\nname: baz\ndescription: x\n---\nbody'), 'unknown');
+  assert.equal(definitionCase('bar', '---\nname: "baz"\nmodel: haiku\n---\n'), 'unknown');
+  assert.equal(definitionCase('bar', '---\nname: bar\nmodel: inherit\n---\n'), 'inherit');
+  assert.equal(definitionCase('bar', "---\nname: 'bar'\n---\n"), 'inherit');
+  assert.equal(definitionCase('bar', '---\ndescription: no name\n---\n'), 'inherit', 'no name: the file name stands');
+});
+
 test('definitionCase: a model in the frontmatter, a plugin agent or an unread file count as fixed or unknown', () => {
   assert.equal(definitionCase('reviewer', '---\nname: reviewer\nmodel: "haiku"\n---\n'), 'fixed');
   assert.equal(definitionCase('plug:agent'), 'unknown');

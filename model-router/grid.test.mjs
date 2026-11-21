@@ -111,7 +111,7 @@ test('effort has ordered levels, questions in check order ending with a fallback
   }
   assert.deepEqual(
     effort.questions.map((q) => q.level),
-    ['low', 'high', 'xhigh', 'medium'],
+    ['low', 'xhigh', 'high', 'medium'],
   );
   assert.equal(effort.questions.at(-1).otherwise, true, 'the last effort question must be the fallback');
   assert.ok(effort.questions.slice(0, -1).every((q) => !q.otherwise));
@@ -257,4 +257,12 @@ test('a fixed agent model is an exception to the project defaults and the grid, 
   const text = body.replace(/\s+/g, ' ');
   assert.match(text, /whatever the project's defaults or the grid say/i);
   assert.match(text, /never pass a model to such an agent/i);
+});
+
+// A critical task almost always answers yes to the high question too: the first yes wins, so xhigh comes first.
+test('xhigh is asked before high, so long, hard, critical and unattended work can reach it', () => {
+  const levels = loadGrid().effort.questions.map((q) => q.level);
+  assert.ok(levels.indexOf('xhigh') < levels.indexOf('high'), `xhigh is asked after high: ${levels.join(', ')}`);
+  const answers = effortAnswers(section(loadSkill(), '### Effort'));
+  assert.ok(answers.indexOf('xhigh') < answers.indexOf('high'), 'SKILL.md asks high before xhigh');
 });
