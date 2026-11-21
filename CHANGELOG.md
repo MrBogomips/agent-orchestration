@@ -3,6 +3,25 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.9
+
+2026-11-21 · pull request #67
+
+### Fixed
+
+- A batch of similar starts on different files (rename in `a.ts`, then `b.ts`, then `c.ts`) is no longer scored as
+  rework: a similar start is a redo only when it names a file the task wrote or the same files. A correction sent
+  to the same subagent inside the rework window of its report is now a rework signal.
+- The usage view measures text in terminal columns: wide characters and emoji in a project root or a model id no
+  longer push rows past the pane, and a cut never splits a character.
+- The event log is never read whole: compaction reads from its offset in chunks, and the report and the usage view
+  keep only the records they show. A log past 2 GB no longer breaks them. Old events are still not rotated.
+- Only the prompts the outcome logic reads are stored: the next two after a subagent's report, inside the rework
+  window. Before, every typed prompt was kept, also in sessions without subagents.
+- `choose-model`: the shape of `quality/recommendations.json` is fixed (`classes.<class>` with `tier`, `effort`,
+  `source`, `n`) and the skill names those fields. An agent definition that fixes its own model is an exception to
+  the project's defaults and the grid, no longer a rule between them that contradicted the first.
+
 ## session-hub 0.2.5
 
 2026-11-21 · pull request #61

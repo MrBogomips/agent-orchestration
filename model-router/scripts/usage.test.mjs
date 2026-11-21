@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkedInput, compactWithin, readUsage } from './usage.mjs';
+import { checkedInput, compactWithin, readUsage, usageRecords } from './usage.mjs';
+import { loadGrid, paths, readEvents } from './compact.mjs';
+import { buildUsageData } from '../lib/usage-data.mjs';
 
 const T0 = Date.parse('2026-11-20T10:00:00Z');
 const at = (ms) => new Date(ms).toISOString();
@@ -32,6 +34,29 @@ test('readUsage compacts first, then shows the closed task in every window', asy
   assert.equal(data.windows.all.classes.project[0].cls, 'read-search');
   assert.equal(data.session.agents, 1, 'the dropped agent comes from its report record');
   assert.deepEqual(data.routing.byAction, { downgrade: 1 });
+});
+
+test('the view keeps only the records it uses, and shows the same data as from the whole log', async () => {
+  const configDir = fixture();
+  const file = join(configDir, 'model-router', 'events.jsonl');
+  const extra = [
+    { v: 1, type: 'signal', kind: 'prompt', ts: at(T0 - 3600000), session: 's1', text: 'x'.repeat(2000) },
+    { v: 1, type: 'report', ts: at(T0 - 3600000), session: 'other', agentId: 'z9', status: 'completed', model: 'claude-opus-5-5', costUsd: 1, tokens: 9 },
+    { v: 1, type: 'spawn', ts: at(T0 - 3600000), session: 'other', agentId: 'z9', class: 'read-search', project: { id: '0123456789abcdef', root: '/x' } },
+  ];
+  appendFileSync(file, extra.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  const input = { session: 's1', project: PROJECT, live: [] };
+  const data = await readUsage({ configDir, now: T0, input, budgetMs: 10000 });
+  const p = paths(configDir);
+  const whole = buildUsageData({
+    events: readEvents(p.events), user: JSON.parse(readFileSync(p.user, 'utf8')), projectLevel: JSON.parse(readFileSync(p.project(PROJECT.id), 'utf8')),
+    project: PROJECT, grid: loadGrid(), now: T0, halfLifeDays: 30, session: 's1', live: [], note: null,
+  });
+  assert.deepEqual(data, whole);
+  const kept = usageRecords({ session: 's1', project: PROJECT });
+  assert.equal(kept({ type: 'signal', kind: 'prompt', text: 'x' }), null);
+  assert.equal(kept({ type: 'report', session: 'other' }), null);
+  assert.equal(kept({ type: 'spawn', agentId: 'z9', project: { id: '0123456789abcdef' } }), null);
 });
 
 test('a compaction past its budget leaves the data as of the last one, with a note', async () => {

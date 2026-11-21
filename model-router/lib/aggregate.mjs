@@ -141,3 +141,24 @@ export function recommend(cells, cls, grid) {
   if (best) return { tier: best.cell.tier, effort: best.cell.effort, source: 'data' };
   return def ? { tier: def.tier, effort: def.effort, source: 'grid' } : null;
 }
+
+export const RECOMMENDATIONS_VERSION = 1;
+
+/**
+ * The content of `quality/recommendations.json`, which `choose-model` reads as a hint:
+ * `{ version, generatedAt, classes: { <class>: { tier, effort, source, n } } }`, `tier` a row of the grid's model
+ * table, `source` `data` or `grid`, `n` the tasks behind a `data` entry (0 for `grid`). Nothing writes the file
+ * before 0.4; the shape is fixed here so the skill and the writer agree.
+ */
+export function recommendationsFile(cells, grid, { now }) {
+  const classes = {};
+  for (const { name } of grid.classes) {
+    const r = recommend(cells, name, grid);
+    if (!r) continue;
+    const cell = r.source === 'data'
+      ? Object.values(cells).find((c) => c.class === name && c.tier === r.tier && c.effort === r.effort)
+      : null;
+    classes[name] = { tier: r.tier, effort: r.effort, source: r.source, n: cell?.n ?? 0 };
+  }
+  return { version: RECOMMENDATIONS_VERSION, generatedAt: new Date(now).toISOString(), classes };
+}

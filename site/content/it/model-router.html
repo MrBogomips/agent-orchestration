@@ -44,9 +44,9 @@
 <ol>
   <li>Una tua scelta esplicita nella conversazione.</li>
   <li>La sezione <code>## Model routing</code> del progetto, se nomina quel tipo di lavoro o quella classe di attività.</li>
-  <li>La definizione di un agente che fissa il proprio modello (in questo caso il modello resta invariato e viene passato solo l'effort).</li>
   <li>La griglia.</li>
 </ol>
+<p>Fa eccezione la definizione di un agente che fissa il proprio modello: qualunque cosa dicano la sezione del progetto o la griglia, il modello resta quello, a meno che non sia tu a indicarne un altro, e viene passato solo l'effort, se la definizione non lo fissa già.</p>
 <figure class="diagram">{{diagram:d7-grid}}<figcaption>La griglia: i livelli di modello controllati in ordine, quattro domande sull'effort poste in ordine e sei classi di attività, ciascuna con la sua scelta abituale.</figcaption></figure>
 <h3>Livelli di modello</h3>
 <p>Scorri la tabella dall'alto verso il basso e fermati alla prima riga adatta al compito:</p>
@@ -189,7 +189,7 @@ listed here follows the grid.
 <ul>
   <li><code>decision</code>: ogni decisione di routing;</li>
   <li><code>spawn</code>: ogni avvio di subagent, con tipo, nome e descrizione breve;</li>
-  <li><code>signal</code>: file scritti dalla sessione e dai subagent, chiamate agli strumenti fallite, prompt che digiti, interruzioni e riprese;</li>
+  <li><code>signal</code>: file scritti dalla sessione e dai subagent, chiamate agli strumenti fallite, i due prompt che digiti subito dopo il resoconto di un subagent, interruzioni e riprese;</li>
   <li><code>report</code>: il resoconto di ogni subagent, completo di token e costo stimato;</li>
   <li><code>session-end</code>: la chiusura della sessione.</li>
 </ul>
@@ -199,7 +199,7 @@ listed here follows the grid.
   <thead><tr><th>Esito</th><th>Quando viene assegnato</th></tr></thead>
   <tbody>
     <tr><td><code>success</code></td><td>Il subagent ha consegnato il resoconto e nulla nella finestra ha rifatto il suo lavoro</td></tr>
-    <tr><td><code>rework</code></td><td>Nella finestra, la sessione principale o un altro agente ha riscritto uno dei suoi file; oppure è seguito un avvio simile della stessa classe; oppure uno dei due prompt successivi che hai scritto ha nominato i suoi file o il suo compito</td></tr>
+    <tr><td><code>rework</code></td><td>Nella finestra, la sessione principale o un altro agente ha riscritto uno dei suoi file; oppure è seguito un avvio simile della stessa classe sugli stessi file; oppure lo stesso subagent ha ricevuto una correzione dopo il resoconto; oppure uno dei due prompt successivi che hai scritto ha nominato i suoi file o il suo compito</td></tr>
     <tr><td><code>failure</code></td><td>Il subagent è fallito, oppure è stato fermato dalla sessione padre e rifatto</td></tr>
     <tr><td><code>cancelled</code></td><td>Nessun resoconto (un compito che non risponde mai si chiude dopo 24 ore), oppure interrotto</td></tr>
   </tbody>
@@ -370,7 +370,7 @@ listed here follows the grid.
 <h2 id="privacy">Privacy</h2>
 <p>Il plugin non invia all'esterno nulla di ciò che misura. Tutti i file restano in locale dentro <code>model-router/</code>, nella cartella di configurazione attiva (<code>CLAUDE_CONFIG_DIR</code>, altrimenti <code>~/.claude</code>):</p>
 <ul>
-  <li>il log degli eventi (<code>events.jsonl</code>), che conserva i primi 2.000 caratteri dei prompt che digiti;</li>
+  <li>il log degli eventi (<code>events.jsonl</code>), che conserva i primi 2.000 caratteri dei due prompt che digiti dopo il resoconto di un subagent, entro la finestra di rilavorazione, e di nessun altro;</li>
   <li>le opzioni usate dalla compattazione;</li>
   <li>gli aggregati per utente e per progetto;</li>
   <li>la pagina HTML del report.</li>

@@ -20,16 +20,40 @@ function bySession(events) {
   return sessions;
 }
 
+/** The base names of the file-like tokens of a description (a word with a `.` or `/` inside), lowercased. */
+function fileNames(text) {
+  if (typeof text !== 'string') return new Set();
+  return new Set(text.toLowerCase().split(/[\s,;:()'"`[\]]+/).map((w) => w.replace(/^[.]+|[.!?]+$/g, ''))
+    .filter((w) => /[a-z0-9_-][./][a-z0-9_]/.test(w)).map((w) => w.split('/').filter(Boolean).pop()).filter(Boolean));
+}
+
+/**
+ * Whether a later start redoes the task: same class and similar description, unless it is the next item of a
+ * batch. A batch item names files, the task names files too, the two share no base name and the later start names
+ * no file the task wrote (rename in a.ts, then in b.ts). A start that names no file, or the same file in another
+ * form (src/csv.ts and /repo/src/csv.ts), is still a redo.
+ */
+function isRedo(task, r, threshold) {
+  if (r.type !== 'spawn' || r.agentId === task.spawn.agentId || !task.spawn.class || r.class !== task.spawn.class) return false;
+  if (!isSimilar(r.description, task.spawn.description, threshold)) return false;
+  if (mentionsFile(r.description, task.files)) return true;
+  const [a, b] = [fileNames(task.spawn.description), fileNames(r.description)];
+  const batch = a.size > 0 && b.size > 0 && [...a].every((w) => !b.has(w));
+  return !batch;
+}
+
+/** Whether the parent sent the same subagent more work inside the rework window of one of its reports. */
+function continuedAfterReport(task, windowMs) {
+  return task.resumes.some((r) => task.reports.some((p) => time(p) < time(r) && time(r) <= time(p) + windowMs));
+}
+
 function reworkSignals(task, records, start, end, threshold) {
   const inWindow = records.filter((r) => time(r) > start && time(r) <= end);
   const why = [];
   const own = task.spawn.agentId;
   const sameFile = inWindow.find((r) => r.type === 'signal' && r.kind === 'write' && r.agentId !== own && task.files.includes(r.file));
   if (sameFile) why.push(`write to ${sameFile.file}`);
-  const redo = inWindow.find(
-    (r) => r.type === 'spawn' && r.agentId !== own && task.spawn.class && r.class === task.spawn.class &&
-      isSimilar(r.description, task.spawn.description, threshold),
-  );
+  const redo = inWindow.find((r) => isRedo(task, r, threshold));
   if (redo) why.push(`similar ${redo.class} start`);
   const prompts = inWindow.filter((r) => r.type === 'signal' && r.kind === 'prompt').slice(0, PROMPTS_ABOUT_TASK);
   const about = prompts.find((p) => mentionsFile(p.text, task.files) || isSimilar(p.text, task.spawn.description, threshold));
@@ -44,10 +68,11 @@ function stoppedByParent(task, records) {
   );
 }
 
-function classify(task, records, end, threshold) {
+function classify(task, records, end, threshold, windowMs) {
   const report = task.report;
   if (!report) return { outcome: 'cancelled', why: ['no report'] };
   const why = reworkSignals(task, records, time(report), end, threshold);
+  if (continuedAfterReport(task, windowMs)) why.push('continued after its report');
   if (report.status === 'failed') return { outcome: 'failure', why: ['failed', ...why] };
   if (report.status === 'stopped') {
     return stoppedByParent(task, records) && why.length > 0
@@ -92,12 +117,16 @@ function outcomeRecord(task, result, now) {
 function tasksOf(records) {
   const tasks = new Map();
   for (const r of records) {
-    if (r.type === 'spawn' && r.agentId && !tasks.has(r.agentId)) tasks.set(r.agentId, { spawn: r, report: null, files: [] });
+    if (r.type === 'spawn' && r.agentId && !tasks.has(r.agentId)) tasks.set(r.agentId, { spawn: r, report: null, reports: [], resumes: [], files: [] });
   }
   for (const r of records) {
     const task = r.agentId ? tasks.get(r.agentId) : undefined;
     if (!task) continue;
-    if (r.type === 'report') task.report = r;
+    if (r.type === 'report') {
+      task.report = r;
+      task.reports.push(r);
+    }
+    if (r.type === 'signal' && r.kind === 'resume') task.resumes.push(r);
     if (r.type === 'signal' && r.kind === 'write' && r.file && !task.files.includes(r.file)) task.files.push(r.file);
   }
   return tasks;
@@ -121,7 +150,7 @@ export function computeOutcomes(events, { now, windowMin, similarityThreshold, d
         openTasks.add(key);
         continue;
       }
-      outcomes.push(outcomeRecord(task, classify(task, records, end, similarityThreshold), now));
+      outcomes.push(outcomeRecord(task, classify(task, records, end, similarityThreshold, windowMs), now));
     }
   }
   return { outcomes, openTasks };

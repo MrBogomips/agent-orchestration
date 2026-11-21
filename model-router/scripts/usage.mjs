@@ -9,7 +9,7 @@
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, readEvents } from './compact.mjs';
+import { defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, scanEvents } from './compact.mjs';
 import { readJson } from './report.mjs';
 import { buildUsageData } from '../lib/usage-data.mjs';
 
@@ -17,6 +17,19 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_BUDGET_MS = 3000;
 const PROJECT_ID = /^[0-9a-f]{16}$/;
 const STALE = 'the numbers are as of the last compaction.';
+
+/**
+ * The filter the view reads the event log through: outcomes, decisions, this session's reports and the spawns of
+ * this session's project, and nothing else (signals and prompts are most of the log and the view shows none).
+ */
+export function usageRecords({ session = null, project = null } = {}) {
+  return (r) => {
+    if (r.type === 'outcome' || r.type === 'decision') return r;
+    if (r.type === 'report') return session && r.session === session ? r : null;
+    if (r.type === 'spawn') return project && r.project?.id === project.id ? r : null;
+    return null;
+  };
+}
 
 /**
  * Runs compact.mjs in a child process and waits at most `budgetMs`. Past the budget the child is left to finish
@@ -76,7 +89,7 @@ export async function readUsage({ configDir = defaultConfigDir(), now = Date.now
   const opts = effectiveOptions(configDir, options);
   const p = paths(configDir);
   return buildUsageData({
-    events: readEvents(p.events),
+    events: scanEvents(p.events, { keep: usageRecords({ session, project }) }).records,
     user: readJson(p.user) ?? { cells: {} },
     projectLevel: project ? readJson(p.project(project.id)) : null,
     project, grid: loadGrid(), now, halfLifeDays: opts.halfLifeDays, session, live, note,

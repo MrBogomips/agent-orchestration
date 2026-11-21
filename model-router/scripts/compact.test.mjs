@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, appendFileSync, readdirSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, appendFileSync, readdirSync, utimesSync, truncateSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { compact, readEvents, takeLock, releaseLock } from './compact.mjs';
+import { compact, readEvents, scanEvents, takeLock, releaseLock } from './compact.mjs';
 
 const T0 = Date.parse('2026-11-20T10:00:00Z');
 const at = (min) => new Date(T0 + min * 60000).toISOString();
@@ -105,6 +105,31 @@ test('a torn last line left by a writer that died is closed off, and the outcome
   const summary = compact({ configDir, now: T0 + 60 * 60000, options: OPTIONS });
   assert.equal(summary.outcomes, 1);
   assert.deepEqual(outcomesIn(file).map((o) => o.task), ['s1/a1']);
+});
+
+test('a run reads only the bytes after its offset, so a log past 2 GB still compacts', () => {
+  const configDir = fixture([]);
+  const file = join(configDir, 'model-router', 'events.jsonl');
+  const prefix = 2 ** 31 + 4096; // sparse: no disk is used, but reading it whole would throw
+  truncateSync(file, prefix);
+  appendFileSync(file, task('s1', 'a1', 0).map((l) => JSON.stringify(l)).join('\n') + '\n');
+  mkdirSync(join(configDir, 'model-router', 'quality'), { recursive: true });
+  writeFileSync(join(configDir, 'model-router', 'quality', 'state.json'), JSON.stringify({ version: 1, offset: prefix, done: [] }));
+  const summary = compact({ configDir, now: T0 + 60 * 60000, options: OPTIONS });
+  assert.equal(summary.outcomes, 1, JSON.stringify(summary));
+  assert.equal(read(configDir, 'quality', 'state.json').offset > prefix, true);
+  rmSync(configDir, { recursive: true, force: true });
+});
+
+test('readEvents reads in chunks: a record split across chunks is whole, and a filter keeps only what it asks for', () => {
+  const lines = [...task('s1', 'a1', 0), { v: 1, type: 'signal', kind: 'prompt', ts: at(3), session: 's1', text: 'x'.repeat(300) }, ...task('s1', 'a2', 5)];
+  const configDir = fixture(lines);
+  const file = join(configDir, 'model-router', 'events.jsonl');
+  assert.deepEqual(readEvents(file, { chunkBytes: 7 }), lines);
+  const reports = scanEvents(file, { keep: (r) => r.type === 'report', chunkBytes: 64 });
+  assert.equal(reports.total, 5);
+  assert.deepEqual(reports.records.map((r) => r.agentId), ['a1', 'a2']);
+  rmSync(configDir, { recursive: true, force: true });
 });
 
 test('a fresh lock makes the run skip; a stale one is taken over', () => {

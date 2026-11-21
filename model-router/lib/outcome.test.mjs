@@ -113,6 +113,46 @@ test('the latest report of a continued agent gives the cost and starts the windo
   assert.equal(computeOutcomes(events, { ...OPTS, now: now(35) }).outcomes[0].costUsd, 0.06);
 });
 
+test('a batch of similar starts on different files is not rework', () => {
+  const rename = (id, min, file) => [
+    spawn(id, min, { class: 'edit-mechanical', description: `[mr:edit-mechanical] Rename foo to bar in ${file}` }),
+    write(id, min + 1, `/repo/src/${file}`), report(id, min + 2),
+  ];
+  const events = [...rename('a1', 0, 'a.ts'), ...rename('a2', 3, 'b.ts'), ...rename('a3', 6, 'c.ts')];
+  const out = computeOutcomes(events, { ...OPTS, now: now(60) }).outcomes;
+  assert.deepEqual(out.map((o) => [o.agentId, o.outcome]), [['a1', 'success'], ['a2', 'success'], ['a3', 'success']]);
+});
+
+test('a similar start that names a file the task wrote is still a redo', () => {
+  const events = [
+    spawn('a1', 0, { class: 'edit-mechanical', description: 'Rename foo to bar in a.ts' }), write('a1', 1, '/repo/src/a.ts'), report('a1', 2),
+    spawn('a2', 3, { class: 'edit-mechanical', description: 'Rename foo to bar in a.ts again' }),
+  ];
+  const a1 = computeOutcomes(events, { ...OPTS, now: now(60) }).outcomes.find((o) => o.agentId === 'a1');
+  assert.equal(a1.outcome, 'rework');
+  assert.match(a1.why, /similar edit-mechanical start/);
+});
+
+test('a redo of a task that wrote nothing is still a redo when it names the file differently or adds one', () => {
+  const pair = (first, second) => {
+    const events = [spawn('a1', 0, { class: 'review-debug', description: first }), report('a1', 2), spawn('a2', 3, { class: 'review-debug', description: second })];
+    return computeOutcomes(events, { ...OPTS, now: now(60) }).outcomes.find((o) => o.agentId === 'a1').outcome;
+  };
+  assert.equal(pair('Review the parser in /Users/x/repo/src/csv.ts', 'Review the parser in src/csv.ts'), 'rework');
+  assert.equal(pair('Fix the quoting bug in the CSV parser', 'Fix the quoting bug in the CSV parser again (csv.ts)'), 'rework');
+  assert.equal(pair('Review the parser in src/a.ts', 'Review the parser in src/b.ts'), 'success', 'two files, two tasks');
+});
+
+test('a correction sent to the same subagent after its report is rework', () => {
+  const resume = (min) => ({ type: 'signal', kind: 'resume', ts: at(min), session: 's1', agentId: 'a1' });
+  const events = [spawn('a1', 0), write('a1', 1, '/repo/src/csv.ts'), report('a1', 2), resume(5), write('a1', 6, '/repo/src/csv.ts'), report('a1', 8)];
+  const o = computeOutcomes(events, { ...OPTS, now: now(60) }).outcomes[0];
+  assert.equal(o.outcome, 'rework');
+  assert.match(o.why, /continued after its report/);
+  const late = [spawn('a1', 0), report('a1', 2), resume(40), report('a1', 42)];
+  assert.equal(computeOutcomes(late, { ...OPTS, now: now(80) }).outcomes[0].outcome, 'success', 'a resume after the window is a new request');
+});
+
 test('a task with no report is closed as cancelled when its session ended or a day passed', () => {
   const ended = computeOutcomes([spawn('a1', 0), { type: 'session-end', ts: at(5), session: 's1' }], { ...OPTS, now: now(6) }).outcomes[0];
   assert.equal(ended.outcome, 'cancelled');

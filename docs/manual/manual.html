@@ -682,9 +682,10 @@ wins:</p>
 <ol>
   <li>an explicit choice by you, in the conversation;</li>
   <li>the project's <em>Model routing</em> section, when it names the kind of work or the class;</li>
-  <li>an agent definition that fixes its own model keeps it (only an effort is passed);</li>
   <li>the grid.</li>
 </ol>
+<p>An agent definition that fixes its own model keeps it, whatever the project's section or the grid say: unless you
+name a model for it, only an effort is passed, and only if its definition sets none.</p>
 <p>Before each start the agent writes one line, passes <code>model</code> and <code>effort</code> on the start call,
 and begins the description with the class tag. The line is 🔀, the model, an effort bar of four cells
 (<code>▰</code> filled, <code>▱</code> empty: one for <code>low</code>, two for <code>medium</code>, three for
@@ -795,7 +796,7 @@ closes: 30 minutes after the subagent's report (<code>reworkWindowMin</code>), o
 <table>
   <thead><tr><th style="width:15%">Outcome</th><th>When</th></tr></thead>
   <tr><td><code>success</code></td><td>the subagent reported and nothing in the window redid its work</td></tr>
-  <tr><td><code>rework</code></td><td>in the window, the main session or another agent wrote one of its files; or a similar start of the same class followed; or one of the next two prompts you typed named its files or its task</td></tr>
+  <tr><td><code>rework</code></td><td>in the window, the main session or another agent wrote one of its files; or a similar start of the same class followed on the same files; or the same subagent was sent a correction after its report; or one of the next two prompts you typed named its files or its task</td></tr>
   <tr><td><code>failure</code></td><td>it failed, or was stopped by its parent and redone</td></tr>
   <tr><td><code>cancelled</code></td><td>no report (for example, the session ended first), or stopped</td></tr>
 </table>
@@ -987,7 +988,7 @@ start when <code>measure</code> is on, so the report script uses the same values
 (<code>CLAUDE_CONFIG_DIR</code>, else <code>~/.claude</code>); nothing is written inside a repository.</p>
 <table>
   <thead><tr><th style="width:34%">File</th><th>Content</th></tr></thead>
-  <tr><td><code>events.jsonl</code></td><td>Append only: routing decisions; each subagent start with its type, name and short description; the paths of files the session and its subagents write; tool names of failed subagent calls and stop targets; the first 2,000 characters of the prompts you type; reports with tokens and estimated cost; session ends; outcomes (written by compaction).</td></tr>
+  <tr><td><code>events.jsonl</code></td><td>Append only: routing decisions; each subagent start with its type, name and short description; the paths of files the session and its subagents write; tool names of failed subagent calls and stop targets; the first 2,000 characters of the two prompts you type next after a subagent reports, inside the rework window, and of no other prompt; reports with tokens and estimated cost; session ends; outcomes (written by compaction).</td></tr>
   <tr><td><code>options.json</code></td><td>The options compaction uses</td></tr>
   <tr><td><code>quality/user.json</code>, <code>quality/projects/&lt;id&gt;.json</code></td><td>Aggregates per user and per project, with the project's root path</td></tr>
   <tr><td><code>quality/state.json</code>, <code>quality/.lock</code></td><td>Compaction's position in the log, and its lock (stale after 2 minutes)</td></tr>

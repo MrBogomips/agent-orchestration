@@ -13,6 +13,7 @@ import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky
 import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { parseTag } from '../lib/text.mjs'
+import { promptGate } from '../lib/prompt-gate.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, TAB_TITLES, TABS, WINDOW_KEYS, helpText, noteRows, parseArgs, tabRows, textView } from '../lib/usage-view.mjs'
 import type { Row } from '../lib/usage-view.mjs'
 import { isArrowScroll, padRows, ringTarget, stepWindow, tabKey, tabOfKey, windowKey } from '../lib/usage-nav.mjs'
@@ -407,6 +408,8 @@ export const register: Register = (on, options) => {
   // The effort each routed subagent runs at, by agentId, applied to every one of its steps (a step rewrite lasts one step).
   const stepEffort = new Map<string, string>()
   const fired = new Set<string>()
+  // Only the prompts the outcome logic reads are stored: the next two inside the rework window after a report.
+  const prompts = promptGate(opts.reworkWindowMin)
   // Subagents whose line waits for the effort of their first step, by agentId: the tool_use_id of their row.
   const effortWait = new Map<string, string>()
 
@@ -666,7 +669,7 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     const result = await next(e)
     const kind = e.origin?.kind
-    if (opts.measure && !e.command && !e.isMeta && (kind === 'composer' || kind === 'bridge')) {
+    if (opts.measure && !e.command && !e.isMeta && (kind === 'composer' || kind === 'bridge') && prompts.shouldRecord(Date.now())) {
       await appendEvents($, ctx, [{ type: 'signal', kind: 'prompt', ts: now(), session: await $.session.id(), text: e.text.slice(0, PROMPT_CHARS) }])
     }
     return result
@@ -677,6 +680,7 @@ export const register: Register = (on, options) => {
 
   on('agent.report', async ($, e, next) => {
     firstFire($, fired, 'agent.report')
+    prompts.reported(Date.now())
     if (opts.measure) await appendEvents($, ctx, [await reportOf($, e)])
     return next(e)
   }).catch(($, e, next) => {
