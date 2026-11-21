@@ -30,14 +30,14 @@ const GRID = {
 
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
 
-type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[] }
+type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
 function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, text: FAST_ANSWER, usage: {} } }), answers: Answers = {}): World {
-  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [], logs: [] }
+  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [], logs: [], debug: [] }
   on('ui.open', ($, e) => {
     w.opens.push(e)
     return { value: answers.isPlaced === false ? { isPlaced: false, reason: 'no surface' } : { isPlaced: true } }
@@ -48,6 +48,7 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
   })
   on('ui.log', ($, e, next) => {
     if ((e as any).to !== 'debug') w.logs.push(String((e as any).text ?? ''))
+    else w.debug.push(String((e as any).text ?? ''))
     return next(e)
   })
   on('ui.toast', ($, e) => {
@@ -55,12 +56,15 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     return { value: undefined }
   })
   mock.env(on, { HOME: '/home/u' })
-  on('fs.read', () => ({ value: JSON.stringify(GRID) }))
+  on('fs.read', () => ({ value: answers.grid ?? JSON.stringify(GRID) }))
   on('fs.exists', () => ({ value: false }))
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.cwd', () => ({ value: '/repo' }))
   on('session.root', () => ({ value: '/repo' }))
-  on('session.repo', () => ({ value: { root: '/repo', remote: 'git@github.com:o/r.git', internal: false, name: null } }))
+  on('session.repo', () => {
+    if (answers.repoFails) throw new Error('no repo')
+    return { value: { root: '/repo', remote: 'git@github.com:o/r.git', internal: false, name: null } }
+  })
   on('command.register', () => ({ value: { command: 'model-router' } }))
   on('agent.list', () => ({
     value: [{ id: 'ag1', model: 'claude-haiku-5-5', effort: 'low', usage: [{ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }], cost: { usd: 0.002 } }] as any,
@@ -203,6 +207,36 @@ describe('routing a start that carries no model', () => {
     const decision = w.appended.find((r) => r.type === 'decision')
     expect(decision.action).toBe('forced-risk')
     expect(decision.class).toBe('edit-specified')
+  })
+})
+
+describe('failing open with a trace', () => {
+  // Failure lines, not the first-fire lines: `[model-router] <hook>: <error>`.
+  const failures = (w: World) => w.debug.filter((l) => /^\[model-router\] [\w. ]+: /.test(l))
+
+  test('an unreadable grid still starts the subagent, appends its spawn record and logs why', async ($, on) => {
+    const w = world(on, undefined, { grid: '{not json' })
+    const started = await start($, { description: '[mr:edit-specified!] Rotate the key' }, { description: '[mr:edit-specified!] Rotate the key' })
+    expect(started.agentId).toBe('ag1')
+    expect(w.spawns.length).toBe(1)
+    const spawn = w.appended.find((r) => r.type === 'spawn')
+    expect(spawn).toBeDefined()
+    expect(spawn.class).toBe(null)
+    expect(spawn.risky).toBe(true)
+    expect(spawn.project.root).toBe('/repo')
+    expect(failures(w).some((l) => l.startsWith('[model-router] agent.spawn: '))).toBe(true)
+    expect(failures(w).some((l) => l.startsWith('[model-router] tool.call Agent: '))).toBe(true)
+  })
+
+  test('a session.repo that throws still appends a spawn record, with no project', async ($, on) => {
+    const w = world(on, undefined, { repoFails: true })
+    const started = await start($)
+    expect(started.agentId).toBe('ag1')
+    const spawn = w.appended.find((r) => r.type === 'spawn')
+    expect(spawn).toBeDefined()
+    expect(spawn.project).toBe(null)
+    expect(spawn.class).toBe('read-search')
+    expect(failures(w).some((l) => l.startsWith('[model-router] agent.spawn: '))).toBe(true)
   })
 })
 

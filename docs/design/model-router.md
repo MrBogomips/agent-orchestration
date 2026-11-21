@@ -178,17 +178,20 @@ keeps the engine's row (`await next(e)` in its tree) and adds one line:
 Fail open: a judge error, a timeout or an unreadable answer leaves the request unchanged. This is the opposite
 of the guards in `session-hub`, on purpose: a router that fails must never stop work.
 
-The routing and recording hooks each have a `.catch` that hands the event on unchanged, `session.start` catches
-its own work, and `/model-router` answers a fixed line when the log cannot be read, so a hook that throws or times
-out is fail-open too. A judge that answers with an error is logged as `error` (a `!` tag still forces the deep
+The routing and recording hooks each have a `.catch` that writes one debug line, `[model-router] <hook>: <error>`,
+and hands the event on unchanged; `session.start` catches its own work, and `/model-router` answers a fixed line
+when the log cannot be read, so a hook that throws or times out is fail-open too, and leaves a trace. At
+`agent.spawn`, what runs after the agent has started is caught on its own: an unreadable grid or project is logged,
+and the spawn record is still appended without the class or the project, so the task still gets an outcome. A judge that answers with an error is logged as `error` (a `!` tag still forces the deep
 tier); a judge call that throws leaves no decision record, and the spawn record shows route `unseen`.
 
 The router's judge tiers stop at the deep tier (`opus`) and the comparison is with the parent's model, so a
 subagent of a `fable` session can be lowered; up to 0.3 it does not hold `review-debug` and `design-open` to the grid's
 floor (the floor applies to exploration and recommendations from 0.4).
 
-Log one line when the mod is ready and one at the first firing of each hook. Without them, a router that never
-loaded looks the same as one with nothing to do. Both go to the debug log (`claude --debug`), not the transcript.
+Log one line when the mod is ready, one at the first firing of each hook and one for each failure. Without them, a
+router that never loaded, or fails on every call, looks the same as one with nothing to do. All go to the debug log
+(`claude --debug`), not the transcript.
 
 ### Decision log
 
