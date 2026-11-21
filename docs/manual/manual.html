@@ -784,7 +784,7 @@ closes: 30 minutes after the subagent's report (<code>reworkWindowMin</code>), o
 <table>
   <thead><tr><th style="width:15%">Outcome</th><th>When</th></tr></thead>
   <tr><td><code>success</code></td><td>the subagent reported and nothing in the window redid its work</td></tr>
-  <tr><td><code>rework</code></td><td>in the window, the main session or another agent wrote one of its files; or a similar start of the same class followed; or one of the next two prompts you typed named its files or its task</td></tr>
+  <tr><td><code>rework</code></td><td>in the window, the main session or another agent wrote one of its files; or a similar start of the same class followed on the same files; or the same subagent was sent a correction after its report; or one of the next two prompts you typed named its files or its task</td></tr>
   <tr><td><code>failure</code></td><td>it failed, or was stopped by its parent and redone</td></tr>
   <tr><td><code>cancelled</code></td><td>no report (for example, the session ended first), or stopped</td></tr>
 </table>

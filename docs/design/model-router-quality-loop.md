@@ -53,11 +53,14 @@ All come from mod events and `$` calls; none calls a model.
 | How the run ended | `agent.report`: `status` = `completed` / `failed` / `stopped` | strong |
 | Tool error rate | tool results with `isError`, keyed by `agentId` | medium |
 | Files the subagent wrote | `tool.call` on `Edit`, `Write`, `NotebookEdit` with `agentId` and `file_path` (verified, S12) | needed for rework |
-| Rework | inside the rework window after the report: the main session or any other agent (siblings included) writes one of the same files; a spawn of the same class whose description is similar (redo or escalation); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
+| Rework | inside the rework window after the report: the main session or any other agent (siblings included) writes one of the same files; a spawn of the same class whose description is similar (redo or escalation) and names a file the task wrote or the same files as the task; the parent sends the same subagent more work (`resume`, a correction); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
 | Re-search | inside the window, for a read-only subagent: the parent starts another read-only subagent of the same class on a similar description, or reads the files the subagent named | weak; shown as such in the report |
 
 *Similar description*: same class and a token-set overlap (Jaccard) of at least 0.5 on the lowercased words of
-the description, stop words removed. Builder may tune; the threshold is an option.
+the description, stop words removed. Builder may tune; the threshold is an option. A similar start counts as a redo
+only when it names a file the task wrote, or when the two descriptions name the same file-like tokens (words with a
+`.` or `/` inside): a batch such as "rename foo in a.ts", then "in b.ts", then "in c.ts" is three tasks, not two
+redos.
 
 ## Outcome of one task
 
@@ -254,7 +257,9 @@ Choices left to the builder, and where the build departs from the text above.
 - **Window bookkeeping.** `quality/state.json` holds the byte offset of the first record of any task still open
   (a subagent's report can reach the log before its spawn record) and the keys of tasks closed after it. A task
   with no report closes as `cancelled` when its session ends or after 24 hours. A continued subagent
-  (`SendMessage`) stays one task: its latest report gives the cost and starts the window.
+  (`SendMessage`) stays one task: its latest report gives the cost and starts the window. A continuation inside the
+  rework window of an earlier report is a rework signal (`continued after its report`): it is the correction that
+  `choose-model` asks for instead of a new start, which the similar-start signal would have caught.
 - **Compaction** is `scripts/compact.mjs` (Node, no dependencies), started by the mod at `session.start` through
   `$.process.run` without waiting, and by `model-router:report`. It writes the aggregates and `state.json` whole
   (temporary name, then rename) under `quality/.lock`. A stale lock is moved aside by a rename, which only one run

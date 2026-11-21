@@ -70,7 +70,8 @@ transcript.
 
 Each subagent start is one task. Its outcome is fixed when the rework window (30 minutes after its report, or
 the end of the session) closes: `success`, `rework` (the main session or another agent writes one of its files, a
-similar start of the same class follows, or one of the next two prompts you type names its files or its task),
+similar start of the same class follows on the same files, the same subagent is sent a correction after its report,
+or one of the next two prompts you type names its files or its task),
 `failure` (failed, or stopped by its parent and redone) or `cancelled`. Cancelled tasks, risky tasks, tasks with
 no class (no `[mr:<class>]` tag and no judge answer), tasks on a model outside the four families and tasks with no
 known effort are recorded but not learned. Cells of class × tier × effort keep first-pass yield, rework rate,
