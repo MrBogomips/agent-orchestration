@@ -31,7 +31,7 @@
 
 import { commandEffects, commandName, parseArgs, hasOption, shellLine, stripPrefix } from './shell-commands.mjs';
 import { tokenize } from './shell-words.mjs';
-import { checkRootFolder, checkRootSetting } from './write-root.mjs';
+import { checkRootFolder, checkRootSetting, isRootSettings, settingsReason } from './write-root.mjs';
 
 const PREFIX = '[session-hub]';
 const ALLOW = Object.freeze({ allow: true });
@@ -395,7 +395,10 @@ export async function judgeShell({ role, command, cwd, home, realpath, fileKind 
       const path = await foldDots(written, follow);
       if (isUnder(path, '/dev')) continue;
       root ??= await writeRoot(role, { realpath, fileKind, home });
+      const isWrite = verb === 'writes';
+      if (isWrite && isRootSettings(path, normalizePath(role.scopeRoot))) return block(`it writes ${settingsReason(path)} ${advice}`);
       for (const real of await land(path, ownLink ? path : undefined)) {
+        if (isWrite && isRootSettings(real, root)) return block(`it writes ${settingsReason(real)} ${advice}`);
         if (isUnder(real, root) || isAllowedPlace(real)) continue;
         const lands = real === path ? '' : ` (resolves to ${real})`;
         return block(`it ${verb} ${path}${lands}, outside the write root ${root}. ${advice}`);

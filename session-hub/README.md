@@ -22,7 +22,7 @@ important one, the write scope, with a hook.
 | `session-hub:spawn` | skill | Starts one child per repository (desktop app, Herdr, tmux, `claude --bg`, or commands for the user) with a scope, a model and an effort level, the `SESSION_HUB_*` role variables, and a handoff file. Records each child. |
 | `session-hub:dispatch` | skill | Master side. Decides per repository whether the master reads, a subagent reads, or a child works; handles the children's messages and routes out-of-scope requests; keeps master-only duties. |
 | `session-hub:setup` | skill | Writes or updates the hub's *Child sessions* section, after an explicit yes. |
-| `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, or to a file with more than one hard link (another of its names may be outside), and tells the model to send an `out-of-scope` message to the master. |
+| `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, to a file with more than one hard link (another of its names may be outside), or to the repository's `.claude/settings*.json`, and tells the model to send an `out-of-scope` message to the master. |
 | `scripts/registry.mjs` | script | Reads and writes the children record, atomically. Used by the skills and, read only, by the mod. |
 | `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel and the start line under each child launch. See *The mod* below. |
 | `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel. See [Commands](#commands). |
@@ -117,6 +117,9 @@ inside a hub or a repository. Writes are atomic and take a lock file next to the
 - **A killed hook lets the write through.** Claude Code treats a hook that exceeds its timeout (10 s) as a
   non-blocking error. The guard blocks on its own after about 7 s to stay ahead of that, but a hook killed
   from outside before it answers cannot block.
+- **A repository's Claude Code settings are the master's.** Their `env` and hook settings could turn a child's
+  guards off at its next start, so the hook and the shell check block a child's write to
+  `<root>/.claude/settings.json` and `settings.local.json`; the child sends the change to the master instead.
 - The guard accepts only absolute paths, and refuses `/` or the home folder as a write root; the mod's shell check
   refuses the same roots. A file inside the root with a second hard link cannot be edited in a child, even when
   both names are inside the root: the guard cannot see where the other name is. The role value is

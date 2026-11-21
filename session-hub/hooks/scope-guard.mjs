@@ -3,8 +3,9 @@
 //
 // In a child session (SESSION_HUB_ROLE=child) it blocks a file write whose real path is not under
 // SESSION_HUB_SCOPE_ROOT, and a write to an existing file with more than one hard link (a hard link has no real path
-// that leads elsewhere, so another name of the file may be outside the root). It does nothing in any other session,
-// or when SESSION_HUB_GUARDS=off.
+// that leads elsewhere, so another name of the file may be outside the root), and a write to the repository's Claude
+// Code settings, <root>/.claude/settings*.json, whose env and hook settings could turn the guards off. It does
+// nothing in any other session, or when SESSION_HUB_GUARDS=off.
 // It fails closed: when it cannot evaluate a call in a child, it blocks and says why.
 //
 // Output contract: exit 0 with no output allows the call; exit 2 with the reason on stderr blocks it,
@@ -12,10 +13,13 @@
 
 import { lstatSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, dirname, sep } from 'node:path';
+import { isAbsolute, dirname, normalize as normalizePath, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { checkRootFolder, checkRootSetting } from './mod/write-root.mjs';
+import { checkRootFolder, checkRootSetting, isRootSettings, settingsReason } from './mod/write-root.mjs';
+
+// A path without `.`, `..` or a trailing separator, as written.
+const asWritten = (path) => normalizePath(String(path)).replace(/(.)\/+$/, '$1');
 
 const PREFIX = '[session-hub]';
 // Path fields per tool, in the order they are looked up.
@@ -126,6 +130,10 @@ export function evaluate(input, env) {
     const raw = targetPath(input);
     const target = resolveTarget(raw);
     if (!isUnder(target, root)) return block(`${raw} is outside this child's write root ${root}. ${outOfScopeAdvice}`);
+    // Checked on the real path and as written, against the root as resolved and as configured.
+    if (isRootSettings(target, root) || isRootSettings(asWritten(raw), asWritten(env.SESSION_HUB_SCOPE_ROOT))) {
+      return block(`${settingsReason(raw)} ${outOfScopeAdvice}`);
+    }
     const names = hardLinks(target);
     if (names <= 1) return ALLOW;
     return block(

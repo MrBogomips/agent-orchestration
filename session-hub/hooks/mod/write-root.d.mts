@@ -1,3 +1,7 @@
+export function isRootSettings(path: string, root: string): boolean
+
+export function settingsReason(path: string): string
+
 export function checkRootSetting(raw: unknown): string
 
 export function checkRootFolder(found: {
