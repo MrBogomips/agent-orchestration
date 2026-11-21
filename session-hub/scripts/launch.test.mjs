@@ -36,6 +36,10 @@ test('--carry adds named variables and refuses credentials and bad names', () =>
   assert.deepEqual(identityEnv({ MY_PROFILE: 'a' }, '/Users/me', ['MY_PROFILE']), { MY_PROFILE: 'a' });
   assert.throws(() => carryNames('ANTHROPIC_API_KEY'), LaunchError);
   assert.throws(() => carryNames('GH_TOKEN'), LaunchError);
+  for (const name of ['GH_PAT', 'OPENAI_KEY', 'PRIVATE_KEY', 'DATABASE_URL', 'SESSION_COOKIE', 'DB_PASSWORD']) {
+    assert.throws(() => carryNames(name), LaunchError, name);
+  }
+  assert.deepEqual(carryNames('PATH_PROFILE'), ['PATH_PROFILE']);
   assert.throws(() => carryNames('A=B'), LaunchError);
 });
 
@@ -82,6 +86,36 @@ test('an unknown flag and a flag with no value are reported, not carried', () =>
   const read = readArguments(['--frobnicate', '--settings'], { exact: true });
   assert.deepEqual(read.flags, []);
   assert.equal(read.unsure.length, 2);
+});
+
+test('split on spaces, a prompt word that looks like a flag is never read as one', () => {
+  const prompt = readArguments('what does --dangerously-skip-permissions do'.split(' '), { exact: false });
+  assert.deepEqual(prompt.permission, { bypass: false, flags: [] });
+  assert.equal(prompt.unsure.length, 1);
+  const settings = readArguments('--model opus fix --settings parsing'.split(' '), { exact: false });
+  assert.deepEqual(settings.flags, []);
+  assert.equal(settings.model, 'opus');
+  assert.equal(settings.unsure.length, 1);
+  // A plain prompt with no flag-like word is not a doubt.
+  assert.deepEqual(readArguments('--resume abc fix the bug'.split(' '), { exact: false }).unsure, []);
+  // The real argument vector keeps the prompt in one piece, and flags after it are flags.
+  const exact = readArguments(['what does --dangerously-skip-permissions do', '--agent', 'x'], { exact: true });
+  assert.equal(exact.permission.bypass, false);
+  assert.deepEqual(exact.flags, ['--agent', 'x']);
+});
+
+test('inline JSON in --settings or --mcp-config is not carried: it may hold credentials', () => {
+  for (const args of [
+    ['--settings', '{"env":{"ANTHROPIC_API_KEY":"sk-x"}}'],
+    ['--settings={"env":{"ANTHROPIC_API_KEY":"sk-x"}}'],
+    ['--mcp-config', '/ok.json', '{"headers":{"Authorization":"Bearer sk-x"}}'],
+  ]) {
+    const read = readArguments(args, { exact: true });
+    assert.deepEqual(read.flags, []);
+    assert.equal(read.unsure.length, 1);
+    assert.ok(!JSON.stringify(read).includes('sk-x'));
+  }
+  assert.deepEqual(readArguments(['--settings', '/s.json'], { exact: true }).flags, ['--settings', '/s.json']);
 });
 
 test('arguments after -- are a prompt', () => {

@@ -47,7 +47,9 @@ repository): never start one with a bare `claude` or a bare `herdr agent start`.
    already leaves out the ones that belong to the master's own session (`-n`/`--name`, `-r`/`--resume`,
    `-c`/`--continue`, `--session-id`, `--fork-session`, `-p`/`--print`, `--bg`, `-w`/`--worktree`, `--add-dir`, a
    prompt). `model` and `effort` are for step 9 of the skill and are not carried: the child gets its own.
-   `permission` is for *Permission mode* in [hub-config.md](hub-config.md).
+   `permission` is for *Permission mode* in [hub-config.md](hub-config.md). Inline JSON in `--settings` or
+   `--mcp-config` is not carried, because it may hold credentials, and words after a prompt are not read as
+   flags: both come back under `unsure`.
 3. **Identity variables** are `env`, all of them: `CLAUDE_CONFIG_DIR`, a wrapper's profile (`SHALLOW_PROFILE`),
    the `XDG_*_HOME` folders, and `HOME` when it is not the account's own home. The hub's *Carry* key names more
    variables; the script refuses a name that looks like a credential. Never dump or copy the environment: it

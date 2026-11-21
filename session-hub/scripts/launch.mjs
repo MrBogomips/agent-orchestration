@@ -36,7 +36,7 @@ export const IDENTITY_VARIABLES = Object.freeze([
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // A name that looks like a credential is refused even when asked for: it would land on command lines and in panes.
-const SECRET = /(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|API_?KEY|AUTH)/i;
+const SECRET = /(TOKEN|SECRET|PASSW|CREDENTIAL|KEY|AUTH|PRIVATE|SESSION|COOKIE|(^|_)(PAT|URL|URI|DSN)(_|$))/i;
 
 // one: exactly one value. many: every argument up to the next flag. optional: a value only if one follows.
 const CARRIED = Object.freeze({
@@ -64,6 +64,8 @@ const DROPPED = Object.freeze({
   '--worktree': 'optional',
   '--add-dir': 'many',
 });
+// These take a file or inline JSON; inline JSON may hold credentials (an `env` block, request headers).
+const MAY_BE_JSON = Object.freeze(['--settings', '--mcp-config']);
 const BYPASS_FLAG = '--dangerously-skip-permissions';
 const BYPASS_MODE = 'bypassPermissions';
 
@@ -99,7 +101,15 @@ export function readArguments(args, { exact = false } = {}) {
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === '--') break;
-    if (!isFlag(arg)) continue; // a prompt, or the value of a flag already read
+    if (!isFlag(arg)) {
+      // A free word is the prompt. In the real argument vector flags may still follow it; split on spaces, what
+      // follows may be the rest of the prompt, and a word of it that looks like a flag must not be read as one.
+      if (exact) continue;
+      if (args.slice(i + 1).some((later) => later !== '--' && isFlag(later))) {
+        unsure.push(`what follows "${arg}" may be a prompt or more flags, which the process list does not tell apart: not read; ask the user`);
+      }
+      break;
+    }
     const cut = arg.startsWith('--') ? arg.indexOf('=') : -1;
     const name = cut < 0 ? arg : arg.slice(0, cut);
     const inline = cut < 0 ? undefined : arg.slice(cut + 1);
@@ -132,7 +142,9 @@ export function readArguments(args, { exact = false } = {}) {
         if (!exact && spare > 0) {
           unsure.push(`${name}: its value may contain spaces, which the process list does not show; ask the user for it`);
         }
-        flags.push(...(inline !== undefined ? [arg] : [name, ...values]));
+        const json = MAY_BE_JSON.includes(name) && values.some((value) => /^\s*['"]?\s*[{[]/.test(value));
+        if (json) unsure.push(`${name} holds inline JSON, which may hold credentials: not carried; ask the user for a file to pass instead`);
+        else flags.push(...(inline !== undefined ? [arg] : [name, ...values]));
       }
       if (inline === undefined) i += values.length;
     } else if (name in DROPPED) {
