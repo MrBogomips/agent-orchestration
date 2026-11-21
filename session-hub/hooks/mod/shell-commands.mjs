@@ -204,17 +204,71 @@ function links(command, options, operands, targetDirectory) {
   return { hard: [], symbolic: placed.map((link) => ({ ...link, fromWorkingFolder })), made };
 }
 
+// `find`'s options before its starting points, and the ones among them that take a value.
+const FIND_LEADING = Object.freeze(['-H', '-L', '-P']);
+// Actions that run a command up to `;` (or `{} +`); the `dir` ones run it in each file's folder.
+const FIND_RUNS = Object.freeze(['-exec', '-execdir', '-ok', '-okdir']);
+const FIND_OWN_FOLDER = Object.freeze(['-execdir', '-okdir']);
+// Actions that write a file, and how many words each takes (`-fprintf FILE FORMAT`).
+const FIND_WRITES = Object.freeze({ '-fprint': 1, '-fprint0': 1, '-fls': 1, '-fprintf': 2 });
+const isFindExpression = (word) => (word.value.startsWith('-') && word.value.length > 1) || ['(', ')', '!', ','].includes(word.value);
+const dot = Object.freeze({ type: 'word', value: '.', dynamic: false });
+
+// The command words of a `find` action with `{}` replaced by a starting point, marked `fromStart`: every file `find`
+// hands the command is under that point, so it is judged where the point is, from `find`'s own folder.
+const withStart = (words, point) =>
+  words.map((word) =>
+    !word.dynamic && word.value.includes('{}')
+      ? { type: 'word', value: word.value.replaceAll('{}', point.value), dynamic: point.dynamic, fromStart: true }
+      : word);
+
+/**
+ * What `find` writes and runs: the file of `-fprint`, `-fprint0`, `-fprintf` and `-fls`, its starting points with
+ * `-delete` (`.` when none is given), and the commands of `-exec`, `-execdir`, `-ok` and `-okdir`, one run per
+ * starting point, `ownFolder` when the command runs in each file's folder.
+ */
+function findEffects(args) {
+  let i = 0;
+  while (i < args.length && (FIND_LEADING.includes(args[i].value) || /^-O\d*$/.test(args[i].value) || args[i].value === '-D')) {
+    i += args[i].value === '-D' ? 2 : 1;
+  }
+  const given = [];
+  while (i < args.length && !isFindExpression(args[i])) given.push(args[i++]);
+  const points = given.length > 0 ? given : [dot];
+  const targets = [];
+  const runs = [];
+  let deletes = false;
+  while (i < args.length) {
+    const action = args[i].value;
+    if (FIND_RUNS.includes(action)) {
+      let end = i + 1;
+      while (end < args.length && args[end].value !== ';' && !(args[end].value === '+' && args[end - 1].value === '{}')) end += 1;
+      const words = args.slice(i + 1, end);
+      runs.push(...points.map((point) => ({ words: withStart(words, point), ownFolder: FIND_OWN_FOLDER.includes(action) })));
+      i = end + 1;
+    } else if (Object.hasOwn(FIND_WRITES, action)) {
+      if (args[i + 1]) targets.push(args[i + 1]);
+      i += 1 + FIND_WRITES[action];
+    } else {
+      if (action === '-delete') deletes = true;
+      i += 1;
+    }
+  }
+  return { targets: deletes ? [...targets, ...points] : targets, runs };
+}
+
 /**
  * What one simple command (prefix already stripped) writes: `targets` (files written), `ownLinks` (the names of the
- * symbolic links it makes, judged without following them), `hard` (the sources of the hard links it makes) and
- * `symbolic` (the symbolic links it makes).
+ * symbolic links it makes, judged without following them), `hard` (the sources of the hard links it makes),
+ * `symbolic` (the symbolic links it makes) and `runs` (the commands it runs itself, as `find -exec` does).
  */
 export function commandEffects(words) {
-  const none = { targets: [], ownLinks: [], hard: [], symbolic: [] };
+  const none = { targets: [], ownLinks: [], hard: [], symbolic: [], runs: [] };
   const [name, ...args] = words;
   if (!name) return none;
   const command = commandName(name);
   if (command === 'sed') return { ...none, targets: sedTargets(args) };
+  if (command === 'find') return { ...none, ...findEffects(args) };
   const { options, operands } = parseArgs(args, { values: VALUE_OPTIONS[command] ?? [] });
   if (ALL_ARGS.includes(command)) return { ...none, targets: operands };
   if (!LAST_ARG.includes(command)) return none;

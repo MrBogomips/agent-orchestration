@@ -3,6 +3,17 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.2.6
+
+2026-11-21 · pull request #PR
+
+### Fixed
+
+- The shell check reads `find`. The command of `-exec`, `-execdir`, `-ok` and `-okdir` is judged like a wrapped
+  command, with `{}` standing for the starting points; with `-execdir` only its absolute targets and its `{}` are
+  judged, since it runs in each file's folder. The file of `-fprint`, `-fprint0`, `-fprintf` and `-fls` is a write
+  target, and with `-delete` the starting points are, as for `rm`.
+
 ## model-router 0.3.9
 
 2026-11-21 · pull request #67
