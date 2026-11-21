@@ -152,7 +152,7 @@ one file per environment).
 | `model-router:report` | skill | Runs `scripts/report.mjs` and gives the user the page's path. Computes nothing itself. |
 | `model-router` | mod | `hooks/model-router.tsx`, registered as a module in `hooks/hooks.json`. Routes subagent starts that carry no model, draws under each `Agent` call's row the model and effort the subagent got, and records the quality loop's events. Thin glue over the plain modules in `lib/`. |
 | `/model-router` | command | Registered by the mod: the usage view, a tabbed dialog (Overview, Models, Classes, Decisions) with a text fallback; `on` or `off` for the session; `report`; `help`. See [Commands](#commands). |
-| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the choose-model line (`route-line.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the usage view's rows (`usage-view.mjs`), its tiles and sparklines (`usage-tiles.mjs`) and keys (`usage-nav.mjs`), terminal text width (`width.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
+| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), which typed prompts are stored (`prompt-gate.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the choose-model line (`route-line.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the usage view's rows (`usage-view.mjs`), its tiles and sparklines (`usage-tiles.mjs`) and keys (`usage-nav.mjs`), terminal text width (`width.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
 | `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes outcomes and updates the aggregates under a lock; the report renders them into one self-contained page and opens it; `usage.mjs` compacts within a 3-second budget and prints the usage view's data as JSON. |
 | `grid.json` | data | The same grid in machine-readable form, with each class's usual choice (`default`); the judge's prompt is generated from it. |
 | `grid.test.mjs` | test | Fails when `grid.json` and the two skills drift apart. |
@@ -711,7 +711,8 @@ not hold `review-debug` and `design-open` to the grid's floor.
 ### The quality loop (measuring only up to 0.3)
 
 The mod appends `decision`, `spawn`, `signal` (`write`, `tool-error`, `prompt`, `stop`, `resume`), `report` and
-`session-end` records to `events.jsonl` with `cat >>` through `$.process.run`. Compaction, started by the mod at
+`session-end` records to `events.jsonl` with `cat >>` through `$.process.run`; a `prompt` signal only for the next
+two prompts after a subagent's report, inside the rework window. Compaction, started by the mod at
 session start and by the report, decides the outcome of every task whose rework window closed (`success`,
 `rework`, `failure`, `cancelled`), appends it as an `outcome` record, and folds the learned ones into cells of
 class × tier × effort at two levels (user, project), with aging and the grid as prior. The report shows first-pass

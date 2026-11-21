@@ -288,7 +288,10 @@ Choices left to the builder, and where the build departs from the text above.
   the grid for protected classes; the router does not use it until 0.4.
 - **Project id** comes from the engine's `$.session.repo()` (`origin` URL and root), else the session root.
 - **Privacy.** The prompt signal keeps the first 2,000 characters of a typed prompt, so that compaction can tell
-  whether it is about the task. All of it stays under the config folder.
+  whether it is about the task, and only for the prompts the outcome logic reads: the next two after a subagent of
+  the session reports, inside the rework window. A prompt typed before any report, past the window or after those
+  two is not stored. The count lives in the mod and starts over when the mod reloads. All of it stays under the
+  config folder.
 
 Not built in 0.2 (nor in 0.3):
 

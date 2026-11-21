@@ -214,8 +214,8 @@ Set in `/config` or under `pluginConfigs` in settings.
 The plugin sends what it records nowhere: it all stays under the active config folder
 (`CLAUDE_CONFIG_DIR`, else `~/.claude`) in `model-router/`: `events.jsonl` (decisions; each subagent start with
 its type, name and short description; the paths of files the session and its subagents write; tool names of
-failed subagent calls and stop targets; the first 2,000 characters of the prompts you type; reports with tokens
-and estimated cost), `options.json` (the options compaction uses), `quality/` (aggregates per user and per
+failed subagent calls and stop targets; the first 2,000 characters of the two prompts you type next after a
+subagent reports, inside the rework window, and of no other prompt; reports with tokens and estimated cost), `options.json` (the options compaction uses), `quality/` (aggregates per user and per
 project, with the project's root path) and `report.html`. Nothing is written inside a repository. The judge is one
 fast-tier model call per routed start through your session's own client, counted in the session's cost; it
 receives the subagent type, its short description and the first 4,000 characters of its task.
