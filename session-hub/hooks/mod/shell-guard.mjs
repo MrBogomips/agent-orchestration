@@ -396,9 +396,9 @@ export async function judgeShell({ role, command, cwd, home, realpath, fileKind 
       if (isUnder(path, '/dev')) continue;
       root ??= await writeRoot(role, { realpath, fileKind, home });
       const isWrite = verb === 'writes';
-      if (isWrite && isRootSettings(path, normalizePath(role.scopeRoot))) return block(`it writes ${settingsReason(path)} ${advice}`);
+      if (isWrite && isRootSettings(path, normalizePath(role.scopeRoot))) return block(`${settingsReason(path)} ${advice}`);
       for (const real of await land(path, ownLink ? path : undefined)) {
-        if (isWrite && isRootSettings(real, root)) return block(`it writes ${settingsReason(real)} ${advice}`);
+        if (isWrite && isRootSettings(real, root)) return block(`${settingsReason(real)} ${advice}`);
         if (isUnder(real, root) || isAllowedPlace(real)) continue;
         const lands = real === path ? '' : ` (resolves to ${real})`;
         return block(`it ${verb} ${path}${lands}, outside the write root ${root}. ${advice}`);
