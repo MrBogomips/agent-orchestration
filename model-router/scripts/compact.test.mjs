@@ -115,7 +115,7 @@ test('a run reads only the bytes after its offset, so a log past 2 GB still comp
   appendFileSync(file, task('s1', 'a1', 0).map((l) => JSON.stringify(l)).join('\n') + '\n');
   mkdirSync(join(configDir, 'model-router', 'quality'), { recursive: true });
   writeFileSync(join(configDir, 'model-router', 'quality', 'state.json'), JSON.stringify({ version: 1, offset: prefix, done: [] }));
-  const summary = compact({ configDir, now: T0 + 60 * 60000, options: OPTIONS });
+  const summary = compact({ configDir, now: T0 + 60 * 60000, options: { ...OPTIONS, rotateBytes: 0 } });
   assert.equal(summary.outcomes, 1, JSON.stringify(summary));
   assert.equal(read(configDir, 'quality', 'state.json').offset > prefix, true);
   rmSync(configDir, { recursive: true, force: true });

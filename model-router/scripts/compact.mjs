@@ -1,23 +1,32 @@
 #!/usr/bin/env node
 // Compaction of the quality loop: closes the outcomes whose rework window ended, appends them to events.jsonl
-// and folds the learned ones into quality/user.json and quality/projects/<id>.json.
+// and folds the learned ones into quality/user.json and quality/projects/<id>.json. Past `rotateBytes` it rotates
+// the log into archive/ (scripts/rotate.mjs).
 // See docs/design/model-router-quality-loop.md, "Memory".
 //
 // Usage: node compact.mjs [--config-dir <dir>] [--options '<json>']
 // Prints a JSON summary. Fails open: any error is printed as { error } and the exit code stays 0, so a caller
-// (the mod at session start, the report) is never stopped by it. The event log is never rewritten.
-import { readFileSync, readSync, writeFileSync, appendFileSync, mkdirSync, openSync, closeSync, unlinkSync, renameSync, existsSync, statSync, realpathSync } from 'node:fs';
+// (the mod at session start, the report) is never stopped by it. The live event log is never rewritten: it is
+// only appended to and, past `rotateBytes`, renamed.
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, openSync, closeSync, unlinkSync, renameSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { computeOutcomes } from '../lib/outcome.mjs';
 import { applyOutcome, emptyLevel } from '../lib/aggregate.mjs';
+import { eachLine, parseLine, readJson, tailOf, writeWhole } from './log-io.mjs';
+import { expireSegments, finishRotation, startRotation } from './rotate.mjs';
+
+export { readEvents, scanEvents, writeWhole } from './log-io.mjs';
+export { logFiles, scanLog } from './rotate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LOCK_STALE_MS = 2 * 60000;
-// A torn last line untouched for this long has no writer left: appends are one short `cat >>`.
-const TORN_STALE_MS = 2 * 60000;
-export const DEFAULT_OPTIONS = Object.freeze({ halfLifeDays: 30, reworkWindowMin: 30, similarityThreshold: 0.5 });
+export const DEFAULT_OPTIONS = Object.freeze({
+  halfLifeDays: 30, reworkWindowMin: 30, similarityThreshold: 0.5,
+  // events.jsonl is rotated into archive/ from this size; a rotated log keeps its decisions for this many days.
+  rotateBytes: 32 * (1 << 20), keepDays: 90,
+});
 
 export function defaultConfigDir() {
   return process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
@@ -40,90 +49,6 @@ export function paths(configDir) {
     projects: join(quality, 'projects'),
     project: (id) => join(quality, 'projects', `${id}.json`),
   };
-}
-
-const CHUNK_BYTES = 1 << 20;
-
-/**
- * Reads the complete lines of a file from byte `from`, one chunk at a time, so the file is never held whole (a
- * log past 2 GB cannot be read in one piece). Calls `onLine(text, start)` for each line ending in a newline, with
- * the byte offset of its start, and returns the offset just after the last complete line.
- */
-function eachLine(file, from, onLine, chunkBytes = CHUNK_BYTES) {
-  const fd = openSync(file, 'r');
-  try {
-    const chunk = Buffer.alloc(Math.max(1, chunkBytes));
-    let carry = Buffer.alloc(0);
-    let carryStart = from;
-    let pos = from;
-    for (;;) {
-      const n = readSync(fd, chunk, 0, chunk.length, pos);
-      if (n === 0) break;
-      pos += n;
-      const data = carry.length ? Buffer.concat([carry, chunk.subarray(0, n)]) : chunk.subarray(0, n);
-      let at = 0;
-      for (let nl = data.indexOf(10, at); nl >= 0; nl = data.indexOf(10, at)) {
-        onLine(data.subarray(at, nl).toString('utf8'), carryStart + at);
-        at = nl + 1;
-      }
-      carry = Buffer.from(data.subarray(at));
-      carryStart += at;
-    }
-    return carryStart;
-  } finally {
-    closeSync(fd);
-  }
-}
-
-/** The record on one line, or null for a blank or malformed line (skipped, never fatal). */
-function parseLine(text) {
-  const line = text.trim();
-  if (!line) return null;
-  try {
-    const record = JSON.parse(line);
-    return record && typeof record === 'object' ? record : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The parseable records of an event log that `keep` accepts (all by default), in order, and how many parseable
- * records it holds in all. `keep` may return a smaller copy of the record to hold; an absent file reads as empty.
- */
-export function scanEvents(file, { keep = (r) => r, chunkBytes = CHUNK_BYTES } = {}) {
-  const records = [];
-  let total = 0;
-  if (!existsSync(file)) return { records, total };
-  eachLine(file, 0, (text) => {
-    const record = parseLine(text);
-    if (!record) return;
-    total += 1;
-    const kept = keep(record);
-    if (kept) records.push(kept === true ? record : kept);
-  }, chunkBytes);
-  return { records, total };
-}
-
-/** Every parseable record of an event log, in order; an absent file reads as empty. */
-export function readEvents(file, { chunkBytes = CHUNK_BYTES } = {}) {
-  return scanEvents(file, { chunkBytes }).records;
-}
-
-function readJson(file, fallback) {
-  try {
-    return JSON.parse(readFileSync(file, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
-
-/** Writes a file whole: a temporary name in the same folder, then a rename. */
-export function writeWhole(file, text) {
-  mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(tmp, text);
-  renameSync(tmp, file);
 }
 
 /**
@@ -184,24 +109,6 @@ function readNewLines(file, offset) {
   return { records, starts, end, from };
 }
 
-/**
- * How the log ends: `whole` (empty, or on a newline), `writing` (a torn last line changed within the last two
- * minutes: a writer may still be finishing it) or `abandoned` (a torn last line older than that).
- */
-function tailOf(file, now) {
-  const { size, mtimeMs } = statSync(file);
-  if (size === 0) return 'whole';
-  const fd = openSync(file, 'r');
-  try {
-    const last = Buffer.alloc(1);
-    readSync(fd, last, 0, 1, size - 1);
-    if (last[0] === 10) return 'whole';
-  } finally {
-    closeSync(fd);
-  }
-  return now - mtimeMs < TORN_STALE_MS ? 'writing' : 'abandoned';
-}
-
 /** The next offset: the first line of any record of a task still open, so none of its records is skipped. */
 function nextState(records, starts, end, openTasks, closedKeys) {
   const keyOf = (r) => `${r.session}/${r.agentId}`;
@@ -258,12 +165,21 @@ export function effectiveOptions(configDir, options = {}) {
 export function compact({ configDir = defaultConfigDir(), now = Date.now(), options = {}, grid = loadGrid() } = {}) {
   const opts = effectiveOptions(configDir, options);
   const p = paths(configDir);
-  if (!existsSync(p.events)) return { outcomes: 0, learned: 0, open: 0 };
+  // Right after a rotation there may be no events.jsonl yet, but the rotation still has to be finished.
+  if (!existsSync(p.events) && !existsSync(p.state)) return { outcomes: 0, learned: 0, open: 0 };
   mkdirSync(p.quality, { recursive: true });
   const token = `${process.pid}-${now}-${Math.random().toString(36).slice(2)}`;
   if (!takeLock(p.lock, now, token)) return { skipped: 'locked' };
   try {
-    const state = readJson(p.state, { version: 1, offset: 0, done: [] });
+    const save = (s) => writeWhole(p.state, JSON.stringify(s));
+    let state = readJson(p.state, { version: 1, offset: 0, done: [] });
+    if (state.pending) {
+      // Until the rotated log is settled, the records of open tasks are split between it and events.jsonl.
+      const settled = finishRotation(p, state, { now });
+      if (!settled) return { outcomes: 0, learned: 0, open: 0, rotating: true };
+      state = settled;
+      save(state);
+    }
     const { records, starts, end, from } = readNewLines(p.events, state.offset ?? 0);
     // A run that died after appending its outcomes left them in the log: they count as done.
     const logged = records.filter((r) => r.type === 'outcome').map((r) => r.task);
@@ -276,7 +192,7 @@ export function compact({ configDir = defaultConfigDir(), now = Date.now(), opti
       // Another writer is finishing the last line: appending now would glue the outcomes onto it. The tasks stay
       // behind the offset, and the next run closes, folds and appends them.
       const waiting = new Set([...openTasks, ...outcomes.map((o) => o.task)]);
-      writeWhole(p.state, JSON.stringify(nextState(records, starts, end, waiting, done)));
+      save(nextState(records, starts, end, waiting, done));
       return { outcomes: 0, learned: 0, open: openTasks.size, deferred: outcomes.length };
     }
     const learned = fold(p, outcomes, { now, options: opts, grid });
@@ -286,8 +202,11 @@ export function compact({ configDir = defaultConfigDir(), now = Date.now(), opti
       appendFileSync(p.events, lead + outcomes.map((o) => JSON.stringify(o)).join('\n') + '\n');
     }
     const closed = new Set([...done, ...outcomes.map((o) => o.task)]);
-    writeWhole(p.state, JSON.stringify(nextState(records, starts, end, openTasks, closed)));
-    return { outcomes: outcomes.length, learned, open: openTasks.size };
+    const next = nextState(records, starts, end, openTasks, closed);
+    save(next);
+    const rotated = startRotation(p, next, { now, rotateBytes: opts.rotateBytes, save }) !== next;
+    const expired = expireSegments(p, { now, keepDays: opts.keepDays });
+    return { outcomes: outcomes.length, learned, open: openTasks.size, ...(rotated ? { rotated } : {}), ...(expired ? { expired } : {}) };
   } finally {
     releaseLock(p.lock, token);
   }

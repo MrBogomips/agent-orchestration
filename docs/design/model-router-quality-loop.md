@@ -277,7 +277,7 @@ Choices left to the builder, and where the build departs from the text above.
   wins, and a run removes only its own lock.
 - **A run that dies is safe to repeat.** A task that already has an `outcome` record in the log is not decided
   again, and each aggregate file keeps the keys of the tasks it folded (for 90 days), so a repeated fold counts
-  nothing twice. The event log itself is only appended to.
+  nothing twice. The live event log itself is only appended to (and renamed by a rotation).
 - **A torn last line.** A line with no newline yet is not read; it waits for the next run. Compaction never
   appends after it: while the line changed in the last two minutes, another session may still be finishing it,
   and the run closes nothing (its tasks stay behind the offset and are closed, folded and appended by a later
@@ -287,6 +287,20 @@ Choices left to the builder, and where the build departs from the text above.
   a time. The report and the usage view read the log in chunks too and keep only the records they show: outcomes and
   decisions, plus, for the view, this session's reports and the spawns of this session's project. Memory follows
   what is kept, not the size of the log.
+- **Rotation** (from 0.3.11, `scripts/rotate.mjs`). The live log is never rewritten. When a run ends with
+  `events.jsonl` at 32 MB or more (`rotateBytes`), it saves its state with the rotation pending, then renames the
+  log to `archive/raw-<ms>.jsonl`; the next writer creates a new `events.jsonl`. A session that opened the log just
+  before the rename still appends to the renamed file, so the rotation is finished by a later run, once the renamed
+  file has not changed for two minutes (until then a run closes nothing): the records after the saved offset that
+  compaction still needs (everything but decisions, outcomes and the records of tasks already closed) are carried
+  into `events.jsonl`, and the renamed log is rewritten as `archive/events-<ms>.jsonl` with only what the readers
+  keep (outcomes, decisions, spawns; prompts and other signals are dropped). A slimmed log rotated more than 90 days
+  ago (`keepDays`) gives its outcomes to `archive/outcomes.jsonl` and is removed. The report and the usage view read
+  `archive/outcomes.jsonl`, the rotated logs oldest first, then `events.jsonl`: every outcome is kept, so the
+  all-time window and the trend stay whole; decisions count for the last `keepDays` of rotated logs plus the live
+  log. A run that dies before the rename leaves the log in place (no rotated file: the saved offset is restored);
+  one that dies after carrying records but before saving may carry them twice, which the outcome logic tolerates
+  (one task per spawn, the latest report wins).
 - **Options.** The mod saves the options compaction needs in `<config dir>/model-router/options.json` at each
   session start; compaction and the report read it when no `--options` is given.
 - **Cells** store aged evidence counts (`n`, `success`, `rework`, `failure`) and the means; `alpha` and `beta` are
@@ -307,9 +321,6 @@ Choices left to the builder, and where the build departs from the text above.
 Not built in 0.2 (nor in 0.3):
 
 - *Re-search* by reading the files a read-only subagent named: only the similar-start signal is measured.
-- Pruning or rotation of compacted events older than 90 days: rewriting the log could drop a line another session
-  appends, a rename races with a writer's `cat >>`, and the all-time window and the trend read every outcome, so
-  archived outcomes would leave them. The log only grows; the readers above keep its cost to what they hold.
 - The two-level combination (`projectPriorStrength`): the report shows each project's own cells. It is used by
   selection from 0.4.
 - The tool error rate: `tool-error` signals are recorded but play no part in outcomes or the report yet.

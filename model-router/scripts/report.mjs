@@ -7,7 +7,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { compact, defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, scanEvents, writeWhole } from './compact.mjs';
+import { compact, defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, scanLog, writeWhole } from './compact.mjs';
 import { agedCells, classesOf, decisionsOf, latestOutcomes, trendOf } from '../lib/usage-data.mjs';
 import { renderReport } from '../lib/report-html.mjs';
 
@@ -36,7 +36,7 @@ export function buildReportData({ configDir = defaultConfigDir(), now = Date.now
   compact({ configDir, now, options: opts, grid });
   const p = paths(configDir);
   // The page shows outcomes and decision counts: only those records are held, however long the log is.
-  const { records: events, total } = scanEvents(p.events, { keep: (r) => r.type === 'outcome' || r.type === 'decision' });
+  const { records: events, total } = scanLog(p, { keep: (r) => r.type === 'outcome' || r.type === 'decision' });
   const outcomes = latestOutcomes(events);
   const user = readJson(p.user) ?? { cells: {} };
   const levels = [
