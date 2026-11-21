@@ -2,8 +2,12 @@
 // bold and fenced code. Anything else is rendered as text.
 import { escapeHtml } from './text.mjs';
 
+// The page is filled with the site's placeholders after it is rendered: a `{` written as an entity keeps a
+// `{{…}}` the Markdown shows (a release note about the placeholders, say) from being read as one.
+const escapeText = (text) => escapeHtml(text).replaceAll('{', '&#123;');
+
 function inline(text) {
-  return escapeHtml(text)
+  return escapeText(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label, href) => `<a href="${href}">${label}</a>`);
@@ -18,7 +22,7 @@ export function renderMarkdown(source, { skipTitle = true } = {}) {
   const flushList = () => { if (list) { out.push(`<ul>${list.map((li) => `<li>${inline(li)}</li>`).join('')}</ul>`); list = null; } };
   for (const line of source.split('\n')) {
     if (fence !== null) {
-      if (line.startsWith('```')) { out.push(`<pre><code>${escapeHtml(fence.join('\n'))}</code></pre>`); fence = null; } else fence.push(line);
+      if (line.startsWith('```')) { out.push(`<pre><code>${escapeText(fence.join('\n'))}</code></pre>`); fence = null; } else fence.push(line);
       continue;
     }
     if (line.startsWith('```')) { flushPara(); flushList(); fence = []; continue; }

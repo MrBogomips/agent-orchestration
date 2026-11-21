@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// Translates the site into Italian with the Gemini API, through the gemini-translate skill's script
-// (gemini_translate.py), with the glossary site/src/glossary.it.md. An authoring step, never run by the build or CI;
-// every call is billed to the GEMINI_API_KEY in use.
+// Translates the site with the Gemini API, through the gemini-translate skill's script (gemini_translate.py). An
+// authoring step, never run by the build or CI; every call is billed to the GEMINI_API_KEY in use.
+//
+// Pages are written in the source language (site.json `sourceLanguage`, Italian) and translated into the others
+// with the glossary site/src/glossary.<target>.md. Interface strings and diagram text are written in English and
+// translated into Italian with site/src/glossary.it.md.
 //
 //   node site/translate.mjs                 everything that is stale or missing
-//   node site/translate.mjs pages [ids…]    pages whose English changed (or the ones named)
+//   node site/translate.mjs pages [ids…]    English pages whose Italian source changed (or the ones named)
 //   node site/translate.mjs strings [--all] interface strings missing from it.json (or all of them)
 //   node site/translate.mjs diagrams [--all] diagram text missing from diagrams/i18n/it.json (or all of it)
 //
@@ -19,6 +22,7 @@ import { readTranslationHeader, sha12, translationHeader } from './lib/text.mjs'
 import { diagramStrings } from './lib/diagrams.mjs';
 import { loadSite, repoRoot } from './build.mjs';
 
+// The language the interface strings and the diagram text are translated into.
 const LANG = 'it';
 
 function findScript() {
@@ -38,14 +42,16 @@ function findScript() {
   return hits.sort().pop();
 }
 
-function gemini(site, input, register = 'technical') {
+function gemini(site, input, { to = LANG, register = 'technical' } = {}) {
   let work = mkdtempSync(join(tmpdir(), "site-tr-"));
   try {
     const src = join(work, 'in.md');
     const out = join(work, 'out.md');
     writeFileSync(src, input);
-    const run = (extra) => spawnSync('python3', [findScript(), '--to', LANG, '--register', register, '--glossary',
-      join(site.root, 'site/src/glossary.it.md'), ...extra, '-i', src, '-o', out], { encoding: 'utf8', timeout: 900_000 });
+    const glossary = join(site.root, `site/src/glossary.${to}.md`);
+    if (!existsSync(glossary)) throw new Error(`no glossary for ${to}: site/src/glossary.${to}.md`);
+    const run = (extra) => spawnSync('python3', [findScript(), '--to', to, '--register', register, '--glossary',
+      glossary, ...extra, '-i', src, '-o', out], { encoding: 'utf8', timeout: 900_000 });
     let r = run([]);
     // Exit 4: code, tags or placeholders differ from the source. The skill's advice: one more run with --review.
     if (r.status === 4) r = run(['--review']);
@@ -71,12 +77,19 @@ function fromList(text) {
   return out;
 }
 
+const targetLanguages = (site) => site.config.languages.filter((l) => l !== site.sourceLanguage);
+
+/** Translates each page from the source language into every other language and writes the new header. */
 function translatePages(site, ids) {
   for (const id of ids) {
-    const src = readFileSync(join(site.root, `site/content/en/${id}.html`), 'utf8');
-    const body = gemini(site, src).replace(/^\s+/, '');
-    writeFileSync(join(site.root, `site/content/${LANG}/${id}.html`), translationHeader(`en/${id}.html`, src) + body);
-    console.log(`site: translated page ${id}`);
+    const source = `${site.sourceLanguage}/${id}.html`;
+    const src = readFileSync(join(site.root, `site/content/${source}`), 'utf8');
+    if (readTranslationHeader(src).hash) throw new Error(`content/${source} carries a translation header: it is the authored page`);
+    for (const to of targetLanguages(site)) {
+      const body = gemini(site, src, { to }).replace(/^\s+/, '');
+      writeFileSync(join(site.root, `site/content/${to}/${id}.html`), translationHeader(source, src) + body);
+      console.log(`site: translated page ${id} into ${to}`);
+    }
   }
 }
 
@@ -113,11 +126,17 @@ function translateDiagrams(site, all) {
   console.log(`site: translated ${todo.length} diagram strings`);
 }
 
-function stalePages(site) {
+/** The pages whose translation in some language is missing or older than the source page. */
+export function stalePages(site) {
   return site.config.pages.filter((p) => !p.source).map((p) => p.id).filter((id) => {
-    const it = join(site.root, `site/content/${LANG}/${id}.html`);
-    if (!existsSync(it)) return true;
-    return readTranslationHeader(readFileSync(it, 'utf8')).hash !== sha12(readFileSync(join(site.root, `site/content/en/${id}.html`), 'utf8'));
+    const source = `${site.sourceLanguage}/${id}.html`;
+    const hash = sha12(readFileSync(join(site.root, `site/content/${source}`), 'utf8'));
+    return targetLanguages(site).some((lang) => {
+      const file = join(site.root, `site/content/${lang}/${id}.html`);
+      if (!existsSync(file)) return true;
+      const header = readTranslationHeader(readFileSync(file, 'utf8'));
+      return header.source !== source || header.hash !== hash;
+    });
   });
 }
 
