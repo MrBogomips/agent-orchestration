@@ -19,7 +19,8 @@ marketplace (`~/git/MrBogomips/claude-plugins`).
 - `<plugin>/hooks/`: classic hooks and, from 0.2, the mod module in the same `hooks.json`.
 - `<plugin>/README.md`: what it does and why; an **Installation** section saying whether it works without the
   other plugin.
-- `tests/validate.sh`: structural checks; `*.test.mjs` next to the code they test (`node --test`);
+- `tests/validate.sh`: structural checks; `tests/pr-checks.mjs`: version bumps and attribution against the base
+  branch; `*.test.mjs` next to the code they test (`node --test`);
   `tests/scenarios/<skill>/`: manual scenario checklists.
 - `docs/design/` (authoritative), `docs/research/` (reference), `docs/manual/` (user manual), `drafts/` (working
   material, committed).
@@ -76,11 +77,17 @@ version in `engines["claude-code"]` (mods exist from 2.1.287).
 
 ```bash
 bash tests/validate.sh
-node --test $(find . -path ./node_modules -prune -o -name '*.test.mjs' -print)
+node --test $(find . -path ./node_modules -prune -o -path ./.claude -prune -o -path ./site/dist -prune -o -name '*.test.mjs' -print)
+node tests/pr-checks.mjs origin/main      # version bumps; no attribution in the commits
+node site/check.mjs                       # documentation site: build, links, images, translations
 claude plugin validate ./session-hub --strict
 claude plugin validate ./model-router --strict
-node site/check.mjs                       # documentation site: build, links, images, translations
-claude plugin test ./model-router        # once the mod exists; same for session-hub
+claude plugin test ./session-hub
+claude plugin test ./model-router
 ```
+
+The `validate` workflow runs all of it on every pull request, with the Claude Code CLI pinned in
+`.github/workflows/validate.yml` (it needs no login for `plugin validate` and `plugin test`); `tests/validate.sh`
+also checks that each plugin's version is its newest `CHANGELOG.md` heading.
 
 The definition of done is `DoD.md`.

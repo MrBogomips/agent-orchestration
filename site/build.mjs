@@ -26,7 +26,10 @@ export function loadSite(root = repoRoot) {
   }));
   const versions = Object.fromEntries(config.plugins.map((p) => [p, readJson(join(root, p, '.claude-plugin/plugin.json')).version]));
   const layout = readFileSync(join(root, 'site/src/layout.html'), 'utf8');
-  return { root, config, strings, dicts, versions, layout };
+  // The language the pages are written in; the others are translated from it. The interface strings and the
+  // diagrams are still written in the default language.
+  const sourceLanguage = config.sourceLanguage ?? config.defaultLanguage;
+  return { root, config, strings, dicts, versions, layout, sourceLanguage };
 }
 
 // Finds an image by name, preferring the language's variant (<name>.<lang>.<ext>) over the shared one.
@@ -50,10 +53,12 @@ function pageSource(site, page, lang) {
   }
   const file = join(site.root, `site/content/${lang}/${page.id}.html`);
   const text = readFileSync(file, 'utf8');
-  if (lang === site.config.defaultLanguage) return { fragment: text, stale: false };
+  if (lang === site.sourceLanguage) return { fragment: text, stale: false };
+  // A translated page names its source and the hash of the source it was translated from.
   const header = readTranslationHeader(text);
-  const sourceText = readFileSync(join(site.root, `site/content/${site.config.defaultLanguage}/${page.id}.html`), 'utf8');
-  return { fragment: header.body, stale: header.hash !== sha12(sourceText), header };
+  const source = `${site.sourceLanguage}/${page.id}.html`;
+  const sourceText = readFileSync(join(site.root, `site/content/${source}`), 'utf8');
+  return { fragment: header.body, stale: header.source !== source || header.hash !== sha12(sourceText), header };
 }
 
 export function buildSite({ root = repoRoot, out = join(root, 'site/dist') } = {}) {
