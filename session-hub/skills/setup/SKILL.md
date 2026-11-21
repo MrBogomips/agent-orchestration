@@ -37,6 +37,8 @@ yes. The key reference is `session-hub:spawn`'s `references/hub-config.md`
    - *Model*, *Effort*: leave them out unless the user gives defaults. If `model-router:choose-model` is
      available, say that it will choose per child when these keys are absent.
    - *Scope*, *Registry*, *Guards*: leave out (defaults: nothing, the config folder, `on`) unless the user asks.
+     `Guards: off` turns off all three guards (the scope guard, the send guard and the shell check): say so
+     before writing it.
      A *Registry* path inside the hub is refused: state must live outside it.
 4. **Show** the proposed section, and for an update the lines that change, then ask for an explicit yes
    (AskUserQuestion: write it, change something, or don't write). Only "write it" writes.
