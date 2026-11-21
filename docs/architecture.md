@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.2.3, `model-router` 0.3):
+This document describes the two plugins in this repository as built (`session-hub` 0.2.4, `model-router` 0.3):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.2.3 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `session-hub` | 0.2.4 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
 | `model-router` | 0.3.2 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents

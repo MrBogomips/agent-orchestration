@@ -51,3 +51,10 @@ test('roleSummary gives lines for the command', () => {
   assert.match(roleSummary({ role: readRole({}) }).join('\n'), /no session-hub role/);
   assert.match(roleSummary({ role: readRole({}), master: { record: '/c/x.json' } }).join('\n'), /Role: master/);
 });
+
+test('a master found by its hub names the hub, not the hub as the record', () => {
+  const lines = roleSummary({ role: readRole({}), master: { hub: '/work/hub' } }).join('\n');
+  assert.match(lines, /Hub: \/work\/hub/);
+  assert.match(lines, /Children record: default path for the hub/);
+  assert.doesNotMatch(lines, /Children record: \/work\/hub/);
+});

@@ -146,6 +146,11 @@ Works without `model-router`. With `model-router` installed, `session-hub:spawn`
 
 Then run `session-hub:setup` in the hub to write its *Child sessions* section, or let `spawn` use the defaults.
 
+## Manual
+
+The user manual for both plugins, with a worked example and screenshots of the guards, the command and the
+panel, is `docs/manual/user-manual.pdf` in the source repository.
+
 ## Migrating from `spawn-session`
 
 `session-hub:spawn` replaces the `spawn-session` skill of the `skills` plugin. Disable or uninstall
