@@ -2,6 +2,7 @@
 // Pure: it returns rows ({ text, tone, segments }) that the pane draws in colour and the text fallback prints as
 // they are, emoji included. See docs/design/model-router.md, "Command".
 // Plain ES module with no Node or engine imports, so both the mod and node tests load it.
+import { displayWidth } from './width.mjs';
 
 export const WEAK_N = 5;
 /** Under this many columns the four tiles stand two by two. */
@@ -9,17 +10,11 @@ export const TILES_ONE_ROW = 70;
 const TILE_INNER = 13;
 const DELTA_CAP = 999;
 const BLOCKS = '▁▂▃▄▅▆▇█';
-// Emoji drawn two columns wide whatever their length in UTF-16 units.
-const WIDE = new Set(['🟢', '🟡', '🔴', '⚪', '🔀']);
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
-/** The columns a text takes on a terminal: the status dots and the icon count two. */
-export function cols(text) {
-  let n = 0;
-  for (const ch of String(text)) n += WIDE.has(ch) ? 2 : 1;
-  return n;
-}
+/** The columns a text takes on a terminal: wide characters and emoji (the status dots, the icon) count two. */
+export const cols = displayWidth;
 
 const padTo = (text, width) => `${text}${' '.repeat(Math.max(0, width - cols(text)))}`;
 const centre = (text, width) => {
