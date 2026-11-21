@@ -96,7 +96,9 @@ effort on each model request of the started subagent, by its `agentId` (S14). St
 | The router is off, or a session-wide forced subagent model is set (`CLAUDE_CODE_SUBAGENT_MODEL`) | Keep it. Log `keep`. |
 | No model given | Ask the judge; apply the thresholds below; log. |
 
-A risky marker in the class tag (`[mr:<class>!]`, written by `choose-model`) counts as a risky judge answer.
+A risky marker in the class tag (`[mr:<class>!]`, written by `choose-model`) counts as a risky judge answer. The tag
+is read in any case and with spaces inside (`[MR: edit-specified !]`), and the marker counts even when the class is
+not in the grid: a mistyped or invented class reads as no class, never as no risk.
 
 ### The judge
 
@@ -176,17 +178,20 @@ keeps the engine's row (`await next(e)` in its tree) and adds one line:
 Fail open: a judge error, a timeout or an unreadable answer leaves the request unchanged. This is the opposite
 of the guards in `session-hub`, on purpose: a router that fails must never stop work.
 
-The routing and recording hooks each have a `.catch` that hands the event on unchanged, `session.start` catches
-its own work, and `/model-router` answers a fixed line when the log cannot be read, so a hook that throws or times
-out is fail-open too. A judge that answers with an error is logged as `error` (a `!` tag still forces the deep
+The routing and recording hooks each have a `.catch` that writes one debug line, `[model-router] <hook>: <error>`,
+and hands the event on unchanged; `session.start` catches its own work, and `/model-router` answers a fixed line
+when the log cannot be read, so a hook that throws or times out is fail-open too, and leaves a trace. At
+`agent.spawn`, what runs after the agent has started is caught on its own: an unreadable grid or project is logged,
+and the spawn record is still appended without the class or the project, so the task still gets an outcome. A judge that answers with an error is logged as `error` (a `!` tag still forces the deep
 tier); a judge call that throws leaves no decision record, and the spawn record shows route `unseen`.
 
 The router's judge tiers stop at the deep tier (`opus`) and the comparison is with the parent's model, so a
 subagent of a `fable` session can be lowered; up to 0.3 it does not hold `review-debug` and `design-open` to the grid's
 floor (the floor applies to exploration and recommendations from 0.4).
 
-Log one line when the mod is ready and one at the first firing of each hook. Without them, a router that never
-loaded looks the same as one with nothing to do. Both go to the debug log (`claude --debug`), not the transcript.
+Log one line when the mod is ready, one at the first firing of each hook and one for each failure. Without them, a
+router that never loaded, or fails on every call, looks the same as one with nothing to do. All go to the debug log
+(`claude --debug`), not the transcript.
 
 ### Decision log
 
@@ -250,7 +255,7 @@ row of its own because only Classes and the tiles depend on it. The view has fou
 | Tab | Shows |
 |---|---|
 | Overview | A status line (routing on or off for the session, measuring, adapt). The **KPI tiles** of the window at the level: first-pass yield, cost per successful task, rework rate and routed starts (by downgrade ↓, upgrade ↑, keep =). Each tile carries the change against the window of the same length before it (▲/▼, in points for the rates and in percent for the cost; green when better, red when worse, whatever the direction) and a status dot: FPY 🟢 from 85%, 🟡 from 70%, 🔴 below; rework 🟢 up to 10%, 🟡 up to 25%, 🔴 above; cost 🟢 cheaper or 🔴 dearer than before, ⚪ no prior with no earlier window (always for `all`); ⚪ under five scored tasks. Four tiles stand on one row from 70 columns, two by two below. Two **sparklines**, first-pass yield and cost per success, in equal buckets across the window (24h: 3 hours, 7d: a day, 30d: 3 days, all: the last 12 weeks by week). The **tier·effort bars** of the window, coloured by the FPY thresholds (dim under five tasks). **Session**: this session's subagents by model, with input, output, cache-read and cache-write tokens and cost, and the total. **Routing**: this session's decisions counted by action (downgrade, upgrade, keep, explicit, forced-risk, error). |
-| Models | The tiles when they fit on one row; then per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar coloured as above, cost per successful task; the model ids seen in the window, on one line. A task closed `cancelled` counts in the tasks but not in the first-pass yield or the tiles. |
+| Models | The tiles when they fit on one row; then per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar coloured as above, cost per successful task; the model ids seen in the window, on one line. It counts the same closed tasks as the tiles: a task closed `cancelled` counts in none of its figures. |
 | Classes | The tiles when they fit on one row; then per class, over the window and at the level: n, first-pass yield with a bar, rework rate, cost per successful task, the best measured cell next to the grid's choice, weak-signal flags; under each class its cells. Then up to three recommendation rows that differ from the grid, each led by the recommended cell's first-pass yield. |
 | Decisions | The latest routing decisions, all sessions, newest last: time, action, model before and after, effort, subagent type, reason. |
 

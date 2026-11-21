@@ -81,13 +81,16 @@ function combined(cells) {
   let tokensW = 0;
   for (const c of cells) {
     for (const k of Object.keys(sum)) sum[k] += c[k] ?? 0;
+    // Each mean weighs by the outcomes that carried its value (cells written before those weights: by n).
     if (isNum(c.costMean)) {
-      cost += c.costMean * (c.n ?? 0);
-      costW += c.n ?? 0;
+      const w = isNum(c.costN) ? c.costN : c.n ?? 0;
+      cost += c.costMean * w;
+      costW += w;
     }
     if (isNum(c.tokensMean)) {
-      tokens += c.tokensMean * (c.n ?? 0);
-      tokensW += c.n ?? 0;
+      const w = isNum(c.tokensN) ? c.tokensN : c.n ?? 0;
+      tokens += c.tokensMean * w;
+      tokensW += w;
     }
   }
   return { ...sum, costMean: costW ? cost / costW : null, tokensMean: tokensW ? tokens / tokensW : null };
@@ -133,18 +136,20 @@ export function classesOf(cells, grid, { outcomes = [], projectId = null } = {})
     });
 }
 
-function weekOf(iso) {
-  const d = new Date(iso);
+function weekOf(time) {
+  const d = new Date(time);
   const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - ((d.getUTCDay() + 6) % 7) * DAY_MS);
   return monday.toISOString().slice(0, 10);
 }
 
-/** First-pass yield and cost per successful task per week (Monday, UTC). */
+/** First-pass yield and cost per successful task per week (Monday, UTC); an outcome with no readable time is skipped. */
 export function trendOf(outcomes) {
   const weeks = new Map();
   for (const o of outcomes) {
     if (!CLOSED.includes(o.outcome)) continue;
-    const week = weekOf(o.reportTs ?? o.ts);
+    const t = outcomeTime(o);
+    if (!Number.isFinite(t)) continue;
+    const week = weekOf(t);
     const w = weeks.get(week) ?? { week, n: 0, success: 0, cost: 0, costN: 0 };
     w.n += 1;
     if (o.outcome === 'success') w.success += 1;
@@ -326,19 +331,21 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
   const windows = {};
   for (const window of WINDOW_NAMES) {
     const recent = inWindow(outcomes, window, now);
+    // The Models tab counts what the KPI tiles count: closed tasks, not cancelled ones.
+    const closed = recent.filter((o) => CLOSED.includes(o.outcome));
     const own = projectId ? recent.filter((o) => o.project?.id === projectId) : [];
     const levelClasses = (list, level, id) => (window === 'all'
       ? classesOf(agedCells(level, now, halfLifeDays), grid, { outcomes: list, projectId: id })
       : classesOf(tally(list.filter((o) => o.learn), (o) => `${o.class}|${o.tier}|${o.effort}`), grid, { outcomes: list, projectId: id }));
     windows[window] = {
-      tasks: recent.length,
+      tasks: closed.length,
       headline: {
         user: headlineOf(outcomes, allDecisions, window, now),
         project: projectId
           ? headlineOf(outcomes.filter((o) => o.project?.id === projectId), allDecisions.filter((d) => projectAgents.has(d.agentId)), window, now)
           : null,
       },
-      models: modelRows(recent),
+      models: modelRows(closed),
       classes: {
         user: levelClasses(recent, user, null),
         project: projectId ? levelClasses(own, projectLevel, projectId) : null,

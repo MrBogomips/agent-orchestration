@@ -3,6 +3,30 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.8
+
+2026-11-21 · pull request #59
+
+### Fixed
+
+- A risky `!` tag counts whatever its class, case or spacing: `[mr:migration!]` (a class not in the grid),
+  `[MR:edit-specified!]` and `[mr: read-search !]` now send the start to the deep tier with at least `high` effort.
+  Before, such a start could go to the fast tier.
+- Compaction no longer appends outcomes after a torn last line of `events.jsonl`, which lost them and later closed
+  the torn task as `cancelled`. While the torn line is recent the run closes nothing and the next run does it; a
+  torn line older than two minutes is ended with a newline first.
+- Each hook that fails writes one debug line, `[model-router] <hook>: <error>`, before going on unchanged. At
+  `agent.spawn`, an unreadable grid or project no longer loses the spawn record: it is written without them.
+- The cost and token means of a quality cell count only the outcomes that carried a cost or a token count (new
+  `costN` and `tokensN` weights, aged with the cell), and a class summary weighs each cell's means the same way.
+  Before, tasks with no cost pulled the means down.
+- One outcome with an unreadable time no longer makes the report fail with `Invalid time value`: it is skipped.
+- The Models tab counts the closed tasks the KPI tiles count; cancelled tasks are left out of its counts, tokens and
+  cost.
+- A remote URL that names a port (`ssh://git@github.com:22/o/r`, `https://github.com:443/o/r`) gives the same
+  project id as the other spellings; in the scp form (`git@github.com:1234/r`) a numeric owner is kept. A project
+  whose remote named a port gets a new id once, and starts its project level afresh.
+
 ## model-router 0.3.7
 
 2026-11-21 · pull request #18

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, appendFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, appendFileSync, readdirSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -70,6 +70,41 @@ test('lines appended after a run are picked up, and a torn last line waits', () 
   appendFileSync(file, JSON.stringify(report).slice(20) + '\n');
   const whole = compact({ configDir, now: T0 + 200 * 60000, options: OPTIONS });
   assert.equal(whole.outcomes, 1);
+});
+
+/** A log whose last line, the report of `a2`, is still being written: it has no newline yet. */
+function tornTail() {
+  const lines = [...task('s1', 'a1', 0), ...task('s1', 'a2', 2)];
+  const configDir = fixture(lines.slice(0, 3));
+  const file = join(configDir, 'model-router', 'events.jsonl');
+  appendFileSync(file, JSON.stringify(lines[3]));
+  return { configDir, file };
+}
+
+const outcomesIn = (file) => readEvents(file).filter((e) => e.type === 'outcome');
+
+test('outcomes are never glued onto a torn last line: they wait for it to be finished', () => {
+  const { configDir, file } = tornTail();
+  const first = compact({ configDir, now: T0 + 60 * 60000, options: OPTIONS });
+  assert.equal(first.outcomes, 0, 'nothing is appended after a line still being written');
+  assert.equal(first.deferred, 1);
+  assert.ok(!readFileSync(file, 'utf8').includes('}{'), 'no record is glued onto the torn line');
+  appendFileSync(file, '\n');
+  const later = compact({ configDir, now: T0 + 25 * 3600000, options: OPTIONS });
+  assert.equal(later.outcomes, 2);
+  const outcomes = outcomesIn(file);
+  assert.deepEqual(outcomes.map((o) => [o.task, o.outcome, o.learn]), [['s1/a1', 'success', true], ['s1/a2', 'success', true]]);
+  assert.equal(read(configDir, 'quality', 'user.json').cells['edit-specified|sonnet|medium'].success, 2);
+  assert.equal(compact({ configDir, now: T0 + 26 * 3600000, options: OPTIONS }).outcomes, 0, 'nothing is written twice');
+});
+
+test('a torn last line left by a writer that died is closed off, and the outcomes are appended after it', () => {
+  const { configDir, file } = tornTail();
+  const old = new Date(T0);
+  utimesSync(file, old, old);
+  const summary = compact({ configDir, now: T0 + 60 * 60000, options: OPTIONS });
+  assert.equal(summary.outcomes, 1);
+  assert.deepEqual(outcomesIn(file).map((o) => o.task), ['s1/a1']);
 });
 
 test('a fresh lock makes the run skip; a stale one is taken over', () => {
