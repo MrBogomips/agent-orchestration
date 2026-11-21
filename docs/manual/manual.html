@@ -815,7 +815,9 @@ it is information only: the router does not act on it.</p>
 <h3>Class tags</h3>
 <p>The class comes from the tag at the start of the description, <code>[mr:&lt;class&gt;]</code>, or
 <code>[mr:&lt;class&gt;!]</code> for a risky start; without a tag, from the judge's answer. Tag your own starts when
-you write them by hand: an untagged start that the router does not judge has no class and is not learned.</p>
+you write them by hand: an untagged start that the router does not judge has no class and is not learned. The tag
+is read in any case and with spaces inside; a class that is not in the grid gives no class, but its <code>!</code>
+still makes the start risky.</p>
 <h3>Compaction</h3>
 <p>The mod appends records to <code>events.jsonl</code>. <strong>Compaction</strong> (at session start, when the view
 opens or refreshes, and before the report) closes the tasks whose window ended, appends their outcomes and folds them
