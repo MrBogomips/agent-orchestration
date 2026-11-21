@@ -5,6 +5,8 @@ import { PRICE_ORDER, EFFORT_LEVELS } from './tiers.mjs';
 
 const DAY_MS = 86400000;
 const COUNTS = ['n', 'success', 'rework', 'failure'];
+// The weight behind each mean: only the outcomes that carried that value.
+const MEAN_WEIGHTS = { costN: 'costMean', tokensN: 'tokensMean' };
 export const MIN_CELL_N = 3;
 
 export const cellKey = (cls, tier, effort) => `${cls}|${tier}|${effort}`;
@@ -21,11 +23,20 @@ export function ageFactor(updatedIso, now, halfLifeDays) {
   return 0.5 ** (days / halfLifeDays);
 }
 
+/** The weight behind a mean; a cell written before the weights existed weighs a mean it holds by `n`. */
+function weightOf(cell, key) {
+  if (typeof cell[key] === 'number') return cell[key];
+  return typeof cell[MEAN_WEIGHTS[key]] === 'number' ? (cell.n ?? 0) : 0;
+}
+
 function scaled(cell, factor) {
   const out = { ...cell };
   for (const k of COUNTS) out[k] = (cell[k] ?? 0) * factor;
+  for (const k of Object.keys(MEAN_WEIGHTS)) out[k] = weightOf(cell, k) * factor;
   return out;
 }
+
+const isValue = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /** The cell with its counts aged to `now`; the means are kept. */
 export function ageCell(cell, now, halfLifeDays) {
@@ -50,7 +61,7 @@ export function posterior(cell, now, halfLifeDays, grid) {
 }
 
 function runningMean(mean, n, value) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return mean ?? null;
+  if (!isValue(value)) return mean ?? null;
   if (mean === null || mean === undefined || n <= 0) return value;
   return (mean * n + value) / (n + 1);
 }
@@ -63,13 +74,15 @@ export function applyOutcome(level, outcome, { now, halfLifeDays, grid }) {
   const existing = level.cells[key];
   let base = existing
     ? ageCell(existing, now, halfLifeDays)
-    : { class: outcome.class, tier: outcome.tier, effort: outcome.effort, model: outcome.model, n: 0, success: 0, rework: 0, failure: 0, costMean: null, tokensMean: null };
+    : { class: outcome.class, tier: outcome.tier, effort: outcome.effort, model: outcome.model, n: 0, success: 0, rework: 0, failure: 0, costMean: null, costN: 0, tokensMean: null, tokensN: 0 };
   if (existing && outcome.model && base.model && base.model !== outcome.model) base = { ...scaled(base, 0.5), model: outcome.model };
   const counted = {
     ...base,
     model: outcome.model ?? base.model,
-    costMean: runningMean(base.costMean, base.n, outcome.costUsd),
-    tokensMean: runningMean(base.tokensMean, base.n, outcome.tokens),
+    costMean: runningMean(base.costMean, base.costN, outcome.costUsd),
+    costN: base.costN + (isValue(outcome.costUsd) ? 1 : 0),
+    tokensMean: runningMean(base.tokensMean, base.tokensN, outcome.tokens),
+    tokensN: base.tokensN + (isValue(outcome.tokens) ? 1 : 0),
     n: base.n + 1,
     success: base.success + (outcome.outcome === 'success' ? 1 : 0),
     rework: base.rework + (outcome.outcome === 'rework' ? 1 : 0),

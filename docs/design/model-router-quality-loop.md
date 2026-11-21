@@ -115,8 +115,12 @@ repository, else of its root path. The file also stores the readable root path f
 **Aggregate cell**, keyed by class × tier × effort:
 
 ```json
-{ "alpha": 3.2, "beta": 1.1, "n": 5, "costMean": 0.041, "tokensMean": 18200, "updated": "2026-11-20T10:00:00Z" }
+{ "alpha": 3.2, "beta": 1.1, "n": 5, "costMean": 0.041, "costN": 4, "tokensMean": 18200, "tokensN": 4, "updated": "2026-11-20T10:00:00Z" }
 ```
+
+`costN` and `tokensN` count only the outcomes that carried a cost or a token count, and weigh each mean, so a task
+with no cost does not pull the mean down. They age with `n`. A cell written before they existed weighs its means
+by `n`.
 
 **Compaction** runs at `session.start` and from `model-router:report`. It takes the lock (stale after 2 minutes),
 reads closed outcomes after the last compacted offset, updates both levels, writes each file whole (write to a
