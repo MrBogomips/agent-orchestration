@@ -58,3 +58,12 @@ test('a master found by its hub names the hub, not the hub as the record', () =>
   assert.match(lines, /Children record: default path for the hub/);
   assert.doesNotMatch(lines, /Children record: \/work\/hub/);
 });
+
+test('a child under another configuration folder than its master says so first, in the section and the summary', () => {
+  const mismatch = { own: '/Users/me/.claude', master: '/profiles/work/.claude' };
+  const [first] = scopeSection({ role: child, mismatch }).text.split('\n');
+  assert.match(first, /another configuration folder \(\/Users\/me\/\.claude\) than its master \(\/profiles\/work\/\.claude\)/);
+  assert.match(first, /Tell the user/);
+  assert.match(roleSummary({ role: child, mismatch })[0], /another configuration folder/);
+  assert.doesNotMatch(scopeSection({ role: child }).text, /another configuration folder/);
+});

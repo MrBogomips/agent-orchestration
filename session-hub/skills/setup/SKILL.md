@@ -3,7 +3,8 @@ name: setup
 description: >-
   Writes or updates the `## Child sessions` section of a hub's instruction file (AGENTS.md or CLAUDE.md), which
   configures session-hub: repositories, task IDs, master-only parts, model and effort defaults, read scope per
-  repository, children record path, guards, environment, layout, worktrees, session names. Proposes values from
+  repository, children record path, guards, permission inheritance, carried variables, environment, layout, worktrees,
+  session names. Proposes values from
   what it finds in the hub and writes only after the user's explicit yes. Use when the user asks to set up,
   configure, initialize or update session-hub or the Child sessions section of a hub, or migrates a hub from
   spawn-session.
@@ -40,6 +41,11 @@ yes. The key reference is `session-hub:spawn`'s `references/hub-config.md`
      `Guards: off` turns off all three guards (the scope guard, the send guard and the shell check): say so
      before writing it.
      A *Registry* path inside the hub is refused: state must live outside it.
+   - *Permissions*, *Carry*: run `node "${CLAUDE_PLUGIN_ROOT}/scripts/launch.mjs"`. If `permission.bypass` is true,
+     ask whether children should inherit that without a question at every start (`Permissions: inherit`); say
+     that they will then bypass permission prompts too. If the user starts Claude through a wrapper that sets a
+     variable the script does not print, propose its **name** under *Carry*. Names only, never values or paths:
+     the file may be shared, and each master reads the values from its own launch.
 4. **Show** the proposed section, and for an update the lines that change, then ask for an explicit yes
    (AskUserQuestion: write it, change something, or don't write). Only "write it" writes.
 5. **Write** the section: replace the existing one, or append it at the end of the file. Keep the rest of the
@@ -67,6 +73,8 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   - design: `product/src/public-api/`
 - Registry: default
 - Guards: on
+- Permissions: ask
+- Carry: none
 - Environment: auto
 - Layout: ask
 - Worktrees: repo

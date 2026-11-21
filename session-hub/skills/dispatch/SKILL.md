@@ -14,7 +14,8 @@ description: >-
 
 The master of a hub coordinates; it never writes in a child repository. This skill decides, for each piece of
 work, the cheapest way to handle each repository it touches, and keeps the master's side of the message rules.
-Starting a child is `session-hub:spawn`'s job; this skill decides when to call it.
+Starting a child is `session-hub:spawn`'s job; this skill decides when to call it. Never start a session with a
+bare `claude`, `herdr` or `tmux` command instead: it would come up under another account than the master's.
 
 ## At the start of work
 

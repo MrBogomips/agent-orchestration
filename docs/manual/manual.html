@@ -263,6 +263,8 @@ section, shows it, and writes it only when you choose <em>write it</em>. It does
   <tr><td>Scope</td><td>per repository, what a child may read outside its write root</td><td>nothing</td></tr>
   <tr><td>Registry</td><td>path of the children record, outside the hub</td><td><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></td></tr>
   <tr><td>Guards</td><td><code>on</code> or <code>off</code> for all three guards</td><td><code>on</code></td></tr>
+  <tr><td>Permissions</td><td><code>ask</code> or <code>inherit</code>: what to do when the master bypasses permission prompts</td><td><code>ask</code></td></tr>
+  <tr><td>Carry</td><td>names of more environment variables a child takes from the master's launch</td><td>none</td></tr>
   <tr><td>Environment</td><td><code>auto</code>, <code>desktop</code>, <code>herdr</code>, <code>tmux</code>, <code>cli</code> or <code>manual</code></td><td><code>auto</code></td></tr>
   <tr><td>Layout</td><td><code>tabs</code>, <code>panes</code> or <code>ask</code></td><td><code>ask</code></td></tr>
   <tr><td>Worktrees</td><td><code>repo</code>, <code>always</code> or <code>never</code>, for children that edit</td><td><code>repo</code></td></tr>
@@ -336,22 +338,30 @@ starts all the children in one <code>spawn</code> call, so that their handoffs n
 
 <h3>The launch command</h3>
 <p>A child starts the way the master was started, so that it uses the same account and configuration folder (two
-sessions with different configuration folders cannot message each other). <code>spawn</code> reads the master's
-arguments from the process list and builds:</p>
+sessions with different configuration folders cannot message each other) and the same permission mode. If you start
+Claude Code through an alias or a wrapper that picks a profile or adds flags, the children get the same.
+<code>spawn</code> runs <code>scripts/launch.mjs</code>, which reads the master's own process and environment, and
+builds:</p>
 <ul>
   <li><strong>carried flags</strong> that configure the session (<code>--settings</code>, <code>--mcp-config</code>,
   <code>--plugin-dir</code>, <code>--setting-sources</code>, <code>--agent</code>, <code>--append-system-prompt</code>);
   the master's own (<code>--name</code>, <code>--resume</code>, <code>--worktree</code>, <code>--add-dir</code>, a
-  prompt…) and permission flags are left out;</li>
-  <li><strong>identity variables</strong>: <code>CLAUDE_CONFIG_DIR</code> when set, and <code>HOME</code> when it
-  differs from the account's home; nothing else from the environment;</li>
+  prompt…) are left out;</li>
+  <li><strong>identity variables</strong>: <code>CLAUDE_CONFIG_DIR</code>, <code>SHALLOW_PROFILE</code> and the
+  <code>XDG_*_HOME</code> folders when set, <code>HOME</code> when it differs from the account's home, and the
+  variables you name under <code>Carry</code>; nothing else from the environment, and never a credential;</li>
   <li><strong>child flags</strong>: <code>-n &lt;name&gt;</code>, <code>--model</code>, <code>--effort</code>,
-  <code>--permission-mode</code>, <code>--add-dir &lt;handoff folder&gt;</code>, then <code>--</code> and the prompt;</li>
+  the permission flags, <code>--add-dir &lt;handoff folder&gt;</code>, then <code>--</code> and the prompt;</li>
   <li>the <strong>role variables</strong>, placed as each environment allows.</li>
 </ul>
 <p>Children start in the master's permission mode, because messages between sessions that differ on bypassing
 permission prompts wait for your approval. When the master bypasses permission prompts, <code>spawn</code> asks at
-every start which mode the children get.</p>
+every start which mode the children get. With <code>Permissions: inherit</code> in the hub's section it does not
+ask: the children bypass permission prompts like the master, and the report says so.</p>
+<p>After each start <code>spawn</code> checks that the child appears in the session list. A child that started
+under another configuration folder does not: it would use another account and could not be reached by message, so
+<code>spawn</code> sends it no work and tells you. With mods on, such a child also says so itself, in its first
+lines and in <code>/session-hub</code>.</p>
 
 <h3>Worktrees and the write root</h3>
 <table>

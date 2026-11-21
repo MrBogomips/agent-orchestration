@@ -67,6 +67,9 @@ In the master, ask:
 - [ ] Master in bypass mode: at every start it asks to confirm the children's mode, its own first and
       recommended, in the same ask as the layout when that is asked too
 - [ ] The child's command line carries `--permission-mode <mode>` (Herdr, tmux, `claude --bg`, manual)
+- [ ] `Permissions: inherit` in the hub's section, master started with `--dangerously-skip-permissions` (issue
+      #72): nothing is asked about the mode, the child's command carries the same flag, and the report says in one
+      line that the children bypass permission prompts
 
 ## Launch command
 
@@ -79,6 +82,18 @@ flag, for example `env CLAUDE_CONFIG_DIR=<profile>/.claude claude --setting-sour
 - [ ] The child's command carries `--setting-sources user,project` and not the master's `-n`, `--resume` or
       prompt
 - [ ] No token or other variable from the master's environment appears on a command line or in a pane
+- [ ] A wrapper that also sets `HOME` and a profile variable (issue #72), for example
+      `env HOME=<profile> SHALLOW_PROFILE=work CLAUDE_CONFIG_DIR=<profile>/.claude claude`:
+      `node <plugin>/scripts/launch.mjs` prints the three under `env`, and each child gets all three (Herdr `--env`,
+      tmux `-e`, manual `env` prefix); in the child, `printenv HOME CLAUDE_CONFIG_DIR SHALLOW_PROFILE` shows them
+- [ ] `Carry: MY_PROFILE` in the hub's section and `MY_PROFILE=x` in the master's launch: the child has it;
+      `Carry: GH_TOKEN` is refused by the script and the master says so
+- [ ] After each start the master checks `ListAgents` for the child's name; a `SendMessage` round trip works
+- [ ] A child started by hand in a pane **without** the identity variables (role variables only): it is not in
+      the master's `ListAgents`; with mods on, its first reply and `/session-hub` say that it runs under another
+      configuration folder than its master, with both paths
+- [ ] Outside a hub: asked for a second session in a worktree of the same repository, the master still runs
+      `launch.mjs` and puts its `env` and `flags` on the start
 
 ## Layout
 

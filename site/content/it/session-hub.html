@@ -66,6 +66,8 @@
     <tr><td><code>Scope</code></td><td>Per ogni repository, quali percorsi può leggere una sessione figlia fuori dalla sua radice di scrittura</td><td>Niente</td></tr>
     <tr><td><code>Registry</code></td><td>Percorso del registro delle sessioni figlie, fuori dall'hub</td><td><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></td></tr>
     <tr><td><code>Guards</code></td><td><code>on</code> oppure <code>off</code>, per tutte e tre le protezioni</td><td><code>on</code></td></tr>
+    <tr><td><code>Permissions</code></td><td><code>ask</code> oppure <code>inherit</code>: cosa fare quando il master salta le richieste di permesso</td><td><code>ask</code></td></tr>
+    <tr><td><code>Carry</code></td><td>Nomi di altre variabili d'ambiente che la sessione figlia riprende dall'avvio del master</td><td>Nessuna</td></tr>
     <tr><td><code>Environment</code></td><td><code>auto</code>, <code>desktop</code>, <code>herdr</code>, <code>tmux</code>, <code>cli</code> o <code>manual</code></td><td><code>auto</code></td></tr>
     <tr><td><code>Layout</code></td><td><code>tabs</code>, <code>panes</code> o <code>ask</code></td><td><code>ask</code></td></tr>
     <tr><td><code>Worktrees</code></td><td><code>repo</code>, <code>always</code> o <code>never</code>, per le sessioni figlie che modificano file</td><td><code>repo</code></td></tr>
@@ -126,7 +128,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   </tbody>
 </table>
 <h3>Come viene lanciata una sessione figlia</h3>
-<p>Perché master e sessione figlia possano scambiarsi messaggi, devono condividere account e cartella di configurazione (due sessioni con cartelle di configurazione diverse non riescono a parlarsi). Per questo <code>spawn</code> avvia ogni sessione figlia con gli stessi parametri di base del master, aggiungendo i flag specifici della figlia (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> per accedere alla cartella dell'handoff) e impostando le variabili di ruolo <code>SESSION_HUB_*</code>.</p>
+<p>Perché master e sessione figlia possano scambiarsi messaggi, devono condividere account e cartella di configurazione (due sessioni con cartelle di configurazione diverse non riescono a parlarsi). Se avvii Claude Code con un alias o un wrapper che sceglie un profilo o aggiunge dei flag, le sessioni figlie devono partire allo stesso modo. Per questo <code>spawn</code> legge con <code>scripts/launch.mjs</code> come è stato avviato il master (le variabili d'identità come <code>CLAUDE_CONFIG_DIR</code>, <code>HOME</code> e il profilo del wrapper, più i flag di configurazione) e avvia ogni sessione figlia con gli stessi parametri, aggiungendo i flag specifici della figlia (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> per accedere alla cartella dell'handoff) e impostando le variabili di ruolo <code>SESSION_HUB_*</code>.</p>
 <p>In tmux, ad esempio, il comando di avvio ha questa forma:</p>
 <pre><code>env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub \
   SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
@@ -135,7 +137,8 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'</code></pre>
 <p>Due dettagli operativi meritano attenzione al momento dell'avvio:</p>
 <ul>
-  <li><strong>Modalità di permessi:</strong> la sessione figlia eredita la stessa modalità del master, perché i messaggi tra sessioni con impostazioni divergenti sull'aggiramento dei permessi resterebbero bloccati in attesa di conferma manuale.</li>
+  <li><strong>Modalità di permessi:</strong> la sessione figlia eredita la stessa modalità del master, perché i messaggi tra sessioni con impostazioni divergenti sull'aggiramento dei permessi resterebbero bloccati in attesa di conferma manuale. Se il master salta le richieste di permesso, <code>spawn</code> ti chiede a ogni avvio quale modalità dare alle figlie; con <code>Permissions: inherit</code> non lo chiede e usa quella del master.</li>
+  <li><strong>Controllo dell'identità:</strong> dopo l'avvio <code>spawn</code> verifica che la sessione figlia compaia nell'elenco delle sessioni. Se non compare, gira sotto un altro account: <code>spawn</code> non le affida il lavoro e ti avvisa.</li>
   <li><strong>Worktree e radice di scrittura:</strong> se il worktree si trova <em>dentro</em> il repository, lo crea la sessione figlia e il repository resta la sua radice di scrittura; se invece è in una <em>cartella adiacente</em>, lo crea il master prima dell'avvio e quel worktree diventa la radice di scrittura. È l'unica operazione che il master compie mai su un repository.</li>
 </ul>
 <p>Avviate le sessioni figlie, tutto il coordinamento passa attraverso un protocollo di messaggi codificato.</p>

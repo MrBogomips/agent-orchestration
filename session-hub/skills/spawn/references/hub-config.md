@@ -23,6 +23,8 @@ conversation beats these keys, and these keys beat the defaults.
 | Effort | default effort per repository or kind of work (`low`, `medium`, `high`, `xhigh`, `max`) | none: step 9 of the skill decides |
 | Scope | per repository, what a child may read outside its write root by default, as absolute or hub-relative paths | nothing |
 | Registry | path of the children record, outside the hub | `<config dir>/session-hub/children-<hub id>.json` |
+| Permissions | `ask` or `inherit`: what to do when the master bypasses permission prompts | `ask` |
+| Carry | names of more environment variables a child takes from the master's launch, such as a wrapper's profile variable | none: the identity variables of *Launch command* |
 | Guards | `on` or `off` for all three guards: the scope guard, and the mod's send guard and shell check | `on` |
 
 The `Agent` key of the old `spawn-session` skill is gone: children are Claude Code sessions. If a hub still has
@@ -74,13 +76,21 @@ task itself needs. A folder grants reading what is in it, not analysing that rep
 Children inherit the master's permission mode, never saved in the configuration.
 
 - **Master's mode:** as the harness reports it in your context; the user can change it during the session
-  (Shift+Tab), so take the latest.
+  (Shift+Tab), so take the latest. When the context does not say, `permission.bypass` of `launch.mjs` (*Launch
+  command* in [environments.md](environments.md)) tells whether the master was started bypassing prompts.
 - **Inherit without asking** when the master does not bypass permission prompts.
-- **Ask at every start** when the master bypasses them (`bypassPermissions`, `--dangerously-skip-permissions`):
-  the master's mode first and marked as recommended, then `default`, `acceptEdits`, `auto`, `plan`. If the user
-  picks a mode that doesn't bypass prompts, say in the report that messages will wait for approval.
+- **When the master bypasses them** (`bypassPermissions`, `--dangerously-skip-permissions`), the *Permissions* key
+  decides:
+  - `ask` (the default): ask at every start, the master's mode first and marked as recommended, then `default`,
+    `acceptEdits`, `auto`, `plan`. If the user picks a mode that doesn't bypass prompts, say in the report that
+    messages will wait for approval.
+  - `inherit`: start the children in the master's mode without asking, and say in the report, in one line, that
+    they bypass permission prompts because the master does and the hub says `Permissions: inherit`. What the user
+    says in the conversation still wins.
 - **Unknown mode:** ask, without a recommended option.
-- **Apply** it as `--permission-mode <mode>` on the child's command line.
+- **Apply** it as `--permission-mode <mode>` on the child's command line. For a child that bypasses prompts like
+  its master, repeat the master's own flags instead (`permission.flags`, such as
+  `--dangerously-skip-permissions`): that is the launch the user chose.
 
 ## Layout
 
