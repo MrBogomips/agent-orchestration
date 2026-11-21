@@ -10,7 +10,7 @@
 //   registry.mjs path      --hub <dir>
 //   registry.mjs read      (--hub <dir> | --file <path>)
 //   registry.mjs upsert    --hub <dir> [--file <path>] --entry '<json>'
-//   registry.mjs status    --hub <dir> [--file <path>] --name <child> --status <status>
+//   registry.mjs status    --hub <dir> [--file <path>] --name <child> --status <status> [--reason <text>]
 //   registry.mjs request   --hub <dir> [--file <path>] --name <child> --text <text> [--outcome <text>]
 //   registry.mjs reconcile --hub <dir> [--file <path>] (--live <name,name,...> | --live-none)
 //
@@ -230,11 +230,18 @@ export function upsertChild(file, entry, options = {}) {
   });
 }
 
+// Sets a child's status, with the reason when one is given (why it was abandoned, say). The reason belongs to that
+// status: a later status without one drops it.
 export function setStatus(file, name, status, options = {}) {
   checkStatus(status);
+  if (options.reason !== undefined && (typeof options.reason !== 'string' || options.reason.trim() === '')) {
+    throw new RegistryError('--reason is empty');
+  }
   return update(file, options, (record) => {
     const index = findIndex(record, name);
-    return { ...record, children: replaceAt(record.children, index, { ...record.children[index], status }) };
+    const { reason: _previous, ...child } = record.children[index];
+    const next = options.reason === undefined ? { ...child, status } : { ...child, status, reason: options.reason };
+    return { ...record, children: replaceAt(record.children, index, next) };
   });
 }
 
@@ -272,16 +279,31 @@ export function reconcile(file, liveNames, options = {}) {
 
 // Command line
 
-const COMMANDS = Object.freeze(['path', 'read', 'upsert', 'status', 'request', 'reconcile']);
+// The options each command takes. Anything else is refused, so that a typo cannot change what a call does.
+const COMMAND_OPTIONS = Object.freeze({
+  path: ['hub'],
+  read: ['hub', 'file'],
+  upsert: ['hub', 'file', 'entry'],
+  status: ['hub', 'file', 'name', 'status', 'reason'],
+  request: ['hub', 'file', 'name', 'text', 'outcome'],
+  reconcile: ['hub', 'file', 'live', 'live-none'],
+});
+const COMMANDS = Object.freeze(Object.keys(COMMAND_OPTIONS));
 const FLAGS = Object.freeze(['live-none']);
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
+  if (!COMMANDS.includes(command)) throw new RegistryError(`unknown command "${command}"; use ${COMMANDS.join(', ')}`);
+  const accepted = COMMAND_OPTIONS[command];
   const options = {};
   for (let i = 0; i < rest.length; i += 1) {
     const key = rest[i];
     if (!key?.startsWith('--')) throw new RegistryError(`bad argument "${key}"`);
     const name = key.slice(2);
+    if (!accepted.includes(name)) {
+      throw new RegistryError(`unknown option --${name} for ${command}; it takes ${accepted.map((o) => `--${o}`).join(', ')}`);
+    }
+    if (Object.hasOwn(options, name)) throw new RegistryError(`--${name} is given twice`);
     if (FLAGS.includes(name)) {
       options[name] = true;
       continue;
@@ -289,6 +311,9 @@ function parseArgs(argv) {
     if (i + 1 >= rest.length) throw new RegistryError(`--${name} needs a value`);
     options[name] = rest[i + 1];
     i += 1;
+  }
+  if (options.live !== undefined && options['live-none']) {
+    throw new RegistryError('--live and --live-none say opposite things; give one of them');
   }
   return { command, options };
 }
@@ -361,7 +386,6 @@ function liveNames(options) {
 // Returns { out, note }: `out` goes to stdout, `note` (if any) to stderr.
 export function runCli(argv) {
   const { command, options } = parseArgs(argv);
-  if (!COMMANDS.includes(command)) throw new RegistryError(`unknown command "${command}"; use ${COMMANDS.join(', ')}`);
   if (command === 'path') {
     const hub = required(options, 'hub');
     return { out: checkOutsideHub(defaultRegistryPath(hub), hub) };
@@ -377,7 +401,7 @@ export function runCli(argv) {
     case 'upsert':
       return json(upsertChild(file, parseEntry(required(options, 'entry')), hub));
     case 'status':
-      return json(setStatus(file, required(options, 'name'), required(options, 'status'), hub));
+      return json(setStatus(file, required(options, 'name'), required(options, 'status'), { ...hub, reason: options.reason }));
     case 'request': {
       const request = { text: required(options, 'text'), ...(options.outcome ? { outcome: options.outcome } : {}) };
       return json(addRequest(file, required(options, 'name'), request, hub));

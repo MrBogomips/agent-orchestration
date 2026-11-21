@@ -287,6 +287,49 @@ describe('command line', () => {
     assert.equal(existsSync(join(hub, 'kids.json')), false);
   });
 
+  // Issue #27: each command takes only its own options
+  const recordText = () => readFileSync(defaultRegistryPath(hub, { CLAUDE_CONFIG_DIR: join(base, 'cfg') }), 'utf8');
+
+  test('an option a command does not take, or a typo, exits 1 and writes nothing', () => {
+    const typo = cli(['upsert', '--hubb', hub, '--file', join(base, 'x', 'kids.json'), '--entry', JSON.stringify(entry('z'))]);
+    assert.equal(typo.status, 1);
+    assert.match(typo.stderr, /^\[session-hub\] registry: unknown option --hubb for upsert/);
+    assert.equal(existsSync(join(base, 'x', 'kids.json')), false);
+    assert.equal(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    const before = recordText();
+    for (const args of [['read', '--hub', hub, '--name', 'a'], ['request', '--hub', hub, '--name', 'a', '--text', 't', '--reason', 'r'],
+      ['status', '--hub', hub, '--name', 'a', '--status', 'done', '--live', 'a'], ['path', '--hub', hub, '--file', '/x/y.json'],
+      ['status', '--hub', hub, '--name', 'a', '--name', 'b', '--status', 'done']]) {
+      const r = cli(args);
+      assert.equal(r.status, 1, args.join(' '));
+      assert.match(r.stderr, /^\[session-hub\] registry: /, args.join(' '));
+    }
+    assert.equal(recordText(), before);
+  });
+
+  test('--live with --live-none exits 1 and leaves the record unchanged', () => {
+    assert.equal(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    const before = recordText();
+    const r = cli(['reconcile', '--hub', hub, '--live', 'a', '--live-none']);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /--live.*--live-none|--live-none.*--live/);
+    assert.equal(recordText(), before);
+  });
+
+  test('status takes a reason, stored on the entry and dropped by a later status without one', () => {
+    assert.equal(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    let r = cli(['status', '--hub', hub, '--name', 'a', '--status', 'abandoned', '--reason', 'wrong turn']);
+    assert.equal(r.status, 0, r.stderr);
+    let child = JSON.parse(cli(['read', '--hub', hub]).stdout).children[0];
+    assert.equal(child.status, 'abandoned');
+    assert.equal(child.reason, 'wrong turn');
+    r = cli(['status', '--hub', hub, '--name', 'a', '--status', 'running']);
+    child = JSON.parse(cli(['read', '--hub', hub]).stdout).children[0];
+    assert.equal(child.status, 'running');
+    assert.equal('reason' in child, false);
+    assert.equal(cli(['status', '--hub', hub, '--name', 'a', '--status', 'done', '--reason', '']).status, 1);
+  });
+
   // Issue #28: the record may never land inside the hub
   const refusedInside = (r, path) => {
     assert.equal(r.status, 1, r.stdout);

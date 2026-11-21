@@ -8,7 +8,7 @@ R="${CLAUDE_PLUGIN_ROOT}/scripts/registry.mjs"
 node "$R" path --hub /abs/hub                                  # default path
 node "$R" reconcile --hub /abs/hub --live <name,name,...>      # live names from the session list
 node "$R" upsert --hub /abs/hub --entry '<json>'               # one entry, merged by name
-node "$R" status --hub /abs/hub --name <child> --status <s>
+node "$R" status --hub /abs/hub --name <child> --status <s> [--reason <why>]
 node "$R" request --hub /abs/hub --name <child> --text <t> --outcome <o>
 node "$R" read --hub /abs/hub
 ```
@@ -32,6 +32,8 @@ node "$R" request --hub /abs/hub --name <child> --text "<request>" --outcome "<w
   a relative `CLAUDE_CONFIG_DIR` is refused). When the hub's *Registry* key gives a path, add `--file <path>` to
   every call, next to `--hub`: a write with `--file` and no `--hub` is refused. The script refuses a path that lands
   inside the hub, also through a link or a folder that does not exist yet.
+- Each command takes only its own options (above); an unknown or repeated option, or `--live` with `--live-none`,
+  exits 1 and writes nothing.
 - Use the exact child name, the one given with `-n <name>` at the start. `upsert` with an unknown name creates a
   new entry with status `running`, so a misspelt name makes a second child. `status` and `request` refuse a name
   that is not in the record.
@@ -43,8 +45,9 @@ node "$R" request --hub /abs/hub --name <child> --text "<request>" --outcome "<w
 - `upsert` merges fields by name but never changes `started` or `requests`; add a request with `request`.
 - Writes take a lock next to the file. The script waits up to 5 seconds for it, then fails without writing;
   a lock older than 30 seconds is stale and removed. Retry once, then treat it as an error.
-- An entry: `name`, `repo`, `task`, `scope` (`writeRoot`, `external`), `model`, `effort`, `status`, `started`,
-  `lastMessage` (`type`, `at`, `text`), `requests`. Status is one of `running`, `waiting-user`, `done`,
+- An entry: `name`, `repo`, `task`, `scope` (`writeRoot`, `external`), `model`, `effort`, `status`, `reason` (set
+  with `status --reason`, dropped by the next status without one), `started`, `lastMessage` (`type`, `at`, `text`),
+  `requests`. Status is one of `running`, `waiting-user`, `done`,
   `abandoned`, `lost`. The record holds names, paths and URLs only, never project content.
 - If the script reports an error (for example a corrupt file), stop recording, tell the user what it said and
   where the file is, and carry on: the record is never a reason not to start a child or to stop the work. Never
