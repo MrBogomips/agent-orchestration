@@ -7,8 +7,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { compact, defaultConfigDir, effectiveOptions, loadGrid, paths, readEvents, writeWhole } from './compact.mjs';
+import { compact, defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, readEvents, writeWhole } from './compact.mjs';
 import { agedCells, classesOf, decisionsOf, latestOutcomes, trendOf } from '../lib/usage-data.mjs';
 import { renderReport } from '../lib/report-html.mjs';
 
@@ -86,7 +85,7 @@ function parseArgs(argv) {
   return args;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isMainModule(import.meta.url)) {
   try {
     const args = parseArgs(process.argv.slice(2));
     const file = writeReport({ configDir: args.configDir || defaultConfigDir(), options: args.options, open: args.open ? openFile : null });

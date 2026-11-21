@@ -9,7 +9,7 @@
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultConfigDir, effectiveOptions, loadGrid, paths, readEvents } from './compact.mjs';
+import { defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, readEvents } from './compact.mjs';
 import { readJson } from './report.mjs';
 import { buildUsageData } from '../lib/usage-data.mjs';
 
@@ -103,7 +103,7 @@ async function readStdin() {
   return text.trim() ? JSON.parse(text) : {};
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isMainModule(import.meta.url)) {
   try {
     const args = parseArgs(process.argv.slice(2));
     const data = await readUsage({ configDir: args.configDir || defaultConfigDir(), options: args.options, input: await readStdin(), budgetMs: args.budgetMs });

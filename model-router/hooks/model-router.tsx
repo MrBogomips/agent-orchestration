@@ -261,7 +261,9 @@ async function writeReport($: any, ctx: Ctx): Promise<string> {
   const argv = ['node', `${$.plugin.root}/scripts/report.mjs`, '--config-dir', await configDirOf($, ctx)]
   const run = await $.process.run(argv, { timeoutMs: REPORT_TIMEOUT_MS })
   if (run.exitCode !== 0) throw new Error(run.stderr.trim() || `report.mjs exited with ${run.exitCode}`)
-  return run.stdout.trim()
+  const file = run.stdout.trim()
+  if (!file) throw new Error('report.mjs gave no path: the page was not written')
+  return file
 }
 
 const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
@@ -488,9 +490,9 @@ export const register: Register = (on, options) => {
           <Button key="report" label="report" hotkey="o" plain dimColor
             onPress={async () => {
               try {
-                $.ui.log(`${ROUTE_ICON} model-router: report written to ${await writeReport($, ctx)}`)
+                $.ui.log(`${ROUTE_ICON} Report written to ${await writeReport($, ctx)}`)
               } catch (err) {
-                $.ui.log(`${ROUTE_ICON} model-router: could not write the report: ${errorText(err)}`)
+                $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
               }
             }} />
           <Text {...HINT}>·</Text>

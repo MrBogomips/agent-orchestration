@@ -550,7 +550,7 @@ describe('/model-router usage view', () => {
     expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(2)
     await ui.press({ key: 'report' })
     expect(w.runs.some((r) => String(r.argv[1]).endsWith('report.mjs'))).toBe(true)
-    expect(w.logs.some((l) => l.includes('report written to'))).toBe(true)
+    expect(w.logs).toContain('🔀 Report written to /home/u/.claude/model-router/report.html')
     expect(w.toasts.some((t) => t.includes('report'))).toBe(false)
     await ui.unmount()
   })
@@ -597,6 +597,12 @@ describe('/model-router usage view', () => {
     const out = await run($, 'report')
     expect(out.text).toBe('🔀 Report written to /home/u/.claude/model-router/report.html')
     expect(out.isTextDisplayOnly).toBe(true)
+  })
+
+  test('a report script that prints no path is a failure, never an empty line', async ($, on) => {
+    world(on, undefined, { report: { exitCode: 0, stdout: '', stderr: '' } })
+    const out = await run($, 'report')
+    expect(out.text).toBe('🔀 Could not write the report: report.mjs gave no path: the page was not written')
   })
 
   test('a report that fails says so, not that the usage data is unreadable', async ($, on) => {

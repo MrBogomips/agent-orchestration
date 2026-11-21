@@ -6,7 +6,7 @@
 // Usage: node compact.mjs [--config-dir <dir>] [--options '<json>']
 // Prints a JSON summary. Fails open: any error is printed as { error } and the exit code stays 0, so a caller
 // (the mod at session start, the report) is never stopped by it. The event log is never rewritten.
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, openSync, closeSync, unlinkSync, renameSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, openSync, closeSync, unlinkSync, renameSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -224,7 +224,20 @@ function parseArgs(argv) {
   return args;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+/**
+ * Whether the module at `moduleUrl` is the script node was started with. Node resolves links in a module's
+ * URL but not in argv[1], and an installed plugin's path can pass through a link: compare real paths.
+ */
+export function isMainModule(moduleUrl, argv1 = process.argv[1]) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule(import.meta.url)) {
   try {
     const { configDir, options } = parseArgs(process.argv.slice(2));
     process.stdout.write(JSON.stringify(compact({ configDir: configDir || defaultConfigDir(), options })) + '\n');
