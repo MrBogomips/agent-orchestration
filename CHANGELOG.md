@@ -15,6 +15,25 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
   agent type after its frontmatter `name`, not its file, so such a file could make an agent with a fixed model
   look routable; the start is now kept.
 
+## session-hub 0.3.0
+
+2026-11-21 · pull request #68
+
+### Added
+
+- The children panel is drawn with `model-router`'s look: the model bold in its tier's colour, the effort as a
+  four-cell bar and a word in its level's colour, the record and live statuses in the theme's success, warning or
+  error colour, the header and the notes dim.
+- A start line under each `Bash` call that starts children in a master: `⎿  🔀 opus   ▰▰▰▱ high   -> <child>`, one per
+  child, read from the launch command of `spawn` (plain, `tmux send-keys` or `herdr agent start`).
+- `tests/validate.sh` fails when session-hub's copy of the shared colours differs from `model-router`'s.
+
+### Changed
+
+- The `/session-hub` table shows the effort as the bar and the word (`sonnet ▰▰▱▱ medium`) instead of
+  `sonnet/medium`.
+- Manual and site screenshots of the panel and the table retaken.
+
 ## model-router 0.3.9
 
 2026-11-21 · pull request #67

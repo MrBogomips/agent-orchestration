@@ -1,17 +1,20 @@
 // The session-hub mod: the engine glue around the pure modules in ./mod.
 //
 // In a child: the send guard (session.send), the best-effort shell check (tool.call on Bash and Monitor), origin
-// marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel and
-// the scope line. In every session: the /session-hub command. Guards fail closed; the panel and the marking never
-// block anything. The classic scope guard in hooks.json stays and covers file writes with mods off.
+// marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel, the
+// start line under a Bash call that starts children (ui.render ToolUse), and the scope line. In every session: the
+// /session-hub command. The panel and the start line use the look shared with model-router (./mod/look.mjs). Guards
+// fail closed; the panel, the start line and the marking never block anything. The classic scope guard in
+// hooks.json stays and covers file writes with mods off.
 
-import { atom, read, update } from 'claude-code'
+import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { ScopeLine, SessionHubMaster, SessionHubPanel } from '../types'
+import type { ScopeLine, SessionHubMaster, SessionHubPanel, SessionHubStarts } from '../types'
 import { helpText, parseCommand } from './mod/command.mjs'
 import { markContext, markText } from './mod/origin.mjs'
-import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall } from './mod/panel.mjs'
+import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
+import { childStarts, startLineSegments } from './mod/start-line.mjs'
 import { readRole } from './mod/role.mjs'
 import { SECTION_ID, roleSummary, scopeSection } from './mod/scope-line.mjs'
 import { judgeSend } from './mod/send-guard.mjs'
@@ -41,6 +44,33 @@ const scopeLineState = atom({ plugin: 'session-hub', key: 'scopeLine' } as const
 const panelState = atom({ plugin: 'session-hub', key: 'panel' } as const, { rows: [] } as SessionHubPanel, {
   shape: 'panel-1',
 })
+// The start lines of each Bash call that started children, by the call's tool_use_id.
+const startLines = atom({ plugin: 'session-hub', key: 'starts' } as const, null as SessionHubStarts | null)
+
+// The look shared with model-router (docs/design/shared-contract.md): a segment's tone is a theme colour.
+type Segment = { text: string; color?: string; bold?: boolean; tone?: 'dim' | 'good' | 'fair' | 'bad' }
+const TONES = {
+  dim: { dimColor: true },
+  good: { color: 'success' },
+  fair: { color: 'warning' },
+  bad: { color: 'error' },
+} as const
+const segmentProps = (segment: Segment) => ({
+  ...(segment.tone ? TONES[segment.tone] : {}),
+  ...(segment.color ? { color: segment.color } : {}),
+  ...(segment.bold ? { weight: 'bold' as const } : {}),
+})
+
+// Keeps the lines of the children a Bash call started, for its row. Never throws: the line is only a view.
+async function recordStarts($: $, toolUseId: unknown, command: string) {
+  try {
+    const starts = childStarts(command)
+    if (typeof toolUseId !== 'string' || toolUseId === '' || starts.length === 0) return
+    await update($, memberOf(startLines, { requestId: toolUseId }), () => ({ starts }))
+  } catch (error) {
+    $.ui.log(`[session-hub] start line: ${error instanceof Error ? error.message : error}`, { to: 'debug' })
+  }
+}
 
 // The role comes from the launch environment, read at every use: no module state to go stale.
 async function loadRole($: $): Promise<Role> {
@@ -209,6 +239,7 @@ export const register: Register = (on) => {
       return verdict.allow ? next(e) : { deny: verdict.reason }
     }
     const result = await next(e)
+    if (role.kind === 'none' && e.tool === 'Bash') await recordStarts($, e.tool_use_id, e.command)
     const found = role.kind === 'none' && e.tool === 'Bash' ? parseRegistryCall(e.command) : undefined
     if (found) {
       await becomeMaster($, { record: found.file, hub: found.hub })
@@ -279,7 +310,7 @@ export const register: Register = (on) => {
     if (master.isMaster) {
       const panel = await refreshPanel($)
       await $.ui.open({ id: PANE, title: 'session-hub: children' })
-      lines.push('', headerRow(width), ...panel.rows.map((row) => formatRow(row, width)))
+      lines.push('', headerRow(width), ...panel.rows.map((row) => rowText(formatRow(row, width))))
       if (panel.note) lines.push(panel.note)
     }
     return { text: lines.join('\n'), isTextDisplayOnly: true as const }
@@ -296,11 +327,35 @@ export const register: Register = (on) => {
       <Box flexDirection="column">
         <Text dimColor>{headerRow(width)}</Text>
         {panel.rows.map((row) => (
-          <Text>{formatRow(row, width)}</Text>
+          <Text wrap="truncate">
+            {(formatRow(row, width) as Segment[]).map((segment) => <Text {...segmentProps(segment)}>{segment.text}</Text>)}
+          </Text>
         ))}
         {panel.note && <Text dimColor>{panel.note}</Text>}
         {panel.updatedAt && <Text dimColor>{`updated ${panel.updatedAt.slice(11, 19)} UTC; live status from ListAgents`}</Text>}
       </Box>
     )
+  })
+
+  // The start line under a Bash call that started children: `⎿  🔀 opus   ▰▰▰▱ high   -> <child>`, one per child.
+  // The row is kept as it is; with no line, or on any error, only the row is drawn.
+  on('ui.render', { component: 'ToolUse', props: { tool: 'Bash' } }, async ($, e, next) => {
+    const lines = await read($, memberOf(startLines, e))
+    const row = await next(e)
+    if (!lines || lines.starts.length === 0) return row
+    const { Box, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        {row}
+        {lines.starts.map((start) => (
+          <Text wrap="truncate">
+            {(startLineSegments(start) as Segment[]).map((segment) => <Text {...segmentProps(segment)}>{segment.text}</Text>)}
+          </Text>
+        ))}
+      </Box>
+    )
+  }).catch(($, e, next) => {
+    $.ui.log(`[session-hub] start line: ${next.error?.message ?? next.error?.kind ?? 'unknown error'}`, { to: 'debug' })
+    return next(e)
   })
 }

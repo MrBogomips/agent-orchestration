@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.2.5, `model-router` 0.3):
+This document describes the two plugins in this repository as built (`session-hub` 0.3.0, `model-router` 0.3):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.2.5 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `session-hub` | 0.3.0 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
 | `model-router` | 0.3.5 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
@@ -483,6 +483,9 @@ flowchart LR
   role --> line["scope-line.mjs<br/>prompt.compose, prompt.submit"]
   registry["registry.mjs read"] --> panel["panel.mjs<br/>ui.render Pane, /session-hub"]
   list["ListAgents tool"] --> panel
+  bash["tool.call Bash"] --> start["start-line.mjs<br/>ui.render ToolUse"]
+  look["look.mjs<br/>the shared look"] --> panel
+  look --> start
 ```
 
 | Function | Where | Event | Behaviour |
@@ -491,13 +494,15 @@ flowchart LR
 | Shell check | child | `tool.call` on `Bash` | Best effort. Reads the command as bash or zsh would (`shell-words.mjs`, the lexer; `shell-commands.mjs`, what each command writes), zsh's `>!`, `noglob`, `repeat` and `=command` included. Reads redirections and the targets of `tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install` and `sed -i`, resolves them (relative ones against the session's folder, symbolic links through the file system) and denies a target outside the write root. The commands inside substitutions (`$(…)`, backticks, `<(…)`, in double quotes, `${…}`, arithmetic and here-documents with an unquoted delimiter) are judged as subshells, the literal line of `eval` as part of the command and that of `sh -c` as a new shell. A hard link (`ln`, `cp -l`) to a file outside the root is denied, and a write through a symbolic link made in the same command is judged where the link points. A command the lexer cannot read is denied with the reason; the write root follows `write-root.mjs`. `/dev` and the system temporary folders are allowed. It follows `cd` and `pushd` to a literal folder through the rest of the list (not out of a subshell, a pipeline or a background job), so `cd <root> && echo x >> link/f` is judged where `link` lands; a `cd` that may fail leaves both folders possible. A denial names the path as written and, when a link moves it, where it lands. Targets in variables, the output of substitutions or globs, relative targets after a `cd` whose target is one of those (or `cd -`, `popd`), and a line given to `eval` or `sh -c` that is not literal, are not judged. |
 | Origin marking | child | `session.receive`, `prompt.submit` | A delivery from another session gets a line in front of its text, information and not authorization; a prompt from another session gets the line as context if its text lacks it. The person's prompts and the session's own (`composer`, `bridge`, `sdk`, `auto-continuation`, `plugin`, `task-notification`, `scheduled-trigger`) are not marked; any other kind is. |
 | Scope line | child, master | `prompt.compose`, `prompt.submit` | A `session`-scoped section `session-hub:scope` with the role and the scope (child) or the record (master). The same text rides the first prompt after the start, after a compaction and after `/clear` as context. |
-| Children panel | master | `ui.render` (`Pane`), `command.run` | One row per child of the record with the live status from `ListAgents`, model and effort, last message; refreshed on `/session-hub` and every 30 seconds. |
+| Children panel | master | `ui.render` (`Pane`), `command.run` | One row per child of the record with the live status from `ListAgents`, model and effort, last message; refreshed on `/session-hub` and every 30 seconds. `panel.mjs` gives each row as segments: the model bold in its tier's colour, the effort as a four-cell bar and a word in its level's colour, the statuses in the theme's `success`, `warning` or `error`, from the look shared with `model-router` (`look.mjs`, a copy checked by `tests/validate.sh`). The `/session-hub` table is the same text without colour. |
+| Start line | master | `tool.call`, `ui.render` (`ToolUse`) on `Bash` | Under a `Bash` call that starts children, one line per child, `⎿  🔀 opus   ▰▰▰▱ high   -> <child>` (`start-line.mjs`): the model, effort and name read from the launch command (`claude` after `SESSION_HUB_ROLE=child`, also in `tmux send-keys -l`, or `herdr agent start`). Kept by the call's `tool_use_id`; the row is always drawn, alone when there is no line or on any error. |
 
 **Role and master.** The role is read from the `SESSION_HUB_*` variables at every use, with the same rules as the
 hook. A session with no role becomes a master when it runs `session-hub:spawn` or `session-hub:dispatch`, when it
 runs `registry.mjs` with a literal absolute `--file` or `--hub` (a variable, `.` or `$PWD` is not read), or when the
 record for its folder already lists children. The mod keeps its values in `$.state` only (`master`, `panel`,
-`scopeLine`), which does not survive a restart, so they are rebuilt after a resume. It writes no file.
+`scopeLine`, and `starts` by tool call), which does not survive a restart, so they are rebuilt after a resume. It
+writes no file.
 
 **Failures.** The send guard and the shell check fail closed: each has a `.catch` that refuses with a reason when
 the hook throws, and an unknown role or a missing master or write root refuses. `SESSION_HUB_GUARDS=off` turns
