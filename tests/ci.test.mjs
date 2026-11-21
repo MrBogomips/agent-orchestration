@@ -2,7 +2,7 @@
 // A scratch root keeps the real unit tests out, so ci.sh never runs this file again.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, symlinkSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -23,8 +23,10 @@ function repo({ validate = 0, site = 0, claude = 0, withClaude = true } = {}) {
   w('tests/pr-checks.mjs', `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(log)}, 'pr-checks ' + process.argv[2] + '\\n');\n`);
   w('tests/unit.test.mjs', `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(log)}, 'unit\\n');\n`);
   w('site/check.mjs', `import { appendFileSync } from 'node:fs'; appendFileSync(${JSON.stringify(log)}, 'site\\n'); process.exit(${site});\n`);
+  // Only node is linked in: node's own folder can also hold a real `claude` (npm --global), which must not leak.
   const bin = join(root, 'bin');
   mkdirSync(bin);
+  symlinkSync(process.execPath, join(bin, 'node'));
   if (withClaude) {
     w('bin/claude', `#!/bin/sh\necho "claude $*" >> "${log}"\nexit ${claude}\n`);
     chmodSync(join(bin, 'claude'), 0o755);
@@ -33,7 +35,7 @@ function repo({ validate = 0, site = 0, claude = 0, withClaude = true } = {}) {
 }
 
 function ci({ root, bin }, args = []) {
-  const path = `${bin}:${dirname(process.execPath)}:/usr/bin:/bin`;
+  const path = `${bin}:/usr/bin:/bin`;
   const r = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf8',
     env: { PATH: path, HOME: root, CI_ROOT: root },
