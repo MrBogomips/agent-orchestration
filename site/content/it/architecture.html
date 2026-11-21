@@ -1,168 +1,227 @@
-<!-- translated-from: en/architecture.html sha256:664d08846abf -->
+<!-- translated-from: en/architecture.html sha256:08decae711e1 -->
 <h1>Architettura</h1>
-<p class="lede">Come sono costruiti i due plugin nella versione rilasciata: session-hub {{version:session-hub}} e model-router {{version:model-router}}. Di cosa è fatto ciascuno, come collaborano le varie parti, cosa salvano su disco e come si comportano quando qualcosa va storto.</p>
+<p class="lede">Qui vedi come sono costruiti i due plugin nella versione rilasciata — session-hub {{version:session-hub}} e model-router {{version:model-router}}: da quali componenti sono formati, come dialogano tra loro, quali file salvano su disco e come reagiscono quando qualcosa va storto.</p>
 
 <h2 id="overview">Due plugin, due problemi</h2>
-<figure class="diagram">{{diagram:d1-hub}}<figcaption>Il master nella radice dell'hub avvia una sessione figlia per ogni repository; ciascuna è vincolata alla propria radice di scrittura; model-router sceglie il modello e l'effort di ogni avvio.</figcaption></figure>
+<p>Quando lavori su più repository in Claude Code ti trovi davanti a due esigenze distinte: coordinare più sessioni isolate senza che si pestino i piedi e scegliere modello ed effort adatti a ogni attività delegata senza andare a tentoni. Per tenere le responsabilità ben separate, il sistema è diviso in due plugin autonomi.</p>
+<figure class="diagram">{{diagram:d1-hub}}<figcaption>Il master nella radice dell'hub avvia una sessione figlia per ogni repository; ciascuna è vincolata alla propria radice di scrittura, mentre model-router sceglie modello ed effort a ogni avvio.</figcaption></figure>
 <table>
   <thead><tr><th>Plugin</th><th>In una riga</th></tr></thead>
   <tbody>
-    <tr><td><code>session-hub</code></td><td>Una sessione master in un hub di repository avvia una sessione figlia per repository, assegna a ciascuna uno scope, smista le loro richieste e ne tiene un registro.</td></tr>
-    <tr><td><code>model-router</code></td><td>Un'unica griglia scritta decide il modello e l'effort di ogni subagent, sessione figlia o agente di workflow; una mod instrada gli avvii di subagent privi di modello e misura in locale quanto bene ha funzionato ogni scelta.</td></tr>
+    <tr><td><code>session-hub</code></td><td>Una sessione master in un hub di repository avvia una sessione figlia per repository, assegna a ciascuna uno scope, smista le richieste e tiene aggiornato un registro delle sessioni figlie.</td></tr>
+    <tr><td><code>model-router</code></td><td>Un'unica griglia decide modello ed effort per ogni subagent, sessione figlia o agente di workflow; una mod instrada gli avvii di subagent privi di modello e misura in locale quanto bene ha funzionato ogni scelta.</td></tr>
   </tbody>
 </table>
+<p>Poiché risolvono problemi diversi, i due plugin sono progettati per restare indipendenti pur collaborando senza attriti quando li installi insieme.</p>
 
 <h2 id="independence">Indipendenza e contratto condiviso</h2>
-<p>Ogni plugin funziona anche senza l'altro. session-hub non richiede mai model-router e model-router non sa nulla di hub. Nei punti di contatto, una skill indica per esteso la skill dell'altro plugin (<code>&lt;plugin&gt;:&lt;skill&gt;</code>) e verifica a runtime se è installata.</p>
-<p>La griglia risiede in un solo posto: <code>model-router:choose-model</code>. session-hub non ne conserva alcuna copia. Quando <code>session-hub:spawn</code> sceglie il modello e l'effort di una sessione figlia, vince la prima regola che restituisce un valore:</p>
+<p>Puoi usare ciascun plugin da solo, senza installare l'altro: session-hub non richiede mai model-router e model-router non sa nulla dell'esistenza di un hub. Nei pochi punti di contatto, una skill richiama l'altra per esteso (<code>&lt;plugin&gt;:&lt;skill&gt;</code>) e verifica a runtime se è presente.</p>
+<p>La griglia vive in un solo punto — <code>model-router:choose-model</code> — e session-hub non ne conserva alcuna copia. Quando <code>session-hub:spawn</code> deve stabilire modello ed effort per una sessione figlia, applica la prima regola che restituisce un valore:</p>
 <ol>
-  <li>Quello che l'utente ha detto nella conversazione.</li>
-  <li>Le chiavi <em>Model</em> ed <em>Effort</em> dell'hub, per repository o per tipo di lavoro.</li>
+  <li>Quello che hai indicato nella conversazione.</li>
+  <li>Le chiavi <em>Model</em> ed <em>Effort</em> configurate nell'hub, per repository o per tipo di lavoro.</li>
   <li><code>model-router:choose-model</code>, se installata, applicata all'handoff della sessione figlia.</li>
-  <li>Il <code>--model</code> e l'<code>--effort</code> del master stesso; il resoconto indica che la sessione figlia li eredita.</li>
+  <li>Il <code>--model</code> e l'<code>--effort</code> del master stesso; il resoconto segnala che la sessione figlia li eredita.</li>
 </ol>
-<p>Ciò che ciascun plugin può dare per scontato sull'altro è messo nero su bianco in un contratto condiviso nei documenti di design del repository: l'ordine di precedenza appena visto, i flag di avvio <code>--model</code> e <code>--effort</code>, i nomi fissi delle variabili <code>SESSION_HUB_*</code>, le regole di nomenclatura e dove ogni plugin salva il proprio stato. Prima cambia il contratto, in una pull request dedicata, e solo dopo i plugin si appoggiano alla modifica.</p>
-<p>Tutto ciò che è visibile all'esterno di un plugin ne porta il nome: l'hook <code>session-hub-scope-guard</code>, le mod e i comandi <code>session-hub</code> e <code>model-router</code>, il prefisso <code>[session-hub]</code> dei messaggi di blocco, il 🔀 in ciò che mostra il router, le variabili <code>SESSION_HUB_*</code> e le cartelle di stato <code>session-hub/</code> e <code>model-router/</code>.</p>
+<p>Per evitare che un plugin si rompa quando cambia l'altro, tutto ciò che possono dare per scontato a vicenda è fissato in un contratto condiviso nei documenti di design del repository. Prima si modifica il contratto in una pull request dedicata; solo dopo i plugin si adattano alla novità. Il contratto definisce:</p>
+<ul>
+  <li>l'ordine di precedenza appena visto;</li>
+  <li>i flag di avvio <code>--model</code> e <code>--effort</code>;</li>
+  <li>i nomi fissi delle variabili d'ambiente <code>SESSION_HUB_*</code>;</li>
+  <li>le regole di nomenclatura e i percorsi in cui ciascun plugin salva il proprio stato.</li>
+</ul>
+<p>Ogni elemento visibile all'esterno porta il nome del plugin che lo possiede, così sai sempre da dove arriva un messaggio o un file: l'hook <code>session-hub-scope-guard</code>, le mod e i comandi <code>session-hub</code> e <code>model-router</code>, il prefisso <code>[session-hub]</code> nei messaggi di blocco, l'indicatore 🔀 nell'output del router, le variabili <code>SESSION_HUB_*</code> e le cartelle di stato <code>session-hub/</code> e <code>model-router/</code>.</p>
+<p>Chiarito il confine tra i due plugin, vediamo da quali pezzi è composto ciascuno.</p>
 
 <h2 id="components">Componenti</h2>
+<p>Ogni plugin combina skill testuali, script Node senza dipendenze e — quando sono attive — una mod che estende l'interfaccia e gli hook di Claude Code.</p>
 <h3>session-hub</h3>
 <table>
   <thead><tr><th>Componente</th><th>Tipo</th><th>Ruolo</th></tr></thead>
   <tbody>
-    <tr><td><code>session-hub:dispatch</code></td><td>skill</td><td>Lato master: per ogni repository, il master legge, un subagent legge oppure una sessione figlia lavora; gestisce i messaggi e smista le richieste out-of-scope.</td></tr>
-    <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Avvia una sessione figlia per repository nell'ambiente rilevato, con scope, modello, effort, variabili di ruolo e handoff; registra ogni sessione figlia.</td></tr>
-    <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Scrive la sezione <code>## Child sessions</code> dell'hub dopo una conferma esplicita.</td></tr>
-    <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td><code>PreToolUse</code> su <code>Edit</code>, <code>Write</code>, <code>NotebookEdit</code>, in <code>hooks/hooks.json</code> e <code>hooks/scope-guard.mjs</code>.</td></tr>
-    <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>L'unico componente che scrive il registro delle sessioni figlie: lo legge, unisce le modifiche e lo scrive in modo atomico sotto lock.</td></tr>
-    <tr><td><code>session-hub</code></td><td>mod</td><td>Caricata dallo stesso <code>hooks.json</code>: guardia di invio, controllo della shell, marcatura dell'origine, riga di scope, pannello delle sessioni figlie, <code>/session-hub</code>.</td></tr>
+    <tr><td><code>session-hub:dispatch</code></td><td>skill</td><td>Lato master: per ogni repository decide se legge il master, se legge un subagent oppure se lavora una sessione figlia; gestisce i messaggi e smista le richieste fuori scope.</td></tr>
+    <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Avvia una sessione figlia per repository nell'ambiente rilevato, con scope, modello, effort, variabili di ruolo e handoff, e la aggiunge al registro delle sessioni figlie.</td></tr>
+    <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Scrive la sezione <code>## Child sessions</code> dell'hub solo dopo una tua conferma esplicita.</td></tr>
+    <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td><code>PreToolUse</code> su <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>, definito in <code>hooks/hooks.json</code> e implementato in <code>hooks/scope-guard.mjs</code>.</td></tr>
+    <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>Unico componente che scrive il registro delle sessioni figlie: legge il file, unisce le modifiche e lo riscrive in modo atomico sotto lock.</td></tr>
+    <tr><td><code>session-hub</code></td><td>mod</td><td>Caricata dallo stesso <code>hooks.json</code>: aggiunge guardia di invio, controllo della shell, marcatura dell'origine, riga di scope, pannello delle sessioni figlie e comando <code>/session-hub</code>.</td></tr>
   </tbody>
 </table>
 <h3>model-router</h3>
 <table>
   <thead><tr><th>Componente</th><th>Tipo</th><th>Ruolo</th></tr></thead>
   <tbody>
-    <tr><td><code>model-router:choose-model</code></td><td>skill</td><td>Definisce la griglia; fa sì che l'agente passi un modello e un effort a ogni avvio.</td></tr>
-    <tr><td><code>model-router:setup</code></td><td>skill</td><td>Scrive la sezione <code>## Model routing</code> di un progetto dopo una conferma esplicita.</td></tr>
-    <tr><td><code>model-router:report</code></td><td>skill</td><td>Esegue <code>scripts/report.mjs</code>; non calcola nulla in proprio.</td></tr>
-    <tr><td><code>model-router</code></td><td>mod</td><td><code>hooks/model-router.tsx</code>: instrada gli avvii senza modello, mostra la riga 🔀 sotto le righe <code>Agent</code>, registra gli eventi del ciclo di qualità, espone <code>/model-router</code>.</td></tr>
-    <tr><td><code>lib/*.mjs</code></td><td>moduli</td><td>Semplici moduli ES condivisi dalla mod e dagli script: prompt e risposta del judge, tabella di routing, esiti, aggregati, righe della vista d'uso, pagina del report.</td></tr>
-    <tr><td><code>scripts/compact.mjs</code>, <code>report.mjs</code>, <code>usage.mjs</code></td><td>script</td><td>Node, zero dipendenze: compattazione, pagina del report, dati della vista d'uso.</td></tr>
-    <tr><td><code>grid.json</code></td><td>dati</td><td>La griglia in formato leggibile dalla macchina, con la scelta abituale di ogni classe; da qui viene generato il prompt del judge.</td></tr>
+    <tr><td><code>model-router:choose-model</code></td><td>skill</td><td>Definisce la griglia e guida l'agente a passare modello ed effort espliciti a ogni avvio.</td></tr>
+    <tr><td><code>model-router:setup</code></td><td>skill</td><td>Scrive la sezione <code>## Model routing</code> di un progetto solo dopo una tua conferma esplicita.</td></tr>
+    <tr><td><code>model-router:report</code></td><td>skill</td><td>Esegue <code>scripts/report.mjs</code> senza calcolare nulla in proprio.</td></tr>
+    <tr><td><code>model-router</code></td><td>mod</td><td><code>hooks/model-router.tsx</code>: instrada gli avvii senza modello, mostra la riga 🔀 sotto le righe <code>Agent</code>, registra gli eventi del ciclo di qualità ed espone <code>/model-router</code>.</td></tr>
+    <tr><td><code>lib/*.mjs</code></td><td>moduli</td><td>Moduli ES condivisi tra la mod e gli script: prompt e risposta del judge, tabella di routing, esiti, aggregati, righe della vista d'uso e pagina del report.</td></tr>
+    <tr><td><code>scripts/compact.mjs</code>, <code>report.mjs</code>, <code>usage.mjs</code></td><td>script</td><td>Script Node senza dipendenze per la compattazione, la pagina del report e i dati della vista d'uso.</td></tr>
+    <tr><td><code>grid.json</code></td><td>dati</td><td>La griglia in formato leggibile dalla macchina, con la scelta abituale di ogni classe di attività; da qui viene generato il prompt del judge.</td></tr>
   </tbody>
 </table>
-<p>In entrambi i plugin, le skill e l'hook classico funzionano anche con le mod disattivate; tutto ciò che aggiungono le mod richiede invece le mod attive e Claude Code 2.1.329 o successivo.</p>
+<p>In entrambi i plugin, le skill e l'hook classico funzionano anche con le mod disattivate. Le funzioni introdotte dalle mod richiedono invece le mod attive e Claude Code 2.1.329 o successivo.</p>
+<p>Per applicare i controlli solo dove servono — e lasciare intatte le tue normali sessioni fuori dall'hub — i plugin devono prima sapere con certezza quale ruolo ha la sessione corrente.</p>
 
 <h2 id="roles">Ruoli</h2>
-<p>Una sessione è <strong>master</strong>, <strong>figlia</strong> oppure <strong>nessuna delle due</strong>. Il ruolo non viene mai dedotto dalla conversazione.</p>
+<p>Un controllo di sicurezza non può indovinare il ruolo di una sessione leggendo la conversazione. Ogni sessione è quindi classificata in modo esplicito come <strong>master</strong>, <strong>sessione figlia</strong> oppure <strong>nessuna delle due</strong>.</p>
 <table>
   <thead><tr><th>Ruolo</th><th>Come lo assume una sessione</th><th>Cosa fanno i plugin</th></tr></thead>
   <tbody>
-    <tr><td>Figlia</td><td>Il comando di avvio imposta <code>SESSION_HUB_ROLE=child</code>; se ne occupa <code>spawn</code>.</td><td>La guardia di scope controlla ogni modifica; con le mod attive si aggiungono la guardia di invio, il controllo della shell, la marcatura dell'origine e la riga di scope.</td></tr>
-    <tr><td>Master</td><td>Non serve alcuna variabile: è una sessione nell'hub che esegue <code>dispatch</code> o <code>spawn</code>. Con le mod attive, anche una sessione che esegue lo script del registro con un percorso assoluto letterale, o la cui cartella ha già delle sessioni figlie nel registro.</td><td>Le skill avviano le sessioni figlie e aggiornano il registro; con le mod attive si aggiungono il pannello delle sessioni figlie e la riga di scope.</td></tr>
-    <tr><td>Nessuna delle due</td><td>Qualsiasi altro caso.</td><td>La guardia esce subito senza leggere l'input; la mod non blocca e non marca nulla.</td></tr>
+    <tr><td>Figlia</td><td>Il comando di avvio imposta <code>SESSION_HUB_ROLE=child</code>; se ne occupa <code>spawn</code>.</td><td>Lo scope guard controlla ogni modifica ai file; con le mod attive si aggiungono la guardia di invio, il controllo della shell, la marcatura dell'origine e la riga di scope.</td></tr>
+    <tr><td>Master</td><td>Non serve alcuna variabile: è una sessione nell'hub che esegue <code>dispatch</code> o <code>spawn</code>. Con le mod attive, lo è anche una sessione che invoca lo script del registro con un percorso assoluto letterale o la cui cartella ha già sessioni figlie nel registro.</td><td>Le skill avviano le sessioni figlie e aggiornano il registro; con le mod attive si aggiungono il pannello delle sessioni figlie e la riga di scope.</td></tr>
+    <tr><td>Nessuna delle due</td><td>Qualsiasi altro caso.</td><td>Lo scope guard esce subito senza leggere l'input; la mod non blocca e non marca nulla.</td></tr>
   </tbody>
 </table>
-<p><code>SESSION_HUB_ROLE</code> viene letta ignorando maiuscole, minuscole e spazi iniziali o finali. Qualsiasi valore diverso da stringa vuota, <code>none</code>, <code>master</code> o <code>child</code> fa scattare il blocco su tutte le guardie, così un errore di battitura non può mai disattivarle. Le altre variabili sono <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code> e <code>SESSION_HUB_GUARDS</code>.</p>
+<p>La lettura delle variabili d'ambiente segue una regola prudente, così un errore di battitura non può mai disattivare i controlli:</p>
+<ul>
+  <li><code>SESSION_HUB_ROLE</code> viene letta ignorando maiuscole, minuscole e spazi iniziali o finali.</li>
+  <li>Qualsiasi valore diverso da stringa vuota, <code>none</code>, <code>master</code> o <code>child</code> fa scattare il blocco su tutte le guardie.</li>
+  <li>Le altre variabili propagate alla sessione figlia sono <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code> e <code>SESSION_HUB_GUARDS</code>.</li>
+</ul>
+<p>Con componenti e ruoli al loro posto, seguiamo passo dopo passo che cosa succede dal momento in cui affidi un lavoro al master.</p>
 
 <h2 id="spawn-flow">Il flusso di spawn</h2>
+<p>Quando chiedi al master di intervenire su uno o più repository, l'avvio di una sessione figlia passa attraverso una sequenza precisa di otto passi:</p>
 <ol>
-  <li>L'utente chiede al master un lavoro che tocca dei repository; <code>dispatch</code> stabilisce che serve una sessione figlia.</li>
-  <li>Il master riconcilia il registro con i nomi delle sessioni attive: le sessioni figlie non più attive vengono segnate come <code>lost</code>.</li>
-  <li>Verifica che non ci sia un duplicato già attivo, poi sceglie l'ambiente, il nome, il worktree, la radice di scrittura e lo scope.</li>
-  <li>Prende il modello e l'effort dall'utente o dalle chiavi dell'hub; altrimenti interpella <code>model-router:choose-model</code> se è installata; altrimenti eredita quelli del master.</li>
+  <li>Chiedi al master un lavoro che tocca dei repository; <code>dispatch</code> stabilisce che serve una sessione figlia.</li>
+  <li>Il master riconcilia il registro delle sessioni figlie con i nomi delle sessioni attive: quelle che non risultano più attive vengono segnate come <code>lost</code>.</li>
+  <li>Verifica che non esista già un duplicato attivo, poi sceglie ambiente, nome, worktree, radice di scrittura e scope.</li>
+  <li>Ricava modello ed effort da quanto hai chiesto o dalle chiavi dell'hub; se non sono specificati, interpella <code>model-router:choose-model</code> (quando è installata); in mancanza anche di questa, eredita modello ed effort del master.</li>
   <li>Scrive l'handoff fuori dall'hub (su file, oppure inline per l'app desktop).</li>
   <li>Avvia la sessione figlia con i flag propagati, i flag specifici della sessione figlia e le variabili <code>SESSION_HUB_*</code>; Claude Code parte nel repository e legge l'handoff.</li>
-  <li>Registra la sessione figlia come <code>running</code> e mostra il resoconto per ciascuna: repository, radice di scrittura, modello ed effort, ambiente, avvertenze.</li>
-  <li>Da quel momento in poi, ogni chiamata <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code> della sessione figlia passa per la guardia di scope.</li>
+  <li>Registra la sessione figlia come <code>running</code> e ti mostra il resoconto per ciascuna: repository, radice di scrittura, modello ed effort, ambiente ed eventuali avvertenze.</li>
+  <li>Da quel momento in poi, ogni chiamata <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code> della sessione figlia passa per lo scope guard.</li>
 </ol>
-<p>Il registro non blocca mai un avvio: se <code>registry.mjs</code> restituisce un errore, <code>spawn</code> avvisa l'utente e avvia comunque la sessione figlia. Le richieste out-of-scope viaggiano in senso inverso, passando sempre dal master:</p>
-<figure class="diagram">{{diagram:d5-out-of-scope}}<figcaption>Smistamento di una richiesta out-of-scope: se serve una decisione si chiede all'utente; un compito riservato al master o una lettura consentita li esegue il master; altrimenti si invia un follow-up a una sessione figlia attiva titolare del repository, oppure se ne avvia una nuova. La sessione figlia richiedente viene sempre informata di cosa succederà.</figcaption></figure>
+<p>Il registro delle sessioni figlie non blocca mai un avvio: se <code>registry.mjs</code> restituisce un errore, <code>spawn</code> ti avvisa e fa partire comunque la sessione figlia.</p>
+<p>Quando invece una sessione figlia ha bisogno di qualcosa fuori dal proprio scope, la richiesta percorre il tragitto inverso passando sempre dal master:</p>
+<figure class="diagram">{{diagram:d5-out-of-scope}}<figcaption>Smistamento di una richiesta fuori scope: se serve una decisione viene chiesta a te; un compito riservato al master o una lettura consentita li esegue il master; negli altri casi si invia un follow-up a una sessione figlia attiva titolare del repository, oppure se ne avvia una nuova. La sessione figlia richiedente riceve sempre conferma di cosa succederà.</figcaption></figure>
+<p>L'ultimo passo del flusso affida il rispetto dei confini a un controllo tecnico automatico: ecco come funziona nel dettaglio lo scope guard.</p>
 
-<h2 id="scope-guard">La guardia di scope</h2>
-<p>L'hook esegue <code>node "${CLAUDE_PLUGIN_ROOT}/hooks/scope-guard.mjs"</code> con un timeout di 10 secondi prima di ogni <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>, in tutte le sessioni, ma interviene solo nelle sessioni figlie. Il codice di uscita 0 consente la chiamata; il codice di uscita 2 la blocca e mostra il motivo al modello.</p>
-<figure class="diagram">{{diagram:d4-scope-guard}}<figcaption>La decisione della guardia: fuori da una sessione figlia consente subito; al suo interno, ogni controllo non superato blocca la chiamata ed è ammesso solo un percorso reale sotto la radice di scrittura reale.</figcaption></figure>
+<h2 id="scope-guard">Lo scope guard</h2>
+<p>Le istruzioni nell'handoff dicono alla sessione figlia dove dovrebbe lavorare, ma non impediscono fisicamente una scrittura fuori posto. Per trasformare lo scope in un confine reale, l'hook esegue <code>node "${CLAUDE_PLUGIN_ROOT}/hooks/scope-guard.mjs"</code> prima di ogni chiamata a <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>, con un timeout di 10 secondi. Gira in tutte le sessioni, ma interviene solo nelle sessioni figlie: esce con codice 0 per consentire la chiamata, oppure con codice 2 per bloccarla spiegando il motivo al modello.</p>
+<figure class="diagram">{{diagram:d4-scope-guard}}<figcaption>Decisione dello scope guard: fuori da una sessione figlia consente subito; al suo interno ogni controllo non superato blocca la chiamata ed è ammesso solo un percorso reale sotto la radice di scrittura reale.</figcaption></figure>
 <ul>
-  <li><strong>Percorsi reali.</strong> La radice e la destinazione vengono risolte componente per componente seguendo i link simbolici, così un link dentro la radice che punta all'esterno viene bloccato. Un percorso è considerato interno quando coincide con la radice o inizia con la radice seguita da un separatore.</li>
-  <li><strong>Solo percorsi assoluti.</strong> Una destinazione relativa o che inizia con <code>~</code> viene bloccata; impostare come radice <code>/</code> o la cartella home è un errore di configurazione.</li>
-  <li><strong>Nel dubbio blocca.</strong> Ruolo sconosciuto, radice mancante o non valida, input illeggibile, chiamata senza percorso, percorso non risolvibile, errore interno: tutto questo blocca. Se <code>node</code> stesso non riesce a partire, il wrapper di shell in <code>hooks.json</code> controlla il ruolo e blocca a meno che la sessione non sia una figlia o le guardie siano disattivate.</li>
-  <li><strong>Anticipo sul timeout.</strong> Claude Code tratta un hook che supera il timeout come un errore non bloccante, perciò la guardia blocca di propria iniziativa dopo 7 secondi.</li>
+  <li><strong>Percorsi reali.</strong> Sia la radice di scrittura sia la destinazione vengono risolte componente per componente seguendo i link simbolici: un link dentro la radice che punta all'esterno viene bloccato. Un percorso è considerato interno solo se coincide con la radice o inizia con la radice seguita da un separatore.</li>
+  <li><strong>Solo percorsi assoluti.</strong> Una destinazione relativa o che inizia con <code>~</code> viene bloccata; impostare <code>/</code> o la cartella home come radice di scrittura è considerato un errore di configurazione.</li>
+  <li><strong>Nel dubbio blocca.</strong> Ruolo sconosciuto, radice mancante o non valida, input illeggibile, chiamata priva di percorso, percorso non risolvibile o errore interno causano sempre un blocco. Se <code>node</code> stesso non riesce a partire, il wrapper di shell in <code>hooks.json</code> controlla il ruolo e blocca a meno che la sessione non sia una sessione figlia oppure le guardie siano disattivate.</li>
+  <li><strong>Anticipo sul timeout.</strong> Claude Code tratta un hook che supera il timeout come un errore non bloccante; per non lasciare passare nulla, lo scope guard blocca di propria iniziativa dopo 7 secondi.</li>
 </ul>
+<p>Lo scope guard protegge gli strumenti di modifica dei file anche senza mod. Quando le mod sono attive, session-hub estende la copertura ai messaggi tra sessioni, alla shell e all'interfaccia.</p>
 
 <h2 id="sh-mod">La mod session-hub</h2>
-<p>La mod viene caricata dalla voce <code>modules</code> dello stesso <code>hooks/hooks.json</code>, con la logica in semplici moduli <code>.mjs</code>. Non scrive alcun file: legge il registro e tiene il resto nella memoria della sessione, ricostruendola quando la sessione viene ripresa.</p>
+<p>Una sessione figlia può comunque tentare di scrivere tramite shell o di contattare direttamente una sessione sorella, mentre tu nel master hai bisogno di tenere d'occhio lo stato delle sessioni avviate. A tutto questo pensa la mod di session-hub, caricata dalla voce <code>modules</code> dello stesso <code>hooks/hooks.json</code> con logica in semplici moduli <code>.mjs</code>.</p>
+<p>La mod non scrive alcun file su disco: legge il registro delle sessioni figlie, conserva il resto nella memoria della sessione e lo ricostruisce quando la sessione viene ripresa.</p>
 <table>
   <thead><tr><th>Funzione</th><th>Dove</th><th>Evento</th><th>Comportamento</th></tr></thead>
   <tbody>
-    <tr><td>Guardia di invio</td><td>sessione figlia</td><td><code>session.send</code></td><td>Consegna solo al master e ai subagent della sessione stessa; rifiuta qualsiasi altro destinatario indicando il master nella motivazione.</td></tr>
-    <tr><td>Controllo della shell</td><td>sessione figlia</td><td><code>tool.call</code> su <code>Bash</code></td><td>Best-effort: nega le redirezioni e i comandi che scrivono file la cui destinazione è fuori dalla radice di scrittura.</td></tr>
-    <tr><td>Marcatura dell'origine</td><td>sessione figlia</td><td><code>session.receive</code>, <code>prompt.submit</code></td><td>A ogni messaggio ricevuto da un'altra sessione aggiunge una riga: ha valore informativo, non di autorizzazione.</td></tr>
-    <tr><td>Riga di scope</td><td>sessione figlia, master</td><td><code>prompt.compose</code>, <code>prompt.submit</code></td><td>Il ruolo e lo scope (o il registro) nel prompt di sistema e come contesto dopo l'avvio, la compattazione e <code>/clear</code>.</td></tr>
-    <tr><td>Pannello delle sessioni figlie</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Una riga per sessione figlia con lo stato in tempo reale dall'elenco delle sessioni; si aggiorna con <code>/session-hub</code> e ogni 30 secondi.</td></tr>
+    <tr><td>Guardia di invio</td><td>sessione figlia</td><td><code>session.send</code></td><td>Consente l'invio solo al master e ai subagent della sessione stessa; rifiuta qualsiasi altro destinatario indicando il master nella motivazione.</td></tr>
+    <tr><td>Controllo della shell</td><td>sessione figlia</td><td><code>tool.call</code> su <code>Bash</code></td><td>Best-effort: nega le redirezioni e i comandi che scrivono file con destinazione fuori dalla radice di scrittura.</td></tr>
+    <tr><td>Marcatura dell'origine</td><td>sessione figlia</td><td><code>session.receive</code>, <code>prompt.submit</code></td><td>Aggiunge una riga a ogni messaggio ricevuto da un'altra sessione: ha valore informativo, non di autorizzazione.</td></tr>
+    <tr><td>Riga di scope</td><td>sessione figlia, master</td><td><code>prompt.compose</code>, <code>prompt.submit</code></td><td>Inserisce ruolo e scope (o il registro) nel prompt di sistema e come contesto dopo l'avvio, la compattazione e <code>/clear</code>.</td></tr>
+    <tr><td>Pannello delle sessioni figlie</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Mostra una riga per sessione figlia con lo stato in tempo reale dall'elenco delle sessioni; si aggiorna con <code>/session-hub</code> e ogni 30 secondi.</td></tr>
   </tbody>
 </table>
-<p>La guardia di invio e il controllo della shell nel dubbio bloccano; la marcatura, la riga di scope e il pannello si limitano a informare e non bloccano mai. Quando una mod gestita dall'organizzazione gira per prima e salta un evento, la mod ripiega inviando la riga di scope come contesto.</p>
+<p>La guardia di invio e il controllo della shell nel dubbio bloccano; la marcatura dell'origine, la riga di scope e il pannello si limitano a informare e non bloccano mai. Se una mod gestita dall'organizzazione gira per prima e salta un evento, la mod ripiega inviando la riga di scope come contesto.</p>
+<p>Sia le skill sia la mod di session-hub leggono e aggiornano un solo archivio condiviso: il registro delle sessioni figlie.</p>
 
 <h2 id="record">Il registro delle sessioni figlie</h2>
-<p><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code>, dove l'id dell'hub corrisponde alle prime 16 cifre esadecimali dello SHA-256 del percorso reale dell'hub in forma Unicode NFC, così lo stesso hub raggiunto tramite un link ottiene comunque lo stesso id. La cartella viene creata con permessi <code>0700</code>, il file e il relativo lock con <code>0600</code>.</p>
+<p>Per tracciare le sessioni figlie senza sporcare l'hub o i repository — ed evitare corruzioni quando più comandi accedono allo stesso file — session-hub salva il registro in <code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code>.</p>
+<p>L'identificativo dell'hub corrisponde alle prime 16 cifre esadecimali dello SHA-256 del percorso reale dell'hub normalizzato in Unicode NFC, così lo stesso hub raggiunto tramite un link simbolico ottiene lo stesso id. La cartella viene creata con permessi <code>0700</code>, il file del registro e il relativo lock con <code>0600</code>.</p>
 <ul>
   <li><strong>Comandi:</strong> <code>path</code>, <code>read</code>, <code>upsert</code>, <code>status</code>, <code>request</code> e <code>reconcile</code>, ciascuno con <code>--hub</code> o <code>--file</code>.</li>
   <li><strong>Lock:</strong> un file esclusivo <code>&lt;record&gt;.lock</code>; chi scrive attende fino a 5 secondi e un lock più vecchio di 30 secondi è considerato obsoleto.</li>
   <li><strong>Scritture atomiche:</strong> scrittura su un file temporaneo nella stessa cartella, flush su disco e rinomina sopra il registro.</li>
-  <li><strong>Mai sovrascritto se illeggibile:</strong> un file che non è JSON valido, o che appartiene a una versione più recente del formato, viene segnalato e lasciato intatto per l'utente.</li>
-  <li><strong>Stati:</strong> <code>running</code> → <code>waiting-user</code>, <code>done</code>, <code>abandoned</code> o <code>lost</code>; <code>reconcile</code> segna come lost una voce attiva assente dall'elenco delle sessioni e rifiuta un elenco vuoto.</li>
+  <li><strong>Mai sovrascritto se illeggibile:</strong> un file che non contiene JSON valido, o che appartiene a una versione più recente del formato, viene segnalato e lasciato intatto per permetterti di esaminarlo.</li>
+  <li><strong>Stati:</strong> <code>running</code> → <code>waiting-user</code>, <code>done</code>, <code>abandoned</code> o <code>lost</code>; <code>reconcile</code> segna come <code>lost</code> una voce attiva assente dall'elenco delle sessioni e rifiuta un elenco vuoto.</li>
 </ul>
+<p>Con il registro si chiude la parte dedicata a session-hub. Passiamo ora a model-router, partendo dal file da cui nascono tutte le sue decisioni: la griglia.</p>
 
 <h2 id="grid">La griglia e grid.json</h2>
-<p><code>grid.json</code> è la sorgente leggibile dalla macchina della griglia: i livelli in ordine di verifica, l'ordine di prezzo, i valori di effort e le relative domande, le sei classi con la scelta abituale di ciascuna, il formato dei tag e la mappatura del judge <code>fast</code> = <code>haiku</code>, <code>balanced</code> = <code>sonnet</code>, <code>deep</code> = <code>opus</code>.</p>
+<p>Le regole di scelta del modello servono in tre posti diversi: alle skill in prosa, al prompt del judge e al ciclo di qualità. Tenerle sincronizzate a mano sarebbe fragile, quindi <code>grid.json</code> fa da sorgente leggibile dalla macchina per tutto il plugin. Contiene:</p>
+<ul>
+  <li>i livelli in ordine di verifica e l'ordine di prezzo;</li>
+  <li>i valori di effort e le relative domande;</li>
+  <li>le sei classi di attività con la scelta abituale di ciascuna;</li>
+  <li>il formato dei tag e la mappatura del judge: <code>fast</code> = <code>haiku</code>, <code>balanced</code> = <code>sonnet</code>, <code>deep</code> = <code>opus</code>.</li>
+</ul>
 <figure class="diagram">{{diagram:d7-grid}}<figcaption>La griglia: quattro livelli, quattro domande per l'effort, sei classi di attività.</figcaption></figure>
-<p><code>choose-model</code> espone la stessa griglia in prosa per l'agente, mentre <code>setup</code> elenca i valori che un progetto può usare. <code>grid.test.mjs</code> fallisce se i tre si disallineano, quindi ogni modifica alla griglia tocca <code>grid.json</code> ed entrambe le skill insieme. La mod del router legge i livelli, le domande per l'effort e le classi da <code>grid.json</code> per costruire il prompt del judge, e il ciclo di qualità usa la scelta abituale di ogni classe come stima a priori.</p>
+<p><code>choose-model</code> espone la stessa griglia in prosa per l'agente, mentre <code>setup</code> elenca i valori che un progetto può configurare. Per impedire che i tre file divergano, <code>grid.test.mjs</code> fallisce non appena si disallineano: ogni modifica alla griglia aggiorna quindi <code>grid.json</code> ed entrambe le skill insieme.</p>
+<p>A runtime, la mod del router legge livelli, domande sull'effort e classi di attività da <code>grid.json</code> per costruire il prompt del judge, mentre il ciclo di qualità usa la scelta abituale di ogni classe di attività come stima a priori.</p>
+<p>Vediamo ora come la mod del router applica questa griglia quando parte un subagent e come raccoglie i dati di qualità.</p>
 
 <h2 id="router-mod">La mod del router</h2>
+<p>La mod di model-router svolge tre compiti coordinati: instrada gli avvii privi di modello esplicito, interpella il judge per classificare il lavoro e registra gli eventi che alimentano il ciclo di qualità.</p>
 <h3>Routing</h3>
-<p>Quando parte un subagent tramite il tool <code>Agent</code>, il lavoro è diviso tra tre hook. Un hook <code>tool.call</code> valuta il caso, interpella il judge e inoltra la chiamata invariata: in modalità di permessi automatica il motore rifiuta infatti una chiamata il cui input sia stato modificato da un hook dopo la revisione. L'hook <code>agent.spawn</code> successivo imposta il modello rispetto a quello del chiamante e registra la decisione. Infine, un hook <code>turn.step</code> imposta l'effort scelto su ciascuna richiesta al modello effettuata dal subagent.</p>
+<p>Quando parte un subagent tramite il tool <code>Agent</code>, la mod non può limitarsi a riscrivere l'input in un solo hook: in modalità di permessi automatica, Claude Code rifiuta una chiamata il cui input è stato modificato da un hook dopo la revisione. Per questo il lavoro è diviso in tre passaggi:</p>
+<ol>
+  <li>Un hook <code>tool.call</code> valuta il caso, interpella il judge se necessario e inoltra la chiamata invariata.</li>
+  <li>Il successivo hook <code>agent.spawn</code> imposta il modello rispetto a quello del chiamante e registra la decisione.</li>
+  <li>Un hook <code>turn.step</code> applica l'effort scelto a ciascuna richiesta al modello effettuata dal subagent.</li>
+</ol>
 <figure class="diagram">{{diagram:d8-routing}}<figcaption>I casi di routing: modello esplicito, fork, ripresa, agente a modello fisso o di un plugin e routing disattivato restano invariati; un avvio senza modello passa dal judge e si applicano le soglie.</figcaption></figure>
 <h3>Il judge</h3>
-<p>Una singola chiamata al livello fast, con effort basso, limitata a 300 token ed entro 8 secondi. Il prompt viene generato da <code>grid.json</code>; il compito viene troncato a 4.000 caratteri, racchiuso come blocco dati e con l'escape dei tag di chiusura. Risponde con un oggetto JSON contenente livello, confidenza, effort, confidenza sull'effort, rischio e classe. Per scendere di livello serve una confidenza di 0,6, per salire 0,3; un rischio superiore a 0,7, o un tag <code>!</code>, forza il livello deep e un effort almeno <code>high</code>.</p>
+<p>Classificare un'attività al volo deve costare poco, finire in pochi secondi e non farsi manipolare dal testo del compito. Il judge rispetta questi vincoli in questo modo:</p>
+<ul>
+  <li><strong>Budget stretto:</strong> una singola chiamata sul livello fast, con effort basso, limitata a 300 token ed entro 8 secondi.</li>
+  <li><strong>Prompt sicuro:</strong> generato da <code>grid.json</code>; il testo del compito viene troncato a 4.000 caratteri, racchiuso come blocco dati e con l'escape dei tag di chiusura.</li>
+  <li><strong>Risposta strutturata:</strong> un oggetto JSON con livello, confidenza, effort, confidenza sull'effort, rischio e classe di attività.</li>
+  <li><strong>Soglie prudenti:</strong> per scendere di livello serve una confidenza di 0,6, per salire basta 0,3; un rischio superiore a 0,7, oppure un tag <code>!</code>, forza il livello deep e un effort almeno <code>high</code>.</li>
+</ul>
 <figure class="diagram">{{diagram:d11-judge}}<figcaption>Il judge dall'input alla decisione.</figcaption></figure>
 <h3>Il ciclo di qualità</h3>
-<p>La mod accoda voci <code>decision</code>, <code>spawn</code>, <code>signal</code>, <code>report</code> e <code>session-end</code> in <code>events.jsonl</code>. La compattazione, avviata all'apertura della sessione, dalla vista d'uso e dal report, stabilisce l'esito di ogni attività la cui finestra di rilavorazione si è chiusa, lo accoda come voce <code>outcome</code> e incorpora quelli appresi in celle classe × livello × effort su due ambiti, utente e progetto, con decadimento temporale e la griglia come stima a priori. La pagina del report e la vista d'uso condividono la stessa aggregazione, <code>lib/usage-data.mjs</code>, così i numeri coincidono. Fino alla 0.3 il router non usa questi dati.</p>
+<p>Una scelta di routing va giudicata dai risultati reali, non solo dall'intuito iniziale. Per questo la mod accoda eventi <code>decision</code>, <code>spawn</code>, <code>signal</code>, <code>report</code> e <code>session-end</code> in <code>events.jsonl</code>.</p>
+<p>La compattazione — eseguita all'apertura della sessione, dalla vista d'uso e dal report — trasforma questi eventi in statistiche utilizzabili:</p>
+<ol>
+  <li>Determina l'esito di ogni attività la cui finestra di rilavorazione si è chiusa e lo accoda come voce <code>outcome</code>.</li>
+  <li>Incorpora gli esiti in celle classe di attività × livello × effort su due ambiti (utente e progetto), con decadimento temporale e la griglia come stima a priori.</li>
+</ol>
+<p>La pagina del report e la vista d'uso condividono la stessa logica di aggregazione, <code>lib/usage-data.mjs</code>, così i numeri coincidono sempre. Fino alla 0.3 il router si limita a raccogliere e mostrare questi dati senza usarli per cambiare le decisioni.</p>
 <figure class="diagram">{{diagram:d9-stats}}<figcaption>Eventi, esiti, celle: come il ciclo di qualità trasforma le esecuzioni dei subagent in numeri.</figcaption></figure>
-<p>Previsto per la 0.4, ancora provvisorio: con <code>adapt</code> attivo, selezione tramite Thompson sampling tra la scelta della griglia e le celle adiacenti, la griglia come stima a priori, esplorazione limitata al 10% delle decisioni recenti di una classe, nessuna esplorazione sugli avvii rischiosi e scrittura di <code>recommendations.json</code> durante la compattazione perché <code>choose-model</code> possa leggerlo.</p>
+<p><strong>Previsto per la 0.4 (ancora provvisorio):</strong> con <code>adapt</code> attivo, selezione tramite Thompson sampling tra la scelta della griglia e le celle adiacenti, usando la griglia come stima a priori; esplorazione limitata al 10% delle decisioni recenti di una classe di attività e nessuna esplorazione sugli avvii rischiosi; scrittura di <code>recommendations.json</code> durante la compattazione perché <code>choose-model</code> possa leggerlo.</p>
+<p>Tutti i file prodotti dal registro e dal ciclo di qualità hanno una collocazione precisa fuori dai tuoi repository: vediamola in un'unica tabella.</p>
 
 <h2 id="state">Stato su disco</h2>
-<p>Nessun plugin salva stato dentro un hub o un repository. Lo stato risiede nella cartella di configurazione attiva: <code>CLAUDE_CONFIG_DIR</code> se impostata, altrimenti <code>~/.claude</code>.</p>
+<p>Nessuno dei due plugin scrive file di stato dentro un hub o dentro un repository, così gli alberi di lavoro restano puliti. Tutto lo stato risiede nella cartella di configurazione attiva: <code>CLAUDE_CONFIG_DIR</code> se è impostata, altrimenti <code>~/.claude</code>.</p>
 <table>
   <thead><tr><th>Percorso</th><th>Plugin</th><th>Contenuto</th></tr></thead>
   <tbody>
-    <tr><td><code>session-hub/children-&lt;hub id&gt;.json</code> e <code>.lock</code></td><td>session-hub</td><td>il registro delle sessioni figlie e il relativo lock</td></tr>
-    <tr><td><code>&lt;scratchpad or mktemp -d&gt;/&lt;name&gt;-handoff.md</code></td><td>session-hub</td><td>un handoff per sessione figlia, fuori dall'hub</td></tr>
-    <tr><td><code>model-router/events.jsonl</code></td><td>model-router</td><td>decisioni, avvii, segnali, report, chiusure di sessione, esiti; solo in accodamento</td></tr>
-    <tr><td><code>model-router/quality/user.json</code>, <code>quality/projects/&lt;id&gt;.json</code></td><td>model-router</td><td>aggregati di qualità per utente e per progetto</td></tr>
-    <tr><td><code>model-router/quality/state.json</code>, <code>quality/.lock</code></td><td>model-router</td><td>posizione della compattazione e relativo lock (obsoleto dopo 2 minuti)</td></tr>
-    <tr><td><code>model-router/options.json</code></td><td>model-router</td><td>le opzioni usate dalla compattazione e dal report</td></tr>
-    <tr><td><code>model-router/report.html</code></td><td>model-router</td><td>la pagina locale del report</td></tr>
-    <tr><td><code>model-router/quality/recommendations.json</code></td><td>model-router</td><td>suggerimenti per classe, letti se presenti; scritti a partire dalla 0.4</td></tr>
+    <tr><td><code>session-hub/children-&lt;hub id&gt;.json</code> e <code>.lock</code></td><td>session-hub</td><td>Il registro delle sessioni figlie e il relativo lock</td></tr>
+    <tr><td><code>&lt;scratchpad or mktemp -d&gt;/&lt;name&gt;-handoff.md</code></td><td>session-hub</td><td>Un handoff per sessione figlia, salvato fuori dall'hub</td></tr>
+    <tr><td><code>model-router/events.jsonl</code></td><td>model-router</td><td>Decisioni, avvii, segnali, report, chiusure di sessione ed esiti; solo in accodamento</td></tr>
+    <tr><td><code>model-router/quality/user.json</code>, <code>quality/projects/&lt;id&gt;.json</code></td><td>model-router</td><td>Aggregati di qualità per utente e per progetto</td></tr>
+    <tr><td><code>model-router/quality/state.json</code>, <code>quality/.lock</code></td><td>model-router</td><td>Posizione della compattazione e relativo lock (obsoleto dopo 2 minuti)</td></tr>
+    <tr><td><code>model-router/options.json</code></td><td>model-router</td><td>Le opzioni usate dalla compattazione e dal report</td></tr>
+    <tr><td><code>model-router/report.html</code></td><td>model-router</td><td>La pagina locale del report</td></tr>
+    <tr><td><code>model-router/quality/recommendations.json</code></td><td>model-router</td><td>Suggerimenti per classe di attività, letti se presenti e scritti a partire dalla 0.4</td></tr>
   </tbody>
 </table>
-<p>I plugin scrivono anche due tipi di configurazione in un hub o in un progetto, entrambi solo dopo una conferma esplicita dell'utente e senza fare commit di nessuno dei due: la sezione <code>## Child sessions</code> dell'hub e la sezione <code>## Model routing</code> del progetto.</p>
+<p>Le uniche scritture che possono toccare un hub o un progetto riguardano due sezioni di configurazione — <code>## Child sessions</code> nell'hub e <code>## Model routing</code> nel progetto — entrambe create solo dopo una tua conferma esplicita e senza mai eseguirne il commit.</p>
+<p>Sapere come funzionano gli hook e dove risiedono i file aiuta a capire perché i due plugin reagiscono in modo opposto quando qualcosa va storto.</p>
 
 <h2 id="failure">Comportamento in caso di errore</h2>
-<p>I due plugin reagiscono agli errori in direzioni opposte, per scelta progettuale.</p>
+<p>Non tutti gli errori hanno lo stesso peso: violare lo scope di un repository può danneggiare del codice, mentre saltare un'ottimizzazione di modello rallenta o rincara al massimo una chiamata. Per scelta progettuale, i due plugin si comportano quindi in direzioni opposte.</p>
 <div class="cards two">
   <article class="card"><span class="num">session-hub</span><h3>Nel dubbio blocca</h3><p>Una guardia che non riesce a valutare una chiamata in una sessione figlia la blocca e spiega perché. Un registro corrotto, un formato più recente o un lock che non si riesce ad acquisire fermano la scrittura e lasciano il file com'è. Il registro però non ferma mai il lavoro: le skill ti avvisano e proseguono senza registrare.</p></article>
   <article class="card"><span class="num">model-router</span><h3>In caso di errore lascia passare</h3><p>Un errore non ferma mai il lavoro. Un errore del judge, un timeout o una risposta illeggibile lasciano l'avvio invariato; ogni hook ha un catch che lascia proseguire l'evento. Se manca il file dei suggerimenti, decide solo la griglia. Una compattazione che si interrompe può essere ripetuta senza rischi.</p></article>
 </div>
-<p>La logica di fondo: una guardia che lascia passare per sbaglio una scrittura viola lo scope che esiste per difendere, mentre un router che blocca per sbaglio un avvio ferma un lavoro che esiste solo per ottimizzare.</p>
+<p>La logica di fondo è semplice: una guardia che lascia passare per sbaglio una scrittura viola lo scope che esiste per difendere, mentre un router che blocca per sbaglio un avvio ferma un lavoro che esiste solo per ottimizzare.</p>
+<p>Per chiudere, vediamo quali versioni di Claude Code e quali ambienti soddisfano i requisiti di tutto ciò che abbiamo appena descritto.</p>
 
 <h2 id="compatibility">Compatibilità</h2>
+<p>Qui trovi i requisiti minimi dell'ambiente e ciò che è stato verificato sulle versioni recenti di Claude Code.</p>
 <table>
   <thead><tr><th>Requisito</th><th>Valore</th></tr></thead>
   <tbody>
     <tr><td>Versione di Claude Code testata</td><td>2.1.329 (e 2.1.330)</td></tr>
     <tr><td>Messaggistica tra sessioni, per session-hub</td><td>Claude Code 2.1.224 o successivo</td></tr>
-    <tr><td>Mod</td><td>esistono da Claude Code 2.1.287; entrambe le mod dichiarano <code>engines["claude-code"]: "&gt;=2.1.329"</code></td></tr>
-    <tr><td><code>node</code></td><td>nel PATH, per la guardia, lo script del registro, il pannello e tutti gli script di model-router; zero dipendenze</td></tr>
+    <tr><td>Mod</td><td>Esistono da Claude Code 2.1.287; entrambe le mod dichiarano <code>engines["claude-code"]: "&gt;=2.1.329"</code></td></tr>
+    <tr><td><code>node</code></td><td>Nel PATH, per lo scope guard, lo script del registro, il pannello e tutti gli script di model-router; zero dipendenze</td></tr>
     <tr><td>Sistema operativo</td><td>macOS e Linux: il wrapper dell'hook è un comando POSIX <code>sh</code> e il report si apre con <code>open</code> o <code>xdg-open</code></td></tr>
   </tbody>
 </table>
-<p>Verificato sulla 2.1.329: <code>--effort</code> nel comando di avvio e le variabili <code>SESSION_HUB_*</code> raggiungono la sessione figlia in <code>-p</code>, <code>--bg</code>, tmux e Herdr; una sessione in un repository annidato nell'hub carica sia il file di istruzioni dell'hub sia il proprio. Sulla 2.1.330 il routing funziona in modalità di permessi automatica e predefinita. Non verificato: il tool di avvio dell'app desktop (variabili di ruolo, modello ed effort).</p>
+<ul>
+  <li><strong>Verificato sulla 2.1.329:</strong> <code>--effort</code> nel comando di avvio e le variabili <code>SESSION_HUB_*</code> raggiungono la sessione figlia in <code>-p</code>, <code>--bg</code>, tmux e Herdr; una sessione in un repository annidato nell'hub carica sia il file di istruzioni dell'hub sia il proprio.</li>
+  <li><strong>Verificato sulla 2.1.330:</strong> il routing funziona sia in modalità di permessi automatica sia in modalità predefinita.</li>
+  <li><strong>Non verificato:</strong> il tool di avvio dell'app desktop (variabili di ruolo, modello ed effort).</li>
+</ul>

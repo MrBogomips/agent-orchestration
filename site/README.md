@@ -80,6 +80,12 @@ billed to the API key, so translate only what changed. The Italian interface str
 `src/strings/it.json` and the diagrams' text in `diagrams/i18n/it.json`; `check.mjs` fails on any string left
 untranslated.
 
+The page text is now written and reviewed in Italian: `content/it/*.html` is the authored version and
+`content/en/*.html` is translated from it (Italian to English, same script, glossary of the site's English terms).
+After an Italian edit, translate the page to English, then rewrite the Italian page's first line with the new English
+hash so the check stays green. Do not run `translate.mjs pages` on those pages: it translates English to Italian and
+would overwrite the authored Italian text.
+
 ## Publishing
 
 `.github/workflows/pages.yml` builds and checks the site on every push to `main` and deploys `site/dist/` to

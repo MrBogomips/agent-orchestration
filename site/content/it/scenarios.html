@@ -1,26 +1,46 @@
-<!-- translated-from: en/scenarios.html sha256:402aaba46f89 -->
+<!-- translated-from: en/scenarios.html sha256:2a8149b5d17e -->
 <h1>Modi di lavorare</h1>
-<p class="lede">session-hub parte da un'unica idea: chi lavora entra direttamente nella sessione che rientra nelle proprie competenze e lascia al master il coordinamento delle altre sessioni in parallelo. Ecco cosa significa in pratica per una persona con due o tre cappelli, per due colleghi che lavorano in coppia con gli agenti e per un intero team di prodotto.</p>
+<p class="lede">Nella pagina sui <a href="{{link:concept}}">Concetti di base</a> abbiamo visto come <code>session-hub</code> separa i ruoli tra un <strong>master</strong> e una o più <strong>sessioni figlie</strong>. Ma cosa significa, nella pratica quotidiana, lavorare con questa impostazione?</p>
+<p>Tutto ruota intorno a un'idea semplice: <strong>tu entri direttamente nella sessione che corrisponde alle tue competenze</strong>, guidandola come faresti normalmente, mentre il master coordina le altre sessioni in parallelo e fa da ponte tra loro.</p>
+<p>In questa pagina percorriamo quattro scenari in ordine crescente di complessità: partiamo da una sola persona che indossa due cappelli, passiamo a tre repository gestiti in solitaria, poi a due colleghi che lavorano in coppia con gli agenti, fino ad arrivare a un intero team di prodotto.</p>
 
 <h2 id="principle">Il principio alla base di ogni scenario</h2>
-<p>Una sessione figlia è una sessione Claude Code completa, aperta in un singolo repository con le istruzioni, le skill e gli agenti di quel repository già caricati. Puoi scriverci dentro come in qualunque altra sessione. Ciò che la rende una sessione figlia è lo scope ricevuto all'avvio: una radice di scrittura da cui non può uscire, un master a cui risponde e cinque tipi di messaggio per comunicare con lui.</p>
-<p>La divisione del lavoro viene quindi naturale. Tu stai nella sessione figlia che corrisponde al tuo ruolo e la guidi da vicino; le altre sessioni figlie procedono in parallelo sui rispettivi compiti. Quando la sessione figlia in cui ti trovi ha bisogno di qualcosa fuori dal suo repository, anche se glielo chiedi tu direttamente, invia un messaggio <code>out-of-scope</code> al master, che lo smista: alla sessione figlia responsabile di quel repository, a una nuova sessione figlia oppure a te se serve una decisione.</p>
-<div class="note">
-  <p><strong>I messaggi passano informazioni, non autorizzazioni.</strong> Nessuna sessione esegue merge, push, eliminazioni o modifiche alle impostazioni solo perché glielo ha chiesto un'altra sessione. L'approvazione arriva sempre da una persona, nella sua sessione. Con le mod attive, ogni messaggio proveniente da un'altra sessione contiene una riga che lo specifica.</p>
-</div>
+<p>Prima di entrare nei casi concreti, vale la pena fissare un punto: una <strong>sessione figlia</strong> non è un agente "ridotto" o un semplice sotto-processo nascosto. È una sessione Claude Code completa, aperta dentro un singolo repository, con tutte le istruzioni, le skill e gli agenti di quel progetto già caricati. Puoi entrarci e scriverci dentro esattamente come faresti in qualsiasi altra sessione.</p>
+<p>Ciò che la trasforma in una sessione figlia è lo <strong>scope</strong> ricevuto all'avvio:</p>
+<ul>
+  <li>una <strong>radice di scrittura</strong> da cui non può uscire;</li>
+  <li>un <strong>master</strong> a cui fa riferimento;</li>
+  <li>cinque tipi di messaggio codificati per comunicare con lui.</li>
+</ul>
+<p>Da qui la divisione del lavoro viene naturale. Tu ti posizioni nella sessione figlia in cui serve il tuo giudizio e la guidi da vicino, mentre le altre sessioni figlie portano avanti i rispettivi compiti in parallelo.</p>
+<p>Se, mentre lavori, la tua sessione figlia ha bisogno di qualcosa che si trova in un altro repository — <strong>anche se glielo hai chiesto tu direttamente</strong> — non va a toccare quel repository. Invia invece un messaggio <code>out-of-scope</code> al master, che decide come smistarlo: alla sessione figlia responsabile di quel progetto, a una nuova sessione avviata apposta, oppure a te se serve prendere una decisione.</p>
+<div class="note"><p><strong>I messaggi passano informazioni, non autorizzazioni.</strong> Nessuna sessione esegue merge, push, eliminazioni o modifiche alle impostazioni solo perché glielo ha chiesto un'altra sessione. L'approvazione arriva sempre da una persona, nella propria sessione. Con le mod attive, ogni messaggio proveniente da un'altra sessione include una riga che lo ricorda esplicitamente.</p></div>
 
 <h2 id="double-hat">1. Il doppio cappello: analista e UI/UX designer</h2>
-<p>Una sola persona copre due ruoli sulla stessa funzionalità: scrive l'analisi ed è responsabile dell'esperienza utente. L'hub contiene due repository: <code>design</code> per l'analisi e <code>prototype</code> per un prototipo funzionante dell'interfaccia.</p>
+<p>Partiamo dal caso più semplice: <strong>una sola persona</strong> che copre due ruoli sulla stessa funzionalità. Deve scrivere l'analisi funzionale e, allo stesso tempo, curare l'esperienza utente. Nel suo hub convivono due repository: <code>design</code> per i documenti di analisi e <code>prototype</code> per un prototipo funzionante dell'interfaccia.</p>
 <figure class="diagram">{{diagram:d2-double-hat}}<figcaption>Una persona, due cappelli: lavora nella sessione figlia design, mentre il master porta avanti in parallelo la sessione figlia prototype.</figcaption></figure>
-<p>La persona apre il master nell'hub e chiede la funzionalità. La skill <code>dispatch</code> del master stabilisce che si dovrà scrivere in entrambi i repository e avvia una sessione figlia in ciascuno con un'unica chiamata a <code>spawn</code>, così l'handoff di ciascuna indica l'altra come sessione sorella. A quel punto la persona si sposta nella sessione figlia design e scrive l'analisi insieme a lei. Nel frattempo, la sessione figlia prototype costruisce le schermate basandosi su quanto già scritto nell'analisi.</p>
-<p>Quando l'analisi cambia qualcosa da cui dipende il prototipo, la sessione figlia design non modifica il prototipo: la sua guardia dello scope bloccherebbe la scrittura. Invia invece un messaggio <code>out-of-scope</code> al master, che lo gira alla sessione figlia prototype come follow-up <code>[master]</code>. La persona segue un unico filo logico, l'analisi, mentre l'altro cappello lo porta una sessione che le riferisce.</p>
-<figure class="illus"><img src="{{img:illus-double-hat}}" alt="Illustrazione: una persona con due cappelli, uno per l'analisi e uno per il design, con due sessioni al lavoro in parallelo" loading="lazy"></figure>
+<p>Il flusso si apre nel <strong>master</strong>. La persona descrive la funzionalità che vuole realizzare; la skill <code>dispatch</code> del master capisce che servirà scrivere in entrambi i repository e avvia le due sessioni figlie con un'unica chiamata a <code>spawn</code>. Avviarle insieme ha un vantaggio preciso: l'handoff di ciascuna elenca subito l'altra come <strong>sessione sorella</strong>.</p>
+<p>A questo punto il lavoro si sdoppia:</p>
+<ol>
+  <li>La persona entra nella sessione figlia <code>design</code> e scrive l'analisi insieme all'agente, concentrandosi sulle scelte di prodotto.</li>
+  <li>Nel frattempo, in parallelo, la sessione figlia <code>prototype</code> costruisce le schermate basandosi su quanto è già stato definito nell'analisi.</li>
+</ol>
+<p>Cosa succede quando, rifinendo l'analisi, cambia un dettaglio da cui dipende il prototipo? La sessione figlia <code>design</code> non va a modificare il codice di <code>prototype</code> — il suo <em>scope guard</em> bloccherebbe comunque la scrittura. Invia invece un messaggio <code>out-of-scope</code> al master, che lo gira alla sessione figlia <code>prototype</code> come follow-up <code>[master]</code>.</p>
+<p>In questo modo chi lavora mantiene un unico filo logico, quello dell'analisi, senza saltare continuamente di contesto: l'altro cappello lo indossa una sessione parallela che resta allineata e le riferisce.</p>
+<figure class="illus"><img src="{{img:illus-double-hat}}" alt="Illustrazione: una persona con due cappelli, uno per l&#x27;analisi e uno per il design, con due sessioni al lavoro in parallelo" loading="lazy"></figure>
 
 <h2 id="three-hats">2. Sviluppatore, analista e UI/UX designer</h2>
-<p>La stessa idea applicata a tre repository: <code>design</code> (requisiti e analisi), <code>prototype</code> (l'interfaccia implementata ed eseguibile) e <code>product</code> (il codice che va in produzione). Una persona si muove tra tre ruoli; tre sessioni figlie lavorano in parallelo.</p>
+<p>Aggiungiamo ora un terzo tassello. Lo stesso meccanismo scala senza fatica quando una sola persona segue l'intero ciclo di una funzionalità su <strong>tre repository</strong>:</p>
+<ul>
+  <li><code>design</code> — requisiti, analisi e documenti API;</li>
+  <li><code>prototype</code> — l'interfaccia implementata ed eseguibile;</li>
+  <li><code>product</code> — il codice destinato alla produzione.</li>
+</ul>
 <figure class="diagram">{{diagram:d3-three-hats}}<figcaption>Tre cappelli, tre repository, tre sessioni figlie. La persona entra nella sessione figlia dove serve un intervento umano; il master tiene le fila delle altre.</figcaption></figure>
-<p>Ogni sessione figlia carica le regole del proprio repository: la sessione figlia product segue le convenzioni di test e branching del prodotto, quella prototype le convenzioni del prototipo. Le chiavi <em>Model</em> ed <em>Effort</em> dell'hub permettono di assegnare un valore predefinito a ciascun repository, ad esempio <code>design: opus</code> e <code>product: sonnet</code>, e se è installato model-router è la griglia a scegliere per le sessioni figlie lasciate aperte dalle chiavi.</p>
-<p>La chiave <em>Scope</em> dell'hub consente a una sessione figlia di leggere percorsi specifici al di fuori della propria radice di scrittura. Alla sessione figlia product si può dare accesso in lettura ai documenti di design e al prototipo, così può sviluppare basandosi su entrambi senza però poterli modificare.</p>
+<p>Con tre repository in gioco, due meccanismi di configurazione dell'hub diventano particolarmente utili.</p>
+<p>Il primo è l'isolamento delle <strong>regole e dei modelli</strong>. Ogni sessione figlia carica le convenzioni del proprio repository: <code>product</code> rispetta le regole di test e branching del prodotto, <code>prototype</code> quelle del prototipo. Inoltre, tramite le chiavi <code>Model</code> ed <code>Effort</code> dell'hub puoi assegnare un modello predefinito a ciascun repository — ad esempio <code>design: opus</code> per il ragionamento architetturale e <code>product: sonnet</code> per l'implementazione. Se hai installato anche <code>model-router</code>, sarà la sua griglia a scegliere per le sessioni figlie lasciate senza un vincolo fisso.</p>
+<p>Il secondo meccanismo è l'accesso controllato in <strong>sola lettura</strong>. Con la chiave <code>Scope</code> dell'hub puoi permettere a una sessione figlia di leggere percorsi specifici fuori dalla propria radice di scrittura. Così la sessione figlia <code>product</code> può consultare sia i documenti in <code>design/docs/</code> sia il codice in <code>prototype/</code> mentre implementa la funzionalità, senza mai avere il permesso di modificarli.</p>
+<p>Ecco come appare una configurazione tipica di questo hub:</p>
 <pre><code>## Child sessions
 - Repositories:
   - `design/`: requirements, analysis and API documents, base branch `main`
@@ -30,15 +50,17 @@
 - Scope:
   - product: `design/docs/`, `prototype/`
 - Layout: panes</code></pre>
-<p>Una sezione come questa viene generata da <code>session-hub:setup</code>, che propone i valori in base a ciò che trova nell'hub e li scrive solo dopo una tua conferma esplicita.</p>
+<p>Non devi scrivere questa sezione a mano: la genera il comando <code>session-hub:setup</code>, che analizza i repository presenti nell'hub, propone i valori iniziali e scrive la configurazione solo dopo una tua conferma esplicita.</p>
 
 <h2 id="pair">3. Il pair programming con l'IA, evoluto</h2>
-<p>Nel pair programming classico con l'IA lavorano insieme una persona e un agente. Qui invece due colleghi con ruoli diversi lavorano contemporaneamente sulla stessa attività, ciascuno in una sessione diversa. Ognuno forma una coppia, un builder e un agente, mentre un agente master coordina il flusso tra le due coppie.</p>
+<p>Fin qui ha lavorato una sola persona. Cosa succede quando sullo stesso compito entrano in gioco <strong>due colleghi</strong> con ruoli diversi?</p>
+<p>Nel pair programming classico con l'IA lavorano insieme una persona e un agente. Con <code>session-hub</code> il modello si espande: ciascun collega forma una propria coppia (<em>builder + agente</em>) dentro la sessione figlia del proprio repository, mentre l'agente <strong>master</strong> coordina lo scambio tra le due coppie.</p>
 <figure class="diagram">{{diagram:d12-pair}}<figcaption>Due coppie, builder e agente, ciascuna nella propria sessione figlia, con un agente master che smista ciò che serve tra una coppia e l'altra.</figcaption></figure>
-<p>Supponiamo che un collega lavori sull'API in <code>design</code> e l'altro la implementi in <code>product</code>. Ciascuno guida direttamente la propria sessione figlia. Quando la sessione figlia di chi implementa trova un'ambiguità nel documento dell'API, invia al master un messaggio <code>question</code> o <code>out-of-scope</code>; il master lo gira alla sessione figlia design, dove l'altro collega lo vede e prende una decisione. Nessuna delle due coppie modifica il repository dell'altra e nessuno deve interrompersi per spiegare il contesto: è già tutto nel messaggio.</p>
+<p>Immaginiamo una situazione quotidiana: un collega definisce il contratto di un'API in <code>design</code>, l'altro la implementa in <code>product</code>. Ognuno guida direttamente la propria sessione figlia.</p>
+<p>Quando la sessione figlia di chi sta scrivendo il codice incontra un'ambiguità nella specifica dell'API, non tira a indovinare e non modifica il documento: invia al master un messaggio <code>question</code> o <code>out-of-scope</code>. Il master lo gira alla sessione figlia <code>design</code>, dove l'altro collega lo vede, chiarisce il punto e aggiorna il contratto. Nessuna delle due coppie tocca il repository dell'altra, e nessuno deve interrompere il proprio flusso per spiegare il contesto a voce o in chat: tutto il necessario viaggia già nel messaggio.</p>
 <h3>Come gira oggi: un unico host condiviso</h3>
-<p>Oggi questa configurazione gira su <strong>un unico host condiviso</strong>. Entrambi i colleghi si collegano via SSH alla stessa sessione tmux o Herdr su quella macchina e ciascuno controlla il proprio pane. Tutte le sessioni girano con il login Claude Code di quell'host.</p>
-<p>Il motivo dipende da come le sessioni si trovano tra loro. Una sessione figlia viene avviata nello stesso modo in cui è stato avviato il master, con lo stesso account e la stessa cartella di configurazione, perché due sessioni con cartelle di configurazione diverse non possono scambiarsi messaggi. Inoltre il master riceve messaggi dalle sessioni figlie solo se girano sulla sua stessa macchina. I colleghi condividono quindi la macchina, anziché usare ciascuno un proprio login.</p>
+<p>Dal punto di vista pratico, oggi questa configurazione funziona su <strong>un unico host condiviso</strong>. Entrambi i colleghi si collegano via SSH alla stessa sessione <code>tmux</code> o <code>Herdr</code> su quella macchina e ciascuno controlla il proprio pane, mentre il master gira in un terzo pane. Tutte le sessioni usano il login Claude Code configurato su quell'host.</p>
+<p>Il motivo è legato al modo in cui le sessioni comunicano tra loro: una sessione figlia eredita lo stesso account e la stessa cartella di configurazione del master, perché due sessioni con cartelle di configurazione diverse non possono scambiarsi messaggi. Inoltre, il master riceve messaggi solo dalle sessioni figlie che girano sulla sua stessa macchina. Per questo oggi i colleghi condividono l'host, anziché collegarsi ciascuno con il proprio login locale.</p>
 <figure class="shot">
   <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>ssh · sessione condivisa</span></div>
   <img src="{{img:pair-shared}}" alt="I terminali di due colleghi collegati via SSH alla stessa sessione del multiplexer, ciascuno alla guida di un pane diverso con la propria sessione figlia" loading="lazy">
@@ -47,41 +69,52 @@
 <figure class="illus"><img src="{{img:illus-pair}}" alt="Illustrazione: due persone, ciascuna in coppia con un agente, collegate tramite un agente coordinatore" loading="lazy"></figure>
 
 <h2 id="team">4. Il team di prodotto assistito e mediato dall'IA</h2>
-<p>È questo lo scenario a cui punta tutta questa impostazione: un team di prodotto in cui ogni persona lavora affiancata da agenti, e sono gli agenti a gestire il coordinamento tra le persone.</p>
+<p>Portando questa logica fino in fondo si arriva allo scenario verso cui punta l'intera architettura: un <strong>team di prodotto</strong> in cui ogni persona lavora affiancata da agenti, e sono gli agenti a farsi carico del coordinamento operativo tra le persone.</p>
 <h3>Il presupposto: il prototipo sostituisce il mock-up fatto a mano</h3>
-<p>I mock-up UI/UX dettagliati disegnati a mano sono costosi da realizzare e da mantenere aggiornati. In questo team vengono sostituiti da un <strong>prototipo</strong>: un'interfaccia eseguibile costruita da una sessione figlia a partire dai requisiti e dal design. Chi si occupa di UI/UX design è responsabile del <strong>Design System</strong> iniziale e dei <strong>Principles &amp; Patterns</strong> a cui si attengono sia il prototipo sia il prodotto. Il prototipo viene alimentato dal product manager, dagli analisti e dai designer; il builder lo consulta insieme alla documentazione mentre sviluppa il prodotto.</p>
+<p>I mock-up UI/UX statici e dettagliati sono costosi da disegnare e ancora più costosi da tenere allineati man mano che il prodotto evolve. In questo modello vengono sostituiti da un <strong>prototipo</strong>: un'interfaccia realmente eseguibile, costruita e aggiornata da una sessione figlia a partire dai requisiti e dal design.</p>
+<p>Il ruolo di chi si occupa di UI/UX design cambia di conseguenza: invece di inseguire ogni singola schermata a mano, definisce e custodisce il <strong>Design System</strong> iniziale e i <strong>Principles &amp; Patterns</strong> a cui si attengono sia il prototipo sia il prodotto finale. Il prototipo viene poi alimentato in modo continuo da product manager, analisti e designer, mentre chi sviluppa il prodotto lo consulta dal vivo affiancato alla documentazione.</p>
 <figure class="diagram">{{diagram:d13-team}}<figcaption>Il product manager nel master; analista, architetto e designer su design e prototipo; il fullstack developer sul prodotto; ogni richiesta tra loro smistata dal master.</figcaption></figure>
 <h3>Chi lavora dove</h3>
 <table>
   <thead><tr><th>Persona</th><th>Sessione</th><th>Repository e attività</th></tr></thead>
   <tbody>
-    <tr><td>Product Manager</td><td>il master</td><td>l'hub: priorità, decisioni, approvazioni; smista ogni richiesta tra le sessioni figlie</td></tr>
-    <tr><td>Analista, architetto, UI/UX designer</td><td>la sessione figlia design</td><td><code>design</code>: requisiti, PRD, architettura, design UI/UX, Design System e Principles &amp; Patterns</td></tr>
-    <tr><td>Analista, architetto, UI/UX designer</td><td>la sessione figlia prototype</td><td><code>prototype</code>: l'interfaccia eseguibile che sostituisce i mock-up, basata sul Design System</td></tr>
-    <tr><td>Fullstack Developer (Builder)</td><td>la sessione figlia product</td><td><code>product</code>: il codice che va in produzione, sviluppato a partire dalla documentazione e dal prototipo</td></tr>
+    <tr><td><strong>Product Manager</strong></td><td>Il <strong>master</strong></td><td>L'hub: priorità, decisioni, approvazioni; smista ogni richiesta tra le sessioni figlie.</td></tr>
+    <tr><td><strong>Analista, architetto, UI/UX designer</strong></td><td>Sessione figlia <strong><code>design</code></strong></td><td><code>design</code>: requisiti, PRD, architettura, design UI/UX, Design System e Principles &amp; Patterns.</td></tr>
+    <tr><td><strong>Analista, architetto, UI/UX designer</strong></td><td>Sessione figlia <strong><code>prototype</code></strong></td><td><code>prototype</code>: l'interfaccia eseguibile che sostituisce i mock-up, basata sul Design System.</td></tr>
+    <tr><td><strong>Fullstack Developer (Builder)</strong></td><td>Sessione figlia <strong><code>product</code></strong></td><td><code>product</code>: il codice che va in produzione, sviluppato a partire dalla documentazione e dal prototipo.</td></tr>
   </tbody>
 </table>
 <h3>Una giornata nel team</h3>
-<p>Il product manager chiede al master una vista settimanale. <code>dispatch</code> decide quali repository sono coinvolti dal lavoro e avvia le sessioni figlie. Nella sessione figlia design, l'architetto abbozza un'API <code>/week</code>. L'API è un'interfaccia condivisa: la sessione figlia product ci costruirà sopra e il prototipo la chiamerà, quindi la sessione figlia design non si limita a pubblicarla. Invia la proposta al master, e il master chiede al product manager.</p>
+<p>Seguiamo una funzionalità dall'inizio alla fine per vedere come si incastrano i pezzi.</p>
+<ol>
+  <li><strong>L'avvio.</strong> Il product manager apre il master e chiede una nuova vista settimanale. <code>dispatch</code> individua i repository coinvolti e avvia le sessioni figlie necessarie.</li>
+  <li><strong>La proposta condivisa.</strong> Nella sessione figlia <code>design</code>, l'architetto abbozza un nuovo endpoint <code>/week</code>. Siccome si tratta di un'interfaccia condivisa — <code>product</code> dovrà implementarla e <code>prototype</code> dovrà chiamarla — la sessione figlia <code>design</code> non si limita a pubblicarla unilateralmente: invia la proposta al master, che la sottopone al product manager.</li>
+</ol>
 <figure class="shot">
   <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>herdr · team di prodotto</span></div>
   <img src="{{img:team-herdr}}" alt="Herdr: la sessione master sottopone una decisione al product manager; a destra girano le sessioni figlie design, prototype e product" loading="lazy">
   <figcaption>Il master porta al product manager le decisioni che gli competono, come approvare l'API <code>/week</code> o fare il merge dei tre feature branch. Le sessioni figlie design, prototype e product occupano i rispettivi pane sulla destra.</figcaption>
 </figure>
-<p>L'approvazione spetta al product manager e viene data nel master. Ogni richiesta che modifica un'interfaccia condivisa passa al responsabile di quell'interfaccia, e la decisione torna poi a ogni sessione sorella che la usa: il master invia un follow-up <code>[master]</code> alle sessioni figlie prototype e product. La sessione figlia prototype collega la nuova vista; il builder, nella sessione figlia product, legge il documento approvato dell'API e il prototipo in esecuzione, entrambi compresi nello scope di lettura della sessione figlia product, e implementa l'endpoint seguendo le regole e i test del prodotto.</p>
+<ol start="3">
+  <li><strong>L'approvazione e la propagazione.</strong> Il product manager approva l'API direttamente nel master. Vale qui una regola generale: ogni modifica a un'interfaccia condivisa passa al suo responsabile, e la decisione viene poi propagata a tutte le sessioni sorelle interessate. Il master invia quindi un follow-up <code>[master]</code> sia a <code>prototype</code> sia a <code>product</code>.</li>
+  <li><strong>L'esecuzione in parallelo.</strong> La sessione figlia <code>prototype</code> collega la nuova vista settimanale all'interfaccia eseguibile. Intanto il builder, dentro la sessione figlia <code>product</code>, legge la specifica approvata dell'API e apre nel browser il prototipo aggiornato — entrambi inclusi nel suo scope di lettura — e implementa l'endpoint seguendo le convenzioni e i test del prodotto.</li>
+</ol>
 <figure class="shot">
   <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>prototipo · browser</span></div>
   <img src="{{img:prototype-browser}}" alt="Il prototipo costruito dalla sessione figlia prototype, aperto in un browser web" loading="lazy">
   <figcaption>Il prototipo costruito dalla sessione figlia prototype, aperto nel browser. Il builder lo consulta affiancato alla documentazione mentre sviluppa il prodotto.</figcaption>
 </figure>
-<p>Quando una sessione figlia apre una pull request invia <code>pr</code> con il link, e quando ha finito invia <code>done</code>; il master annota entrambi nel registro delle sessioni figlie e segue le regole di chiusura dell'hub. Il product manager segue l'intero flusso dal pannello delle sessioni figlie, senza dover chiedere aggiornamenti di stato a nessuno.</p>
+<ol start="5">
+  <li><strong>La chiusura senza riunioni di stato.</strong> Appena una sessione figlia apre una pull request invia un messaggio <code>pr</code> con il link; quando ha completato il lavoro invia <code>done</code>. Il master registra entrambi nel <strong>registro delle sessioni figlie</strong> e applica le regole di chiusura dell'hub. Il product manager segue l'avanzamento dell'intera funzionalità dal pannello delle sessioni figlie, senza dover rincorrere nessuno per chiedere aggiornamenti di stato.</li>
+</ol>
 <figure class="illus"><img src="{{img:illus-team}}" alt="Illustrazione: un team di prodotto in cui ogni persona lavora con un agente, coordinato attraverso una sessione centrale" loading="lazy"></figure>
 
 <h2 id="limits">Cosa tenere a mente</h2>
+<p>Prima di portare questi scenari nel lavoro di tutti i giorni, conviene conoscere quattro vincoli pratici dell'architettura attuale:</p>
 <ul>
-  <li><strong>Le guardie presidiano lo scope, le persone prendono le decisioni.</strong> La guardia dello scope blocca le modifiche ai file fuori dalla radice di scrittura di una sessione figlia, anche con le mod disattivate. La guardia di invio e il controllo della shell richiedono invece le mod attive; il controllo della shell è best effort.</li>
-  <li><strong>Una sola macchina.</strong> Il master riceve messaggi dalle sessioni figlie sulla propria macchina, e le sessioni figlie usano l'account e la cartella di configurazione del master. Oggi i team condividono un unico host, come nello scenario 3.</li>
-  <li><strong>L'app desktop non ha guardie.</strong> Una sessione figlia avviata lì non riceve le variabili di ruolo, quindi il suo scope si regge solo sull'handoff; <code>spawn</code> lo segnala nel suo report.</li>
-  <li><strong>La fiducia è per singolo repository.</strong> La prima volta che una sessione figlia gira in un repository annidato in un hub già fidato, può fermarsi al prompt di fiducia. A quel prompt devi rispondere tu.</li>
+  <li><strong>Le guardie presidiano lo scope, le persone prendono le decisioni.</strong> Lo <em>scope guard</em> blocca le modifiche ai file fuori dalla radice di scrittura anche quando le mod sono disattivate. La guardia di invio e il controllo della shell richiedono invece le mod attive, e il controllo della shell funziona in modalità <em>best effort</em>.</li>
+  <li><strong>Una sola macchina.</strong> Il master può ricevere messaggi solo dalle sessioni figlie in esecuzione sullo stesso host, che condividono il suo account e la sua cartella di configurazione. Per il lavoro in team, come nello scenario 3, si condivide quindi un'unica macchina.</li>
+  <li><strong>L'app desktop non ha guardie.</strong> Una sessione figlia avviata nell'app desktop non riceve le variabili di ruolo: il suo scope si regge soltanto sulle istruzioni dell'handoff. In questo caso <code>spawn</code> lo segnala esplicitamente nel proprio report.</li>
+  <li><strong>La fiducia è per singolo repository.</strong> La prima volta che una sessione figlia viene avviata in un repository annidato dentro un hub già fidato, Claude Code può fermarsi al prompt di fiducia per quella sottocartella: è una conferma che devi dare tu manualmente.</li>
 </ul>
-<p>I meccanismi dietro tutto questo sono descritti in <a href="{{link:session-hub}}">session-hub nel dettaglio</a>; il modo in cui ogni sessione figlia riceve il proprio modello è spiegato in <a href="{{link:model-router}}">model-router</a>.</p>
+<p>Per approfondire i meccanismi interni puoi proseguire con <a href="{{link:session-hub}}">session-hub nel dettaglio</a>; per scoprire come ogni sessione figlia riceve il modello più adatto, passa a <a href="{{link:model-router}}">model-router</a>.</p>
