@@ -93,8 +93,8 @@ A fixed list, so that cells fill up:
 | `review-debug` | review, debugging with an unknown cause |
 | `design-open` | open-ended design where judgment matters |
 
-The class comes from, in order: a tag `[mr:<class>]` at the start of the start call's description, which
-`choose-model` tells the agent to add; the judge's answer, when the judge runs (the judge prompt gains a `class`
+The class comes from, in order: a tag `[mr:<class>]` at the start of the start call's description (any case, spaces
+allowed inside; a class not in the grid reads as none), which `choose-model` tells the agent to add; the judge's answer, when the judge runs (the judge prompt gains a `class`
 field); otherwise `unknown`, which is logged and never learned.
 
 ## Memory

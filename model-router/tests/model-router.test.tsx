@@ -185,6 +185,25 @@ describe('routing a start that carries no model', () => {
     expect(w.spawns[0].model).toBe('opus')
     expect(w.appended.find((r) => r.type === 'decision').action).toBe('forced-risk')
   })
+
+  test('a risky ! tag counts even when its class is unknown or the tag is not exact', async ($, on) => {
+    const w = world(on)
+    await start($, { description: '[mr:unknown!] Drop the prod users table' }, { description: '[mr:unknown!] Drop the prod users table', parentModel: 'claude-haiku-5-5' })
+    await step($, 'ag1')
+    expect(w.steps[0].effort).toBe('high')
+    expect(w.spawns[0].model).toBe('opus')
+    expect(w.appended.find((r) => r.type === 'decision').action).toBe('forced-risk')
+    expect(w.appended.find((r) => r.type === 'spawn').risky).toBe(true)
+  })
+
+  test('an upper-case risky tag counts too', async ($, on) => {
+    const w = world(on)
+    await start($, { description: '[MR:edit-specified!] Rotate the production API key' }, { description: '[MR:edit-specified!] Rotate the production API key', parentModel: 'claude-haiku-5-5' })
+    expect(w.spawns[0].model).toBe('opus')
+    const decision = w.appended.find((r) => r.type === 'decision')
+    expect(decision.action).toBe('forced-risk')
+    expect(decision.class).toBe('edit-specified')
+  })
 })
 
 describe('effort without rewriting the tool call', () => {

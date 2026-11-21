@@ -30,6 +30,19 @@ test('parseTag reads the class and the risky marker at the start of a descriptio
   assert.deepEqual(parseTag(undefined), { cls: null, risky: false });
 });
 
+test('parseTag keeps the risky marker when the class is unknown, upper case or spaced', () => {
+  const classes = ['read-search', 'edit-specified'];
+  assert.deepEqual(parseTag('[mr:migration!] Drop the prod users table', classes), { cls: null, risky: true });
+  assert.deepEqual(parseTag('[MR:edit-specified!] Rotate the production API key', classes), { cls: 'edit-specified', risky: true });
+  assert.deepEqual(parseTag('[mr: read-search !] Find it', classes), { cls: 'read-search', risky: true });
+  assert.deepEqual(parseTag('[Mr:Read-Search] Find it', classes), { cls: 'read-search', risky: false });
+  assert.deepEqual(parseTag('[mr:migration] Plan it', classes), { cls: null, risky: false });
+});
+
+test('words strips the tag whatever its case and spacing', () => {
+  assert.deepEqual(words('[MR: Edit-Specified !] Rotate key'), ['rotate', 'key']);
+});
+
 test('mentionsFile finds a written file by its path or its base name', () => {
   assert.equal(mentionsFile('the change in src/auth.ts is wrong', ['/repo/src/auth.ts']), true);
   assert.equal(mentionsFile('look at /repo/src/auth.ts', ['/repo/src/auth.ts']), true);

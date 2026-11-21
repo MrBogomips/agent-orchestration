@@ -96,7 +96,9 @@ effort on each model request of the started subagent, by its `agentId` (S14). St
 | The router is off, or a session-wide forced subagent model is set (`CLAUDE_CODE_SUBAGENT_MODEL`) | Keep it. Log `keep`. |
 | No model given | Ask the judge; apply the thresholds below; log. |
 
-A risky marker in the class tag (`[mr:<class>!]`, written by `choose-model`) counts as a risky judge answer.
+A risky marker in the class tag (`[mr:<class>!]`, written by `choose-model`) counts as a risky judge answer. The tag
+is read in any case and with spaces inside (`[MR: edit-specified !]`), and the marker counts even when the class is
+not in the grid: a mistyped or invented class reads as no class, never as no risk.
 
 ### The judge
 

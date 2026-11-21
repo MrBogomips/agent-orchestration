@@ -9,7 +9,8 @@ const STOP_WORDS = new Set([
   'just', 'also', 'again', 'via', 'per',
 ]);
 
-const TAG_RE = /^\s*\[mr:([a-z-]+)(!?)\]/;
+// Read loosely (any case, inner spaces) so a mistyped tag still carries its risky marker.
+const TAG_RE = /^\s*\[mr:\s*([a-z-]+)\s*(!?)\s*\]/i;
 
 /** Lowercased words of a text, without the class tag, punctuation and stop words. */
 export function words(text) {
@@ -38,13 +39,15 @@ export function isSimilar(a, b, threshold) {
 }
 
 /**
- * The class tag `[mr:<class>]` or `[mr:<class>!]` at the start of a description. With `classes`, a class outside
- * the list reads as no tag.
+ * The class tag `[mr:<class>]` or `[mr:<class>!]` at the start of a description, in any case and with spaces
+ * allowed inside. With `classes`, a class outside the list reads as no class; the risky marker counts whatever the
+ * class, so a mistyped or invented class never removes the risk guard.
  */
 export function parseTag(description, classes) {
   const m = typeof description === 'string' ? description.match(TAG_RE) : null;
-  if (!m || (classes && !classes.includes(m[1]))) return { cls: null, risky: false };
-  return { cls: m[1], risky: m[2] === '!' };
+  if (!m) return { cls: null, risky: false };
+  const cls = m[1].toLowerCase();
+  return { cls: !classes || classes.includes(cls) ? cls : null, risky: m[2] === '!' };
 }
 
 /** Whether a text names one of the files, by its full path or its base name. */
