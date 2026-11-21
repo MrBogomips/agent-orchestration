@@ -1,10 +1,15 @@
-<!-- translated-from: en/session-hub.html sha256:c5e0f3e6b79e -->
+<!-- translated-from: en/session-hub.html sha256:d1a5a7705c6a -->
 <h1>session-hub</h1>
-<p class="lede">Una sessione master in un hub di repository avvia sessioni figlie, una per repository, che lavorano in parallelo. Ogni sessione figlia riceve uno scope scritto, un modello e un effort, comunica solo con il master e gli inoltra tutto ciò che esce dal proprio scope. Tu lavori direttamente nella sessione figlia che conosci; il master coordina il resto.</p>
+<p class="lede">Quando un lavoro tocca più repository, tenere tutto in un'unica sessione fa perdere il filo e i confini. Con <code>session-hub</code>, una sessione master nell'hub avvia sessioni figlie — una per repository — che lavorano in parallelo. Ogni sessione figlia riceve uno scope scritto, un modello e un effort, parla solo con il master e gli inoltra tutto ciò che esce dal proprio perimetro. Tu lavori nella sessione figlia che conosci; il master coordina il resto.</p>
 
 <h2 id="parallel">Sessioni parallele, un solo coordinatore</h2>
-<p>Le sessioni figlie di un hub non sono fasi di una pipeline. Girano contemporaneamente, ciascuna nel proprio pane o in una sessione in background, e ciascuna è una sessione Claude Code completa con le regole del suo repository già caricate. Questo cambia il modo di lavorarci.</p>
-<p>Puoi scrivere in qualsiasi sessione figlia. Di solito lavori in quella su cui hai competenza (il design, il prototipo o il codice) e lasci che il master coordini le altre: le avvia, riceve i loro messaggi senza fare polling, smista le richieste e ti avvisa quando serve una decisione. Anche se fai tu una richiesta dentro una sessione figlia ma quella richiesta esce dal suo scope, passa comunque dal master: il coordinamento regge anche quando a chiedere sei tu.</p>
+<p>Coordinare più repository in una sola chat costringe a procedere un passo alla volta o a saltare tra finestre scollegate. Le sessioni figlie di un hub rovesciano questo schema: non sono fasi di una pipeline, ma sessioni Claude Code complete che girano in parallelo, ciascuna nel proprio pane o in background, con le regole del proprio repository già caricate.</p>
+<p>Questo cambia il tuo ruolo durante il lavoro:</p>
+<ul>
+  <li><strong>Intervieni dove hai competenza</strong>: puoi scrivere in qualsiasi sessione figlia, di solito in quella che conosci meglio (il design, il prototipo o il codice).</li>
+  <li><strong>Il master coordina il resto</strong>: avvia le altre sessioni figlie, riceve i loro messaggi senza fare polling, smista le richieste e ti avvisa quando serve una tua decisione.</li>
+  <li><strong>I confini reggono anche con le tue richieste</strong>: se chiedi a una sessione figlia qualcosa che esce dal suo scope, la richiesta passa comunque dal master.</li>
+</ul>
 <div class="tabs" style="margin-top: 24px">
   <input type="radio" name="sh-hub" id="sh-hub-herdr" checked><label for="sh-hub-herdr">Herdr</label>
   <input type="radio" name="sh-hub" id="sh-hub-tmux"><label for="sh-hub-tmux">tmux</label>
@@ -15,7 +20,7 @@
     <figure class="shot"><img src="{{img:hub-tmux}}" alt="tmux: la sessione master nel pane di sinistra, due sessioni figlie nei pane di destra" loading="lazy"><figcaption>tmux: lo stesso hub, lo stesso layout.</figcaption></figure>
   </div>
 </div>
-<p>Quattro modi per metterlo in pratica, da una sola persona con doppio cappello a un team di prodotto in cui gli agenti gestiscono il coordinamento tra le persone, sono descritti in <a href="{{link:scenarios}}">modi di lavorare</a>.</p>
+<p>Nella pagina sui <a href="{{link:scenarios}}">modi di lavorare</a> trovi quattro modi per applicare questo schema, da una sola persona con doppio cappello a un team di prodotto in cui gli agenti gestiscono il coordinamento tra le persone:</p>
 <div class="cards two">
   <a class="card" href="{{link:scenarios}}#double-hat"><span class="num">01</span><h3>Il doppio cappello</h3><p>Analista e UI/UX designer nella stessa persona.</p><span class="arrow">Leggi →</span></a>
   <a class="card" href="{{link:scenarios}}#three-hats"><span class="num">02</span><h3>Tre cappelli, tre repository</h3><p>Sviluppatore, analista e designer su prodotto, design e prototipo.</p><span class="arrow">Leggi →</span></a>
@@ -24,29 +29,31 @@
 </div>
 
 <h2 id="components">Di cosa è composto</h2>
+<p>Per orchestrare le sessioni figlie e far rispettare i loro confini senza interventi manuali, il plugin combina tre skill, un hook, uno script e una mod.</p>
 <table>
   <thead><tr><th>Nome</th><th>Tipo</th><th>Cosa fa</th></tr></thead>
   <tbody>
-    <tr><td><code>session-hub:dispatch</code></td><td>skill</td><td>Lato master. Decide per ogni repository se legge il master, se legge un subagent o se lavora una sessione figlia; gestisce i messaggi delle sessioni figlie e smista le richieste out-of-scope; trattiene i compiti riservati al master.</td></tr>
-    <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Avvia una sessione figlia per repository (app desktop, Herdr, tmux, <code>claude --bg</code> o comandi pronti per te) con uno scope, un modello, un effort, le variabili di ruolo <code>SESSION_HUB_*</code> e un file di handoff. Registra ogni sessione figlia.</td></tr>
-    <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Scrive o aggiorna la sezione <code>## Child sessions</code> dell'hub, dopo una tua conferma esplicita.</td></tr>
-    <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td><code>PreToolUse</code> su <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>. In una sessione figlia, blocca qualsiasi scrittura il cui percorso reale cade fuori dalla radice di scrittura.</td></tr>
+    <tr><td><code>session-hub:dispatch</code></td><td>skill</td><td>Lato master. Decide per ogni repository se legge il master, se legge un subagent o se serve una sessione figlia; gestisce i messaggi delle sessioni figlie, smista le richieste out-of-scope e trattiene i compiti riservati al master.</td></tr>
+    <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Avvia una sessione figlia per repository (app desktop, Herdr, tmux, <code>claude --bg</code> o comandi pronti da lanciare) con scope, modello, effort, variabili di ruolo <code>SESSION_HUB_*</code> e file di handoff, poi la aggiunge al registro.</td></tr>
+    <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Scrive o aggiorna la sezione <code>## Child sessions</code> dell'hub, ma solo dopo una tua conferma esplicita.</td></tr>
+    <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td><code>PreToolUse</code> su <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>. In una sessione figlia, blocca qualsiasi scrittura il cui percorso reale esce dalla radice di scrittura.</td></tr>
     <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>Legge e scrive il registro delle sessioni figlie in modo atomico.</td></tr>
-    <tr><td><code>session-hub</code></td><td>mod</td><td>Nella sessione figlia: la protezione sugli invii, il controllo sulla shell, la marcatura dell'origine e la riga dello scope. Nel master: il pannello delle sessioni figlie. Richiede le mod attive.</td></tr>
-    <tr><td><code>/session-hub</code></td><td>comando</td><td>Ruolo e scope di questa sessione; nel master, le sessioni figlie e il pannello. Registrato dalla mod.</td></tr>
+    <tr><td><code>session-hub</code></td><td>mod</td><td>Nella sessione figlia attiva la protezione sugli invii, il controllo sulla shell, la marcatura dell'origine e la riga dello scope. Nel master aggiunge il pannello delle sessioni figlie. Richiede le mod attive.</td></tr>
+    <tr><td><code>/session-hub</code></td><td>comando</td><td>Mostra ruolo e scope della sessione corrente; nel master mostra anche le sessioni figlie e apre il pannello. Registrato dalla mod.</td></tr>
   </tbody>
 </table>
-<p>Raramente devi chiamare una skill per nome. Chiedi a parole tue, per esempio "avvia una sessione figlia in product per T-42", "configura session-hub in questo hub" o "cosa stanno facendo le sessioni figlie?", e viene caricata la skill corrispondente.</p>
+<p>Quasi mai dovrai chiamare una skill per nome. Ti basta chiedere a parole tue — per esempio "avvia una sessione figlia in product per T-42", "configura session-hub in questo hub" o "cosa stanno facendo le sessioni figlie?" — e viene caricata la skill giusta. Il primo passo è descrivere al master la struttura dell'hub.</p>
 
 <h2 id="setup">Configurare un hub</h2>
-<p>L'hub conserva le regole per le sessioni figlie in una sezione <code>## Child sessions</code> del suo file di istruzioni: <code>AGENTS.md</code> nella radice dell'hub, oppure <code>CLAUDE.md</code> quando <code>AGENTS.md</code> non c'è. Chiedi "configura session-hub per questo hub": <code>setup</code> propone una sezione in base a ciò che trova e la scrive solo quando confermi. Ogni chiave è facoltativa. Ciò che dici nella conversazione prevale sulle chiavi, e le chiavi prevalgono sui valori predefiniti.</p>
+<p>Prima di avviare le sessioni figlie, il master deve conoscere i repository presenti nell'hub, il loro ruolo e le tue preferenze di avvio. Queste regole stanno nella sezione <code>## Child sessions</code> del file di istruzioni dell'hub: <code>AGENTS.md</code> nella radice, oppure <code>CLAUDE.md</code> quando <code>AGENTS.md</code> non esiste.</p>
+<p>Per crearla o aggiornarla, chiedi "configura session-hub per questo hub": <code>setup</code> esamina l'hub, propone una configurazione e la scrive solo dopo la tua conferma. Ogni chiave è facoltativa, con questa precedenza: ciò che dici nella conversazione prevale sulle chiavi del file, e le chiavi prevalgono sui valori predefiniti.</p>
 <table>
   <thead><tr><th>Chiave</th><th>Contenuto</th><th>Predefinito</th></tr></thead>
   <tbody>
-    <tr><td>Repositories</td><td>percorso relativo, ruolo in una riga e, facoltativamente, branch di base</td><td>sottocartelle contenenti <code>.git</code>, più i percorsi in <code>.gitmodules</code></td></tr>
+    <tr><td>Repositories</td><td>percorso relativo, ruolo in una riga e, se serve, branch di base</td><td>sottocartelle contenenti <code>.git</code>, più i percorsi in <code>.gitmodules</code></td></tr>
     <tr><td>Task IDs</td><td>formato dell'ID del task e dove si trovano i task</td><td>l'ID che indichi tu; altrimenti uno slug breve</td></tr>
-    <tr><td>Propagate</td><td>regole dell'hub da riportare nell'handoff di una sessione figlia che lavora fuori dall'hub</td><td>nessuna</td></tr>
-    <tr><td>Master only</td><td>parti del file dell'hub e compiti che valgono solo per il master</td><td>nessuno</td></tr>
+    <tr><td>Propagate</td><td>regole dell'hub da includere nell'handoff di una sessione figlia che lavora fuori dall'hub</td><td>nessuna</td></tr>
+    <tr><td>Master only</td><td>parti del file dell'hub e compiti riservati al master</td><td>nessuno</td></tr>
     <tr><td>Model, Effort</td><td>valori predefiniti per repository o tipo di lavoro</td><td>nessuno: <code>choose-model</code>, altrimenti ereditati</td></tr>
     <tr><td>Scope</td><td>per ogni repository, cosa può leggere una sessione figlia fuori dalla sua radice di scrittura</td><td>niente</td></tr>
     <tr><td>Registry</td><td>percorso del registro delle sessioni figlie, fuori dall'hub</td><td><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></td></tr>
@@ -72,77 +79,104 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 - Layout: panes
 - Worktrees: repo
 - Session name: `&lt;task&gt;-&lt;repo&gt;`</code></pre>
+<p>Una volta configurato l'hub, il master ha tutto ciò che serve per decidere come distribuire un task tra sé, i suoi subagent e le sessioni figlie.</p>
 
 <h2 id="dispatch">Decidere: dispatch</h2>
-<p>Nel master, un task che tocca i repository dell'hub passa da <code>dispatch</code>. La skill legge la sezione, allinea il registro delle sessioni figlie con le sessioni attive, individua quali repository tocca il lavoro (se ha dubbi te lo chiede e non tira mai a indovinare) e per ciascuno applica la prima riga che corrisponde:</p>
+<p>Non ogni operazione su un repository richiede una sessione figlia dedicata: per leggere due file basta il master, mentre per modificare codice o interpretare convenzioni locali serve l'ambiente completo del repository. Nel master, questa scelta passa da <code>dispatch</code>.</p>
+<p>Quando arriva un task che tocca i repository dell'hub, <code>dispatch</code> legge la sezione di configurazione, allinea il registro delle sessioni figlie con le sessioni attive e individua i repository coinvolti (se ha dubbi te lo chiede, senza mai tirare a indovinare). Per ciascun repository applica la prima riga che corrisponde:</p>
 <table>
   <thead><tr><th>Situazione</th><th>Azione</th></tr></thead>
   <tbody>
-    <tr><td>È già in esecuzione una sessione figlia per quel repository e quel task</td><td>Invia un messaggio a quella sessione figlia (<code>[master] …</code>); nessuna seconda sessione figlia</td></tr>
-    <tr><td>Qualsiasi scrittura nel repository</td><td>Una sessione figlia, con <code>session-hub:spawn</code></td></tr>
-    <tr><td>Una lettura che richiede le skill o le regole del repository per essere interpretata</td><td>Una sessione figlia in sola lettura</td></tr>
-    <tr><td>Una lettura ampia il cui risultato è una conclusione</td><td>Un subagent in sola lettura del master</td></tr>
-    <tr><td>Pochi file noti da leggere</td><td>Li legge direttamente il master</td></tr>
+    <tr><td>È già in esecuzione una sessione figlia per quel repository e quel task</td><td>Invia un messaggio a quella sessione figlia (<code>[master] …</code>); non ne avvia una seconda</td></tr>
+    <tr><td>Qualsiasi scrittura nel repository</td><td>Avvia una sessione figlia con <code>session-hub:spawn</code></td></tr>
+    <tr><td>Una lettura che richiede le skill o le regole del repository per essere interpretata</td><td>Avvia una sessione figlia in sola lettura</td></tr>
+    <tr><td>Una lettura ampia il cui risultato è una sintesi o una conclusione</td><td>Delega a un subagent in sola lettura del master</td></tr>
+    <tr><td>Pochi file noti da leggere</td><td>Li legge il master</td></tr>
   </tbody>
 </table>
-<p>Oltre circa cinque file, oppure se serve una ricerca nel repository o l'uso dei suoi strumenti di build, non si tratta più di "pochi file noti". <code>dispatch</code> espone la sua decisione in una breve tabella, poi avvia tutte le sessioni figlie con un'unica chiamata a <code>spawn</code>, così i rispettivi handoff si indicano a vicenda come sessioni sorelle.</p>
+<p>Superati circa cinque file — oppure quando serve una ricerca nel repository o l'uso dei suoi strumenti di build — il lavoro non rientra più nei "pochi file noti". <code>dispatch</code> ti mostra il piano in una breve tabella e poi avvia tutte le sessioni figlie con un'unica chiamata a <code>spawn</code>, così i rispettivi handoff si indicano a vicenda come sessioni sorelle.</p>
 
 <h2 id="spawn">Avviare le sessioni figlie: spawn</h2>
-<p>Per ogni sessione figlia, <code>spawn</code> risolve il repository e il suo branch di base, allinea il registro, cerca un'eventuale sessione figlia attiva sullo stesso repository e task (inviandole la richiesta invece di avviarne un'altra), sceglie l'ambiente, il nome, il worktree, la radice di scrittura e lo scope, e stabilisce il modello e l'effort: prima ciò che hai indicato tu, poi le chiavi dell'hub, poi <code>model-router:choose-model</code> se è installato, altrimenti quelli del master. Scrive un file di handoff fuori dall'hub, avvia la sessione figlia con il prompt di una riga <code>Read and follow &lt;file&gt;</code>, la registra come <code>running</code> e ti restituisce un riepilogo.</p>
+<p>Una volta deciso quali sessioni figlie servono, <code>spawn</code> prepara l'ambiente, assegna lo scope e avvia ciascuna sessione seguendo cinque passaggi:</p>
+<ol>
+  <li>Risolve il repository e il suo branch di base, poi allinea il registro delle sessioni figlie.</li>
+  <li>Controlla se esiste già una sessione figlia attiva su quel repository e quel task: se la trova, le invia la richiesta invece di avviarne un'altra.</li>
+  <li>Sceglie l'ambiente di esecuzione, il nome, il worktree, la radice di scrittura e lo scope.</li>
+  <li>Stabilisce modello ed effort in ordine di priorità: prima ciò che hai indicato tu, poi le chiavi dell'hub, poi <code>model-router:choose-model</code> (se installato), altrimenti eredita quelli del master.</li>
+  <li>Scrive il file di handoff fuori dall'hub, avvia la sessione figlia con il prompt di una riga <code>Read and follow &lt;file&gt;</code>, la registra come <code>running</code> e ti mostra un riepilogo.</li>
+</ol>
+<p>La scelta dell'ambiente determina come viene aperta la sessione e se lo scope guard può entrare in azione:</p>
 <table>
-  <thead><tr><th>Ambiente</th><th>Rilevato quando</th><th>Protezione dello scope</th></tr></thead>
+  <thead><tr><th>Ambiente</th><th>Rilevato quando</th><th>Scope guard</th></tr></thead>
   <tbody>
-    <tr><td>App desktop</td><td>è disponibile uno strumento di avvio sessione come <code>start_session</code></td><td>inattiva: lo scope è affidato al solo handoff</td></tr>
-    <tr><td>Herdr</td><td><code>HERDR_ENV</code> vale <code>1</code> e <code>herdr</code> è nel PATH</td><td>attiva</td></tr>
-    <tr><td>tmux</td><td><code>TMUX</code> è impostata e <code>tmux</code> è nel PATH</td><td>attiva</td></tr>
-    <tr><td>Terminale</td><td><code>claude --help</code> elenca <code>--bg</code></td><td>attiva</td></tr>
-    <tr><td>Manuale</td><td>nessuno dei casi precedenti</td><td>attiva se esegui il comando così com'è fornito</td></tr>
+    <tr><td>App desktop</td><td>è disponibile uno strumento di avvio sessione come <code>start_session</code></td><td>inattivo: lo scope è affidato al solo handoff</td></tr>
+    <tr><td>Herdr</td><td><code>HERDR_ENV</code> vale <code>1</code> e <code>herdr</code> è nel PATH</td><td>attivo</td></tr>
+    <tr><td>tmux</td><td><code>TMUX</code> è impostata e <code>tmux</code> è nel PATH</td><td>attivo</td></tr>
+    <tr><td>Terminale</td><td><code>claude --help</code> elenca <code>--bg</code></td><td>attivo</td></tr>
+    <tr><td>Manuale</td><td>nessuno dei casi precedenti</td><td>attivo se esegui il comando così com'è fornito</td></tr>
   </tbody>
 </table>
-<p>Una sessione figlia parte nello stesso modo in cui è stato avviato il master, così usa lo stesso account e la stessa cartella di configurazione: due sessioni con cartelle di configurazione diverse non possono scambiarsi messaggi. <code>spawn</code> riporta i flag che configurano la sessione, aggiunge quelli propri della sessione figlia (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> per la cartella dell'handoff) e le variabili di ruolo. In tmux, l'avvio di una sessione figlia ha questo aspetto:</p>
+<h3>Come viene lanciata la sessione figlia</h3>
+<p>Perché master e sessione figlia possano scambiarsi messaggi, devono condividere account e cartella di configurazione (due sessioni con cartelle di configurazione diverse non comunicano tra loro). Per questo una sessione figlia parte nello stesso modo in cui è stato avviato il master: <code>spawn</code> riporta i flag che configurano la sessione, aggiunge quelli specifici della sessione figlia (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> per la cartella dell'handoff) e imposta le variabili di ruolo. In tmux, il comando di avvio ha questo aspetto:</p>
 <pre><code>env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub \
   SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
   SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json SESSION_HUB_GUARDS=on \
   claude -n t42-product --model sonnet --effort medium --permission-mode default \
   --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'</code></pre>
-<p>Le sessioni figlie partono nella stessa modalità di permessi del master, perché i messaggi tra sessioni che differiscono nell'aggirare le richieste di permesso restano in attesa della tua approvazione. Un worktree dentro il repository viene creato dalla sessione figlia e il repository resta la radice di scrittura; un worktree in una cartella sorella viene creato dal master prima dell'avvio e diventa la radice di scrittura. Questa è l'unica operazione che il master compie mai in un repository.</p>
+<p>Due dettagli operativi contano all'avvio:</p>
+<ul>
+  <li><strong>Modalità di permessi</strong>: ogni sessione figlia eredita la stessa modalità del master, perché i messaggi tra sessioni che differiscono nell'aggirare le richieste di permesso restano in attesa della tua approvazione.</li>
+  <li><strong>Worktree e radice di scrittura</strong>: un worktree dentro il repository viene creato dalla sessione figlia e il repository resta la radice di scrittura; un worktree in una cartella sorella viene creato dal master prima dell'avvio e diventa la radice di scrittura. È l'unica operazione che il master compie mai in un repository.</li>
+</ul>
+<p>Avviate le sessioni figlie, tutto il coordinamento passa attraverso un protocollo di messaggi fisso.</p>
 
 <h2 id="messages">I messaggi e i loro cinque tipi</h2>
-<p>Una sessione figlia comunica solo con il master, usando <code>[&lt;task&gt; &lt;repo&gt;] &lt;type&gt;: &lt;text&gt;</code>. I messaggi del master iniziano con <code>[master]</code>. Il master riceve aggiornamenti da ogni sessione figlia tramite i suoi messaggi e una notifica di inattività; non fa mai polling.</p>
+<p>Quando più sessioni girano in parallelo, il master ha bisogno di ricevere aggiornamenti chiari senza dover interrogare di continuo le sessioni figlie. Ogni sessione figlia comunica solo con il master usando il prefisso <code>[&lt;task&gt; &lt;repo&gt;] &lt;type&gt;: &lt;text&gt;</code>, mentre i messaggi del master iniziano con <code>[master]</code>. Il master non fa mai polling: si aggiorna grazie ai messaggi ricevuti e a una notifica di inattività.</p>
 <table>
   <thead><tr><th>Tipo</th><th>Inviato quando</th><th>Compito del master</th></tr></thead>
   <tbody>
-    <tr><td><code>question</code></td><td>la sessione figlia è bloccata su una decisione</td><td>rispondere, oppure girarla a te e rimandare indietro la risposta</td></tr>
-    <tr><td><code>out-of-scope</code></td><td>c'è un'esigenza o una richiesta fuori dallo scope, inclusa una fatta da te nella sessione figlia</td><td>smistarla: chiedere a te se serve, inviarla alla sessione figlia titolare dello scope, avviarne una o fare direttamente una lettura</td></tr>
-    <tr><td><code>pr</code></td><td>è stata aperta una pull request; il testo ne contiene l'URL</td><td>registrare l'URL; seguire le regole dell'hub sulle pull request</td></tr>
+    <tr><td><code>question</code></td><td>la sessione figlia è bloccata su una decisione</td><td>rispondere, oppure girarti la domanda e rimandare indietro la tua risposta</td></tr>
+    <tr><td><code>out-of-scope</code></td><td>emerge un'esigenza o una richiesta fuori dallo scope, inclusa una fatta da te nella sessione figlia</td><td>smistarla: chiedere a te se serve, inviarla alla sessione figlia titolare dello scope, avviarne una nuova o fare la lettura in autonomia</td></tr>
+    <tr><td><code>pr</code></td><td>è stata aperta una pull request; il testo ne contiene l'URL</td><td>registrare l'URL e seguire le regole dell'hub sulle pull request</td></tr>
     <tr><td><code>done</code></td><td>il lavoro è terminato</td><td>seguire le regole di chiusura dell'hub</td></tr>
     <tr><td><code>abandoned</code></td><td>il lavoro è stato interrotto; il testo ne indica il motivo</td><td>avvisarti</td></tr>
   </tbody>
 </table>
-<p>Un messaggio tra sessioni è un'informazione, mai un'autorizzazione: nessuna delle due parti esegue merge, push, cancellazioni o modifiche alle impostazioni perché glielo ha chiesto un'altra sessione. Con le mod attive, la mod contrassegna ogni messaggio ricevuto da un'altra sessione con una riga che lo ricorda.</p>
+<p>Un messaggio tra sessioni è sempre un'informazione, mai un'autorizzazione: nessuna delle due parti esegue merge, push, cancellazioni o modifiche alle impostazioni solo perché glielo ha chiesto un'altra sessione. Con le mod attive, <code>session-hub</code> aggiunge a ogni messaggio ricevuto da un'altra sessione una riga iniziale che lo ricorda.</p>
 <figure class="shot"><img src="{{img:sh-marked-message}}" alt="Un messaggio [master] così come lo riceve la sessione figlia, preceduto dalla riga di session-hub che precisa che si tratta di un'informazione, non di un'autorizzazione" loading="lazy"><figcaption>Un messaggio <code>[master]</code> così come lo riceve la sessione figlia. La prima riga, che inizia con <code>[session-hub]</code>, è la marcatura della mod. <span class="badge demo">Dati demo</span></figcaption></figure>
+<p>Le regole scritte nell'handoff descrivono i confini, ma non bastano da sole a impedire sconfinamenti accidentali: per questo entrano in gioco tre protezioni attive.</p>
 
 <h2 id="guards">Tre protezioni: nel dubbio bloccano tutte</h2>
-<p>Tre protezioni tengono una sessione figlia dentro il suo scope. Agiscono tutte e tre solo nelle sessioni figlie e tutte e tre, nel dubbio, bloccano: una protezione che non riesce a valutare l'operazione la blocca e spiega il perché. <code>SESSION_HUB_GUARDS=off</code>, oppure <code>Guards: off</code> nell'hub, le disattiva tutte e tre.</p>
-<figure class="diagram">{{diagram:d4-scope-guard}}<figcaption>La protezione dello scope risolve il percorso reale di ogni modifica, seguendo i link, e la consente solo sotto la radice di scrittura reale. Tutto ciò che non riesce a decidere viene bloccato.</figcaption></figure>
-<h3>La protezione dello scope (hook, funziona anche con le mod disattivate)</h3>
-<p><code>session-hub-scope-guard</code> gira prima di ogni <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>. Risolve il percorso reale della destinazione componente per componente: così un link dentro la radice che punta all'esterno viene bloccato, e una cartella sorella il cui nome inizia semplicemente con quello della radice risulta esterna. Blocca una destinazione relativa, una radice di scrittura pari a <code>/</code> o alla cartella home, un valore di ruolo sconosciuto, un input illeggibile o l'assenza di <code>node</code>. Blocca autonomamente dopo 7 secondi, prima del timeout di 10 secondi dell'hook.</p>
-<figure class="shot"><img src="{{img:sh-blocked-write}}" alt="Una scrittura bloccata in una sessione figlia: il messaggio inizia con [session-hub] Write blocked, indica il percorso e la radice di scrittura e dice al modello di inviare un messaggio out-of-scope" loading="lazy"><figcaption>Una scrittura tramite un link che atterra in un altro repository, bloccata. Al modello viene detto di non riprovare con un altro strumento, ma di inviare un messaggio <code>out-of-scope</code>. <span class="badge demo">Dati demo</span></figcaption></figure>
+<p>Tre meccanismi mantengono ogni sessione figlia dentro il suo scope. Agiscono tutti solo nelle sessioni figlie e condividono lo stesso principio: nel dubbio bloccano. Se una protezione non riesce a valutare un'operazione, la ferma e spiega il perché. Puoi disattivarle tutte e tre con <code>SESSION_HUB_GUARDS=off</code> oppure impostando <code>Guards: off</code> nell'hub.</p>
+<figure class="diagram">{{diagram:d4-scope-guard}}<figcaption>Lo scope guard risolve il percorso reale di ogni modifica, seguendo i link, e la consente solo sotto la radice di scrittura reale. Tutto ciò che non riesce a valutare viene bloccato.</figcaption></figure>
+<h3>Lo scope guard (hook, funziona anche con le mod disattivate)</h3>
+<p><code>session-hub-scope-guard</code> gira prima di ogni <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>. Risolve il percorso reale della destinazione componente per componente, così blocca sia un link dentro la radice che punta all'esterno, sia una cartella sorella il cui nome inizia solo con lo stesso prefisso della radice.</p>
+<p>Blocca inoltre qualsiasi caso ambiguo o mal configurato:</p>
+<ul>
+  <li>una destinazione relativa;</li>
+  <li>una radice di scrittura pari a <code>/</code> o alla cartella home;</li>
+  <li>un valore di ruolo sconosciuto o un input illeggibile;</li>
+  <li>l'assenza di <code>node</code>.</li>
+</ul>
+<p>Se la valutazione si prolunga, lo scope guard blocca l'operazione dopo 7 secondi, in anticipo rispetto al timeout di 10 secondi dell'hook.</p>
+<figure class="shot"><img src="{{img:sh-blocked-write}}" alt="Una scrittura bloccata in una sessione figlia: il messaggio inizia con [session-hub] Write blocked, indica il percorso e la radice di scrittura e dice al modello di inviare un messaggio out-of-scope" loading="lazy"><figcaption>Una scrittura tramite un link che atterra in un altro repository, bloccata. Al modello viene indicato di non riprovare con un altro strumento, ma di inviare un messaggio <code>out-of-scope</code>. <span class="badge demo">Dati demo</span></figcaption></figure>
 <h3>Il controllo sulla shell (mod, best-effort)</h3>
-<p>Prima che un comando <code>Bash</code> o <code>Monitor</code> venga eseguito in una sessione figlia, la mod legge le redirezioni e le destinazioni di <code>tee</code>, <code>touch</code>, <code>mkdir</code>, <code>rm</code>, <code>rmdir</code>, <code>truncate</code>, <code>unlink</code>, <code>cp</code>, <code>mv</code>, <code>ln</code>, <code>install</code> e <code>sed -i</code>, segue i <code>cd</code> e i <code>pushd</code> letterali e nega qualsiasi destinazione fuori dalla radice di scrittura. <code>/dev</code> e le cartelle temporanee di sistema sono consentiti.</p>
+<p>Prima che una sessione figlia esegua un comando <code>Bash</code> o <code>Monitor</code>, la mod ispeziona le redirezioni e le destinazioni di <code>tee</code>, <code>touch</code>, <code>mkdir</code>, <code>rm</code>, <code>rmdir</code>, <code>truncate</code>, <code>unlink</code>, <code>cp</code>, <code>mv</code>, <code>ln</code>, <code>install</code> e <code>sed -i</code>. Segue i <code>cd</code> e i <code>pushd</code> letterali e blocca ogni destinazione fuori dalla radice di scrittura, mentre <code>/dev</code> e le cartelle temporanee di sistema restano consentiti.</p>
 <pre><code>[session-hub] Shell command blocked: it writes /work/hub/design/notes.md, outside the write root /work/hub/product. Do not retry this write through another command or tool. Send an `out-of-scope` message to the master, saying what you need written and why, and tell the user that you passed the request to the master.</code></pre>
-<p>Legge solo la riga di comando. Le destinazioni contenute in variabili, sostituzioni di comando o glob non vengono valutate, né ciò che scrive un altro programma (uno script, <code>git</code>, uno strumento di build).</p>
+<p>Questo controllo esamina solo la riga di comando letterale: non valuta destinazioni nascoste in variabili, sostituzioni di comando o glob, né ciò che scrive un programma invocato (uno script, <code>git</code> o uno strumento di build).</p>
 <h3>La protezione sugli invii (mod)</h3>
-<p>I messaggi di una sessione figlia vanno al suo master, per nome, oppure ai propri subagent. Qualsiasi altro destinatario, che sia una sessione sorella o un indirizzo socket, viene rifiutato con una motivazione che rimanda al master:</p>
+<p>Per evitare coordinamenti laterali fuori controllo, una sessione figlia può inviare messaggi solo al proprio master, per nome, oppure ai propri subagent. Qualsiasi altro destinatario — una sessione sorella o un indirizzo socket — viene bloccato con un messaggio che rimanda al master:</p>
 <pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix; a request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
 <h3>La riga dello scope</h3>
-<p>Con le mod attive, la mod inserisce anche il ruolo e lo scope (nella sessione figlia) o il registro (nel master) nel system prompt, e invia lo stesso testo come contesto al primo prompt dopo l'avvio, dopo una compattazione e dopo <code>/clear</code>, così lo scope sopravvive anche a una sessione lunga.</p>
+<p>In una sessione lunga le istruzioni iniziali possono perdersi dopo una compattazione o un azzeramento del contesto. Con le mod attive, <code>session-hub</code> inserisce ruolo e scope (nella sessione figlia) o il registro (nel master) nel system prompt, e invia lo stesso testo come contesto al primo prompt dopo l'avvio, dopo una compattazione e dopo <code>/clear</code>.</p>
+<p>Per tenere sotto controllo tutte le sessioni figlie e il loro stato senza interrompere la chat, puoi usare il comando e il pannello integrati.</p>
 
 <h2 id="panel">Il comando e il pannello delle sessioni figlie</h2>
-<p><code>/session-hub</code> è registrato dalla mod e la sua risposta è solo per te: il modello non la legge. Nel master mostra il percorso del registro e la tabella delle sessioni figlie, e apre il pannello delle sessioni figlie accanto alla chat. Il pannello ha una riga per ogni sessione figlia, con lo stato nel registro, lo stato in tempo reale dall'elenco delle sessioni, modello ed effort e l'ultimo messaggio; si aggiorna ogni 30 secondi e a ogni <code>/session-hub</code>.</p>
+<p>La mod registra il comando <code>/session-hub</code>, la cui risposta è visibile solo a te e non viene letta dal modello. Nel master stampa il percorso del registro e la tabella delle sessioni figlie, e apre il pannello delle sessioni figlie accanto alla chat.</p>
+<p>Il pannello mostra una riga per ogni sessione figlia, con stato nel registro, stato in tempo reale dall'elenco delle sessioni, modello, effort e ultimo messaggio; si aggiorna ogni 30 secondi e ogni volta che esegui <code>/session-hub</code>.</p>
 <figure class="shot"><img src="{{img:sh-panel-live}}" alt="Il pannello delle sessioni figlie accanto alla chat del master, con una riga per ogni sessione figlia in esecuzione" loading="lazy"><figcaption>Il pannello delle sessioni figlie in un hub attivo.</figcaption></figure>
 <figure class="shot"><img src="{{img:sh-panel}}" alt="Il pannello delle sessioni figlie: per ciascuna lo stato, lo stato in tempo reale, il modello, l'effort e l'ultimo messaggio" loading="lazy"><figcaption>Le righe del pannello: stato nel registro, stato in tempo reale dall'elenco delle sessioni, modello ed effort, ultimo messaggio. <span class="badge demo">Dati demo</span></figcaption></figure>
-<p>In una sessione figlia, <code>/session-hub</code> mostra ruolo, radice di scrittura, handoff, registro e se le protezioni sono attive:</p>
+<p>Eseguito in una sessione figlia, <code>/session-hub</code> riepiloga ruolo, radice di scrittura, handoff, registro e stato delle protezioni:</p>
 <pre><code>Role: child of "hub"
 Write root: /w/repo
 Handoff: /h/t42.md
@@ -150,19 +184,25 @@ Children record: not set
 Guards: on (scope guard, shell check, send guard)</code></pre>
 <figure class="shot"><img src="{{img:sh-child}}" alt="/session-hub in una sessione figlia: ruolo, radice di scrittura, handoff, registro e protezioni" loading="lazy"><figcaption><code>/session-hub</code> nella sessione figlia <code>t123-product</code>. <span class="badge demo">Dati demo</span></figcaption></figure>
 <figure class="shot"><img src="{{img:sh-help}}" alt="Output di /session-hub help" loading="lazy"><figcaption><code>/session-hub help</code>.</figcaption></figure>
+<p>Lo stato mostrato dal comando e dal pannello viene letto dal registro delle sessioni figlie gestito dal master.</p>
 
 <h2 id="record">Il registro delle sessioni figlie</h2>
-<p>Il master tiene un file JSON per ogni hub, fuori dall'hub, in <code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code>, dove la cartella di configurazione è <code>CLAUDE_CONFIG_DIR</code> oppure <code>~/.claude</code> e l'ID dell'hub corrisponde alle prime 16 cifre esadecimali dello SHA-256 del percorso reale dell'hub. C'è una voce per ogni sessione figlia: nome, repository, task, scope, modello, effort, stato, ora di avvio, ultimo messaggio e richieste. Gli stati sono <code>running</code>, <code>waiting-user</code>, <code>done</code>, <code>abandoned</code> e <code>lost</code> (registrata come attiva, non più presente nell'elenco delle sessioni).</p>
-<p>Le skill lo scrivono solo tramite <code>scripts/registry.mjs</code>, in modo atomico e sotto lock, così due scritture concorrenti non perdono alcuna voce. Un registro che non è JSON valido viene segnalato e mai sovrascritto, e un problema sul registro non ferma mai un avvio: <code>spawn</code> te lo segnala e prosegue. Puoi leggerlo anche tu direttamente:</p>
+<p>Per tenere traccia delle sessioni figlie senza sporcare i repository con file di stato, il master mantiene un file JSON per ogni hub, fuori dall'hub stesso, in <code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code>. La cartella di configurazione è <code>CLAUDE_CONFIG_DIR</code> oppure <code>~/.claude</code>, mentre l'ID dell'hub corrisponde alle prime 16 cifre esadecimali dello SHA-256 del percorso reale dell'hub.</p>
+<ul>
+  <li><strong>Cosa registra ogni voce</strong>: nome, repository, task, scope, modello, effort, stato, ora di avvio, ultimo messaggio e richieste.</li>
+  <li><strong>Stati possibili</strong>: <code>running</code>, <code>waiting-user</code>, <code>done</code>, <code>abandoned</code> e <code>lost</code> (registrata come attiva, ma non più presente nell'elenco delle sessioni).</li>
+</ul>
+<p>Le skill modificano il registro solo tramite <code>scripts/registry.mjs</code>, in modo atomico e sotto lock, così due scritture concorrenti non perdono voci. Se il file non contiene JSON valido, il problema viene segnalato senza mai sovrascrivere il file; un errore sul registro non ferma comunque un avvio: <code>spawn</code> te lo segnala e prosegue. Puoi consultare il registro anche da terminale:</p>
 <pre><code>node "&lt;plugin folder&gt;/scripts/registry.mjs" read --hub /work/hub</code></pre>
+<p>Prima di affidarti al flusso su un hub reale, conviene conoscere i confini di questi meccanismi.</p>
 
 <h2 id="limits">Limiti</h2>
 <ul>
   <li><strong>Le scritture da shell sono coperte in modalità best-effort, e solo con le mod attive.</strong> Con le mod disattivate, una scrittura da shell è trattenuta dal solo handoff.</li>
-  <li><strong>L'app desktop non ha protezioni.</strong> Il suo strumento di sessione non accetta variabili d'ambiente, quindi una sessione figlia avviata lì non ha alcun ruolo.</li>
-  <li><strong>La protezione sugli invii richiede le mod attive.</strong> Con le mod disattivate è ancora possibile inviare messaggi a una sessione sorella; la regola di comunicare solo con il master resta allora affidata alle sole istruzioni scritte.</li>
-  <li><strong>Una sessione figlia ripresa senza le sue variabili non è più una sessione figlia.</strong> Riprendila anteponendo le stesse variabili <code>SESSION_HUB_*</code> a <code>claude --resume</code>.</li>
-  <li><strong>Un hook terminato lascia passare la scrittura.</strong> Il watchdog interno di 7 secondi copre una protezione lenta, non un hook terminato dall'esterno.</li>
-  <li><strong>Il trust vale per singolo repository.</strong> <code>claude --bg</code> in un repository annidato dentro un hub già attendibile fallisce con <code>Workspace not trusted</code> finché non lo hai aperto almeno una volta.</li>
+  <li><strong>L'app desktop non ha protezioni.</strong> Il suo strumento di avvio sessione non accetta variabili d'ambiente, quindi una sessione figlia aperta lì non riceve alcun ruolo.</li>
+  <li><strong>La protezione sugli invii richiede le mod attive.</strong> Con le mod disattivate è ancora possibile inviare messaggi a una sessione sorella; la regola di comunicare solo con il master resta affidata alle sole istruzioni scritte.</li>
+  <li><strong>Una sessione figlia ripresa senza le sue variabili non è più una sessione figlia.</strong> Per riprenderla, anteponi le stesse variabili <code>SESSION_HUB_*</code> a <code>claude --resume</code>.</li>
+  <li><strong>Un hook terminato dall'esterno lascia passare la scrittura.</strong> Il watchdog interno di 7 secondi copre una protezione lenta, non un hook interrotto da fuori.</li>
+  <li><strong>Il trust vale per singolo repository.</strong> Avviare <code>claude --bg</code> in un repository annidato dentro un hub già attendibile fallisce con <code>Workspace not trusted</code> finché non lo apri almeno una volta.</li>
 </ul>
-<p>Come si incastrano tra loro le varie parti, con l'intero flusso decisionale della protezione, è illustrato nella pagina sull'<a href="{{link:architecture}}">architettura</a>.</p>
+<p>Come si incastrano tra loro questi componenti, insieme all'intero flusso decisionale delle protezioni, è spiegato nella pagina sull'<a href="{{link:architecture}}">architettura</a>.</p>

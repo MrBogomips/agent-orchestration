@@ -1,21 +1,28 @@
-<!-- translated-from: en/model-router.html sha256:1be3fb086e43 -->
+<!-- translated-from: en/model-router.html sha256:5523363b10a9 -->
 <h1>model-router</h1>
-<p class="lede">model-router sceglie un modello e un livello di effort per ogni subagent, sessione figlia e agente di workflow usando un'unica griglia scritta, instrada gli avvii di subagent che non specificano ancora un modello e misura sulla tua macchina quanto bene ha funzionato ogni scelta. Questa pagina lo spiega prima in modo semplice per tutti, poi in ogni dettaglio.</p>
+<p class="lede">Scegliere il modello giusto per ogni subagent, sessione figlia o agente di workflow non dovrebbe andare a intuito. model-router applica un'unica griglia scritta, instrada gli avvii che non indicano ancora un modello e misura sulla tua macchina quanto ha reso davvero ogni scelta. Qui trovi prima l'idea di fondo in parole semplici, poi il funzionamento in ogni dettaglio.</p>
 
 <h2 id="plain">In parole semplici</h2>
-<p>Claude Code può affidare una parte del lavoro a un <em>subagent</em>: un aiutante che parte con un contesto pulito, svolge un solo compito e riferisce il risultato. Ogni subagent gira su un modello, e i modelli cambiano per prezzo e cura. Un modello piccolo e veloce costa poco e va benissimo per cercare qualcosa. Un modello grande costa di più ed è la scelta giusta per una revisione o una decisione difficile. Il livello di <em>effort</em> indica quanto a lungo il modello ragiona prima di rispondere.</p>
-<p>Lasciato a sé stesso, un agente avvia ogni aiutante sul proprio modello e livello di effort. Così spreca soldi per semplici ricerche e, peggio ancora, a volte affida una revisione complessa a un modello troppo piccolo: il lavoro torna indietro e va rifatto.</p>
+<p>Quando Claude Code delega un lavoro a un <em>subagent</em>, avvia un aiutante con contesto pulito che svolge un solo compito e riferisce il risultato. Se nessuno interviene, però, l'agente principale lancia ogni aiutante sul proprio modello e con il proprio livello di <em>effort</em> — cioè il tempo di ragionamento concesso prima di rispondere.</p>
+<p>Il risultato è uno spreco doppio. Un modello grande costa caro per una semplice ricerca che uno piccolo ed economico chiuderebbe in un attimo; all'opposto, affidare una revisione delicata a un modello troppo piccolo fa tornare indietro il lavoro, costringendoti a rifarlo.</p>
 <figure class="diagram">{{diagram:d6-router-desk}}<figcaption>model-router come banco di smistamento: la griglia sceglie modello ed effort per ogni compito affidato a un aiutante, un judge rapido decide solo quando non è stato indicato alcun modello, l'aiutante lavora e l'esito viene misurato.</figcaption></figure>
-<p>model-router fa tre cose. Dà all'agente un breve regolamento scritto, la <strong>griglia</strong>, così sceglie con criterio e spiega il perché. Intercetta gli aiutanti avviati senza una scelta esplicita e chiede a un <strong>judge</strong> veloce di classificarli. E <strong>misura</strong>: per ogni tipo di compito e per ogni combinazione di modello ed effort, quante volte il lavoro è andato bene al primo colpo, ossia il <a href="#fpy">successo al primo tentativo</a>, e quanto è costato davvero un buon risultato.</p>
+<p>model-router risolve il problema con tre meccanismi:</p>
+<ul>
+  <li><strong>La griglia</strong>: fornisce all'agente un breve regolamento scritto, così sceglie con criterio prima di avviare un aiutante e dichiara il perché.</li>
+  <li><strong>Il judge</strong>: intercetta gli aiutanti partiti senza un modello esplicito e li classifica rapidamente al volo.</li>
+  <li><strong>La misurazione</strong>: registra, per ogni classe di attività e combinazione di modello ed effort, quante volte il lavoro riesce al primo colpo — il <a href="#fpy">successo al primo tentativo</a> — e quanto costa davvero un buon risultato.</li>
+</ul>
 <figure class="illus"><img src="{{img:illus-router}}" alt="Illustrazione: compiti che arrivano a un punto di smistamento e vengono indirizzati a modelli di dimensioni diverse" loading="lazy"></figure>
+<p>Vediamo ora come i due componenti del plugin mettono in pratica questo flusso.</p>
 
 <h2 id="how">Come funziona</h2>
-<p>model-router ha due livelli, e il primo funziona anche senza il secondo.</p>
+<p>model-router separa le regole di scelta dal routing automatico in due livelli indipendenti: il primo lavora bene anche senza il secondo.</p>
 <ul>
-  <li><strong>La skill, <code>model-router:choose-model</code>.</strong> Si carica ogni volta che l'agente sta per avviare un subagent, una sessione figlia o un workflow, ed espone la griglia. L'agente decide prima dell'avvio, passa esplicitamente <code>model</code> ed <code>effort</code>, etichetta la descrizione con la classe del compito e scrive una riga per dire cosa ha scelto. Funziona anche con le mod disattivate.</li>
-  <li><strong>La mod, <code>model-router</code>.</strong> Quando parte un subagent senza modello specificato, interpella il judge e imposta modello ed effort. Mostra sotto ogni chiamata <code>Agent</code> il modello e l'effort effettivamente assegnati al subagent, registra ogni decisione ed esito e fornisce il comando <code>/model-router</code>. Richiede le mod attive e Claude Code 2.1.329 o successivo.</li>
+  <li><strong>La skill, <code>model-router:choose-model</code>.</strong> Si carica ogni volta che l'agente sta per avviare un subagent, una sessione figlia o un workflow ed espone la griglia. L'agente decide prima dell'avvio, passa esplicitamente <code>model</code> ed <code>effort</code>, etichetta la descrizione con la classe di attività e scrive una riga per spiegare la scelta. Funziona anche con le mod disattivate.</li>
+  <li><strong>La mod, <code>model-router</code>.</strong> Quando parte un subagent senza modello indicato, interpella il judge e imposta modello ed effort. Sotto ogni chiamata <code>Agent</code> mostra il modello e l'effort effettivamente assegnati, registra ogni decisione ed esito e mette a disposizione il comando <code>/model-router</code>. Richiede le mod attive e Claude Code 2.1.329 o successivo.</li>
 </ul>
 <figure class="diagram">{{diagram:d8-routing}}<figcaption>Cosa succede all'avvio di un subagent: un modello esplicito, un fork, una ripresa o un modello fisso dell'agente vengono mantenuti; un avvio senza modello passa al judge, e le soglie decidono se abbassare, alzare o mantenere il modello.</figcaption></figure>
+<p>Non tutti gli avvii vengono toccati: il router rispetta sempre le scelte già fissate e interviene solo quando manca il modello.</p>
 <table>
   <thead><tr><th>L'avvio</th><th>Il router</th></tr></thead>
   <tbody>
@@ -25,39 +32,42 @@
     <tr><td>non specifica alcun modello</td><td>interpella il judge, poi imposta modello ed effort</td></tr>
   </tbody>
 </table>
-<p>La chiamata di avvio in sé non viene mai modificata. Il modello viene impostato alla partenza del subagent e l'effort su ciascuna delle sue richieste al modello: così il routing funziona in qualsiasi modalità di permessi, inclusa la modalità auto. Tra i tipi di subagent integrati, vengono instradati solo <code>general-purpose</code> ed <code>Explore</code>.</p>
+<p>La chiamata di avvio in sé non viene mai alterata: il modello viene applicato alla partenza del subagent e l'effort su ciascuna delle sue richieste al modello. Per questo il routing funziona con qualsiasi modalità di permessi, inclusa la modalità auto. Tra i tipi di subagent integrati, vengono instradati solo <code>general-purpose</code> ed <code>Explore</code>.</p>
+<p>Tutto poggia su criteri chiari e verificabili: vediamo com'è costruita la griglia.</p>
 
 <h2 id="grid">La griglia: come avviene la scelta</h2>
-<p>La griglia ha un'unica fonte leggibile dalla macchina: <code>grid.json</code>. La skill la espone a parole, la skill di configurazione ne elenca i valori e un test fallisce se le tre versioni divergono. A ogni avvio, vince la prima regola che restituisce un valore:</p>
+<p>Per evitare che documentazione, configurazione e comportamento divergano nel tempo, la griglia ha un'unica fonte leggibile dalla macchina: <code>grid.json</code>. La skill la espone a parole, la skill di configurazione ne elenca i valori e un test fallisce se le tre versioni non coincidono.</p>
+<p>A ogni avvio, si applica la prima regola che restituisce un valore:</p>
 <ol>
   <li>Una tua scelta esplicita nella conversazione.</li>
-  <li>La sezione <code>## Model routing</code> del progetto, quando nomina il tipo di lavoro o la classe del compito.</li>
-  <li>La definizione di un agente che fissa il proprio modello lo mantiene; viene passato solo l'effort.</li>
+  <li>La sezione <code>## Model routing</code> del progetto, quando nomina il tipo di lavoro o la classe di attività.</li>
+  <li>La definizione di un agente che fissa il proprio modello: il modello resta invariato e viene passato solo l'effort.</li>
   <li>La griglia.</li>
 </ol>
-<figure class="diagram">{{diagram:d7-grid}}<figcaption>La griglia: i livelli di modello controllati in ordine, quattro domande sull'effort poste in ordine e sei classi di compito, ciascuna con la sua scelta abituale.</figcaption></figure>
+<figure class="diagram">{{diagram:d7-grid}}<figcaption>La griglia: i livelli di modello controllati in ordine, quattro domande sull'effort poste in ordine e sei classi di attività, ciascuna con la sua scelta abituale.</figcaption></figure>
 <h3>Livelli di modello</h3>
-<p>Scorri la tabella dall'alto e fermati alla prima riga adatta.</p>
+<p>Scorri la tabella dall'alto verso il basso e fermati alla prima riga adatta al compito.</p>
 <table>
   <thead><tr><th>Livello</th><th>Adatto quando</th><th>Esempi</th></tr></thead>
   <tbody>
-    <tr><td><code>haiku</code></td><td>Lavoro semplice e ripetitivo, dal risultato facile da verificare e che non richiede valutazioni.</td><td>Elencare o riassumere file; eseguire un singolo comando; rinominare un simbolo</td></tr>
-    <tr><td><code>sonnet</code></td><td>Il risultato atteso si descrive in una frase.</td><td>Una modifica ben specificata su pochi file; test per codice esistente</td></tr>
+    <tr><td><code>haiku</code></td><td>Lavoro semplice e ripetitivo, facile da verificare e privo di valutazioni discrezionali.</td><td>Elencare o riassumere file; eseguire un singolo comando; rinominare un simbolo</td></tr>
+    <tr><td><code>sonnet</code></td><td>Il risultato atteso sta in una sola frase.</td><td>Una modifica ben specificata su pochi file; test per codice esistente</td></tr>
     <tr><td><code>fable</code></td><td>Lavoro ampio <strong>e</strong> aperto, in cui capacità di giudizio e precisione contano davvero. Devono valere entrambe le condizioni.</td><td>Un design complesso; una decisione architetturale con conseguenze a lungo termine</td></tr>
     <tr><td><code>opus</code></td><td>Tutto il resto, e ogni volta che sei indeciso tra due livelli.</td><td>Una revisione; debug quando la causa è ignota; la maggior parte del lavoro di coordinamento</td></tr>
   </tbody>
 </table>
-<p>I nomi dei livelli sono alias: quale modello ci sia dietro ciascuno dipende dalla configurazione. In ordine di prezzo, dal più economico: <code>haiku</code> &lt; <code>sonnet</code> &lt; <code>opus</code> &lt; <code>fable</code>.</p>
+<p>I nomi dei livelli sono alias: il modello concreto associato a ciascuno dipende dalla configurazione. In ordine di prezzo, dal più economico: <code>haiku</code> &lt; <code>sonnet</code> &lt; <code>opus</code> &lt; <code>fable</code>.</p>
 <h3>Effort</h3>
-<p>Rispondi in ordine e fermati al primo sì:</p>
+<p>Rispondi alle domande in ordine e fermati al primo sì:</p>
 <ol>
   <li>È un compito semplice o uno scambio rapido? → <code>low</code></li>
   <li>Un errore non visto costerebbe soldi, un cliente o una decisione sbagliata? → <code>high</code></li>
   <li>È lungo, difficile e critico, <strong>e</strong> gira senza supervisione? Tutte e tre le cose. → <code>xhigh</code></li>
   <li>Nessuno dei casi precedenti. → <code>medium</code></li>
 </ol>
-<p>Mai <code>max</code>.</p>
-<h3>Classi di compito</h3>
+<p>Il livello <code>max</code> non viene mai scelto.</p>
+<h3>Classi di attività</h3>
+<p>Ogni compito rientra in una delle sei classi di attività qui sotto, ciascuna abbinata a una scelta abituale:</p>
 <table>
   <thead><tr><th>Classe</th><th>Copre</th><th>Scelta abituale</th></tr></thead>
   <tbody>
@@ -69,35 +79,38 @@
     <tr><td><code>design-open</code></td><td>design aperto dove conta la capacità di giudizio</td><td>fable · high</td></tr>
   </tbody>
 </table>
-<p>La classe va all'inizio della descrizione del subagent, come <code>[mr:read-search]</code>, oppure <code>[mr:edit-specified!]</code> quando l'avvio è rischioso. È così che le misurazioni sanno di che tipo di lavoro si trattava.</p>
+<p>La classe di attività va all'inizio della descrizione del subagent, come <code>[mr:read-search]</code>, oppure <code>[mr:edit-specified!]</code> se l'avvio è rischioso. È questo tag che permette alle misurazioni di sapere a quale tipo di lavoro appartiene il compito.</p>
 <h3>Regole intorno alla griglia</h3>
+<p>Sei principi pratici completano le tabelle:</p>
 <ul>
   <li><strong>Nel dubbio, sali di livello.</strong> Affidare un lavoro a un modello troppo piccolo costa più in rilavorazione di quanto faccia risparmiare.</li>
-  <li><strong>Il rischio sta nell'azione, non nell'argomento.</strong> Toccare la produzione, spostare denaro o alterare dati non ripristinabili è rischioso; scrivere o testare codice che riguarda queste cose non lo è. Un avvio rischioso riceve almeno effort <code>high</code> e l'indicatore <code>!</code>.</li>
+  <li><strong>Il rischio sta nell'azione, non nell'argomento.</strong> Toccare la produzione, spostare denaro o alterare dati non ripristinabili è rischioso; scrivere o testare codice che tratta questi temi non lo è. Un avvio rischioso riceve almeno effort <code>high</code> e l'indicatore <code>!</code>.</li>
   <li><strong>Sessioni: scegli all'inizio.</strong> Il modello di una sessione già avviata non si cambia mai.</li>
-  <li><strong>Scala un passo alla volta.</strong> Riprova dando indicazioni precise; poi alza l'effort di un gradino; infine avvia al livello superiore con un handoff.</li>
-  <li><strong>Il modello di chi coordina.</strong> Una sessione che per lo più delega gira su <code>opus</code> a effort <code>medium</code>, a meno che il suo lavoro di design non sia complesso.</li>
-  <li><strong>Esegui direttamente o delega; prosegui, non ricominciare.</strong> Un piccolo compito i cui file sono già nel contesto si svolge direttamente nella sessione, e una richiesta successiva va al subagent già avviato su quell'argomento.</li>
+  <li><strong>Scala un passo alla volta.</strong> Riprova prima dando indicazioni precise; poi alza l'effort di un gradino; infine avvia al livello superiore con un handoff.</li>
+  <li><strong>Il modello di chi coordina.</strong> Una sessione che delega la maggior parte del lavoro gira su <code>opus</code> a effort <code>medium</code>, salvo che il suo lavoro di design sia complesso.</li>
+  <li><strong>Esegui direttamente o delega; prosegui, non ricominciare.</strong> Un piccolo compito sui file già presenti nel contesto si svolge nella sessione corrente; una richiesta successiva sullo stesso tema va al subagent già avviato.</li>
 </ul>
-<p>Prima di ogni avvio, l'agente scrive la scelta su una riga: 🔀, il modello, una barra dell'effort a quattro tacche, l'effort e il motivo in meno di dodici parole.</p>
+<p>Prima di ogni avvio, l'agente rende esplicita la scelta su una riga: 🔀, il modello, una barra dell'effort a quattro tacche, il livello di effort e il motivo in meno di dodici parole.</p>
 <pre><code>🔀 opus ▰▰▰▱ high -> review with unknown cause, going up
 🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check</code></pre>
 <p>Con la mod attiva, la stessa riga compare a colori sotto ogni chiamata <code>Agent</code>, indicando cosa ha ricevuto davvero il subagent e perché: <code>explicit</code>, <code>fixed</code>, <code>judge: &lt;class&gt;; lowered from opus</code> (oppure <code>raised from</code>, <code>kept</code>), <code>judge: risky work; raised from &lt;tier&gt;</code>, o <code>keep: &lt;why&gt;</code>.</p>
 <figure class="shot"><img src="{{img:mr-agent-lines}}" alt="Tre chiamate Agent con sotto ciascuna la riga colorata 🔀 che mostra modello, barra dell'effort, effort e motivo" loading="lazy"><figcaption>Il modello in grassetto, colorato in base al livello; la barra e l'effort colorati per intensità, dal verde per low al rosso per xhigh; il motivo attenuato. <span class="badge demo">Dati demo</span></figcaption></figure>
+<p>Fin qui le scelte fatte a monte. Cosa succede, invece, quando un subagent parte senza alcun modello indicato? Entra in gioco il judge.</p>
 
 <h2 id="judge">Come funziona il judge</h2>
-<p>Il judge è interno alla mod: non lo chiami mai direttamente, ed entra in gioco solo per l'avvio di un subagent senza modello che non venga mantenuto per uno dei motivi visti sopra.</p>
+<p>Quando un avvio arriva privo di modello e non rientra nei casi mantenuti invariati, serve una decisione rapida prima che il subagent inizi a lavorare. Se ne occupa il judge, un classificatore interno alla mod che non chiami mai direttamente.</p>
 <figure class="diagram">{{diagram:d11-judge}}<figcaption>Il judge: un prompt costruito da grid.json, il compito incapsulato come dati, una chiamata al livello veloce con limite di tempo e di token, una risposta JSON e le soglie che decidono cosa cambiare.</figcaption></figure>
 <h3>Cosa riceve</h3>
-<p>Il tipo di subagent, la sua descrizione breve e i primi 4.000 caratteri del compito. Il compito viene incapsulato come dati, ogni tag di chiusura al suo interno viene sottoposto a escape e al judge viene detto di non eseguire eventuali istruzioni contenute nel testo.</p>
+<p>Il judge riceve il tipo di subagent, la descrizione breve e i primi 4.000 caratteri del compito. Per evitare interferenze, il testo del compito viene incapsulato come dati, ogni tag di chiusura interno viene sottoposto a escape e al judge viene indicato di non eseguire eventuali istruzioni contenute nel testo.</p>
 <h3>Il suo prompt</h3>
-<p>Il prompt è generato da <code>grid.json</code>: i livelli dietro <code>fast</code>, <code>balanced</code> e <code>deep</code>, le quattro domande sull'effort numerate da 0 a 3, le sei classi e la regola per cui il rischio dipende dall'azione. Se cambi la griglia, il prompt del judge cambia di conseguenza.</p>
+<p>Il prompt nasce direttamente da <code>grid.json</code>: include i livelli associati a <code>fast</code>, <code>balanced</code> e <code>deep</code>, le quattro domande sull'effort numerate da 0 a 3, le sei classi di attività e la regola per cui il rischio dipende dall'azione. Se modifichi la griglia, il prompt del judge si aggiorna di conseguenza.</p>
 <h3>La chiamata</h3>
-<p>Una singola chiamata al livello veloce (l'opzione <code>fastModel</code>, predefinita su <code>haiku</code>), con effort <code>low</code>, limitata a 300 token di output e con un tempo massimo di 8 secondi (<code>timeoutMs</code>). Passa dal client della tua sessione, come qualunque subagent, e viene conteggiata nel costo della sessione.</p>
+<p>Il router effettua una sola chiamata al livello veloce (l'opzione <code>fastModel</code>, predefinita su <code>haiku</code>), con effort <code>low</code>, un tetto di 300 token di output e un timeout di 8 secondi (<code>timeoutMs</code>). La richiesta passa dal client della tua sessione come un normale subagent ed è conteggiata nel costo della sessione.</p>
 <h3>La risposta</h3>
-<p>Un singolo oggetto JSON:</p>
+<p>Il judge restituisce un singolo oggetto JSON:</p>
 <pre><code>{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "&lt;class&gt;" }</code></pre>
 <h3>Cosa ne fa il router</h3>
+<p>Sbagliare per difetto rovina il risultato; sbagliare per eccesso costa solo un po' di più. Per questo le soglie del router sono asimmetriche:</p>
 <table>
   <thead><tr><th>Regola</th><th>Predefinito</th><th>Perché</th></tr></thead>
   <tbody>
@@ -107,13 +120,16 @@
     <tr><td>Confidenza mancante</td><td>—</td><td>non cambia mai il modello, in nessuna direzione</td></tr>
   </tbody>
 </table>
-<p>Il confronto avviene rispetto al modello della sessione padre. L'effort viene impostato quando la relativa confidenza supera la soglia: per <code>low</code> serve la soglia di abbassamento, per i livelli superiori quella di innalzamento. Se la chiamata porta già un effort, viene mantenuto, e <code>max</code> non viene mai impostato. I livelli del judge si fermano a <code>opus</code>, quindi il router non sceglie mai <code>fable</code>.</p>
+<p>Il confronto avviene sempre rispetto al modello della sessione padre. Anche l'effort cambia solo quando la relativa confidenza supera la soglia: per <code>low</code> serve la soglia di abbassamento, per i livelli superiori quella di innalzamento. Se la chiamata porta già un effort, viene mantenuto, e <code>max</code> non viene mai impostato. Inoltre i livelli del judge si fermano a <code>opus</code>, quindi il router non sceglie mai <code>fable</code>.</p>
 <h3>Quando fallisce</h3>
-<p>Il router <strong>in caso di errore lascia passare</strong>. Un errore del judge, un timeout o una risposta illeggibile lasciano l'avvio invariato e vengono registrati come <code>error</code>, salvo che un avvio marcato con <code>!</code> passa comunque al livello deep. Ogni decisione viene registrata con la relativa azione: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>, <code>explicit</code>, <code>forced-risk</code> o <code>error</code>.</p>
+<p>In caso di errore il router <strong>lascia passare</strong>. Un guasto del judge, un timeout o una risposta illeggibile lasciano l'avvio invariato e registrano un <code>error</code>; fa eccezione un avvio marcato con <code>!</code>, che passa comunque al livello deep. Ogni decisione viene annotata con la sua azione: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>, <code>explicit</code>, <code>forced-risk</code> o <code>error</code>.</p>
+<p>Le impostazioni predefinite coprono bene l'uso quotidiano, ma ogni progetto ha le sue eccezioni e le sue soglie ideali: vediamo come configurarle.</p>
 
 <h2 id="configure">Configurazione</h2>
+<p>Puoi personalizzare model-router su due piani distinti: le eccezioni specifiche di un singolo repository e le opzioni globali del plugin.</p>
 <h3>Le eccezioni di un progetto: la sezione Model routing</h3>
-<p>La griglia è uguale ovunque; ciò che cambia da un progetto all'altro va nella sezione <code>## Model routing</code> del file <code>AGENTS.md</code> (o <code>CLAUDE.md</code>) del progetto. Chiedi «configura il model routing per questo progetto» oppure indica direttamente l'eccezione, ad esempio «usa sempre opus per le migrazioni». <code>model-router:setup</code> trova il file di istruzioni, ti chiede valori predefiniti ed eccezioni, ne suggerisce alcune leggendo il repository, ti mostra la sezione esatta e la scrive solo dopo un tuo sì esplicito. Non fa commit.</p>
+<p>La griglia resta uguale ovunque; ciò che varia da un progetto all'altro va nella sezione <code>## Model routing</code> del file <code>AGENTS.md</code> (o <code>CLAUDE.md</code>) del repository.</p>
+<p>Per crearla o aggiornarla, chiedi «configura il model routing per questo progetto» oppure indica subito la regola che vuoi, ad esempio «usa sempre opus per le migrazioni». <code>model-router:setup</code> individua il file di istruzioni, ti chiede predefiniti ed eccezioni, ne propone alcune leggendo il repository, ti mostra il blocco esatto e lo scrive solo dopo un tuo sì esplicito, senza fare commit.</p>
 <pre><code>## Model routing
 
 Defaults for `model-router:choose-model`. An explicit choice in the conversation still wins; anything not
@@ -126,10 +142,10 @@ listed here follows the grid.
 |---|---|---|---|---|
 | Database migrations | `edit-specified` | `opus` | `high` | data cannot be restored |
 | Bulk renames across the codebase | `edit-mechanical` | `haiku` | `low` | checked by the compiler |</code></pre>
-<p>I valori restano dentro il perimetro della griglia: modelli <code>haiku</code>, <code>sonnet</code>, <code>fable</code>, <code>opus</code>; effort da <code>low</code> a <code>xhigh</code>; le sei classi. Se indichi un valore fuori da questi, ti viene riproposto insieme a quello valido più vicino.</p>
+<p>Tutti i valori devono restare dentro il perimetro della griglia: modelli <code>haiku</code>, <code>sonnet</code>, <code>fable</code>, <code>opus</code>; effort da <code>low</code> a <code>xhigh</code>; le sei classi di attività. Se indichi un valore fuori elenco, ti viene riproposto insieme a quello valido più vicino.</p>
 <figure class="shot"><img src="{{img:mr-config}}" alt="La sezione Model routing di un progetto nel suo AGENTS.md, accanto alle opzioni di model-router nella configurazione di Claude Code" loading="lazy"><figcaption>La sezione <code>## Model routing</code> di un progetto e le opzioni del plugin.</figcaption></figure>
 <h3>Le opzioni del plugin</h3>
-<p>Impostale da <code>/config</code> oppure sotto <code>pluginConfigs</code> in un file di impostazioni, usando come chiave il plugin installato:</p>
+<p>Le opzioni del plugin si impostano da <code>/config</code> oppure sotto <code>pluginConfigs</code> in un file di impostazioni, usando come chiave il plugin installato:</p>
 <pre><code>{
   "pluginConfigs": {
     "model-router@mrbogomips": {
@@ -155,14 +171,23 @@ listed here follows the grid.
     <tr><td><code>similarityThreshold</code></td><td>0,5</td><td>Sovrapposizione di parole oltre la quale due descrizioni contano come lo stesso compito</td></tr>
   </tbody>
 </table>
-<p>Per disattivare il routing nella sessione corrente, digita <code>/model-router off</code> (e <code>on</code> per riattivarlo); per disattivarlo in modo permanente, imposta <code>routeSubagents</code> a false.</p>
+<p>Per spegnere il routing solo nella sessione corrente digita <code>/model-router off</code> (e <code>on</code> per riattivarlo); per disattivarlo in modo permanente imposta <code>routeSubagents</code> a false.</p>
+<p>Una volta attivo il routing, resta la domanda decisiva: le scelte stanno funzionando sul tuo lavoro reale? Ecco come model-router trasforma gli eventi della sessione in statistiche.</p>
 
 <h2 id="stats">Come vengono raccolte le statistiche</h2>
-<figure class="diagram">{{diagram:d9-stats}}<figcaption>Dagli eventi ai numeri: la mod accoda gli eventi, la compattazione chiude ogni compito allo scadere della finestra di rilavorazione e gli esiti confluiscono in celle classe × livello × effort, per te e per ciascun progetto.</figcaption></figure>
+<p>Valutare la qualità di un subagent senza interrogare un altro modello richiede segnali oggettivi presi dal lavoro reale. model-router raccoglie questi segnali in locale e li aggrega solo quando ha abbastanza informazioni per chiudere il compito.</p>
+<figure class="diagram">{{diagram:d9-stats}}<figcaption>Dagli eventi ai numeri: la mod accoda gli eventi, la compattazione chiude ogni compito allo scadere della finestra di rilavorazione e gli esiti confluiscono in celle classe di attività × livello × effort, per te e per ciascun progetto.</figcaption></figure>
 <h3>Eventi</h3>
-<p>La mod accoda record in <code>events.jsonl</code> dentro la cartella di configurazione: ogni <code>decision</code> di routing; ogni <code>spawn</code> di subagent, con tipo, nome e descrizione breve; i <code>signal</code> (i file scritti dalla sessione e dai suoi subagent, le chiamate agli strumenti fallite, i prompt che scrivi, interruzioni e riprese); il <code>report</code> di ogni subagent con token e costo stimato; e <code>session-end</code>. Per misurare non viene mai chiamato alcun modello.</p>
+<p>La mod accoda record in <code>events.jsonl</code> dentro la cartella di configurazione, senza mai chiamare alcun modello per misurare. Ogni riga registra uno di questi eventi:</p>
+<ul>
+  <li><code>decision</code>: ogni decisione di routing;</li>
+  <li><code>spawn</code>: ogni avvio di subagent, con tipo, nome e descrizione breve;</li>
+  <li><code>signal</code>: i file scritti dalla sessione e dai suoi subagent, le chiamate agli strumenti fallite, i prompt che scrivi, interruzioni e riprese;</li>
+  <li><code>report</code>: il resoconto di ogni subagent, completo di token e costo stimato;</li>
+  <li><code>session-end</code>: la chiusura della sessione.</li>
+</ul>
 <h3>Compiti ed esiti</h3>
-<p>Ogni avvio di subagent costituisce un compito. Il suo esito viene fissato quando si chiude la <strong>finestra di rilavorazione</strong>: 30 minuti dopo il resoconto del subagent, oppure alla fine della sessione se avviene prima.</p>
+<p>Ogni avvio di subagent corrisponde a un compito. Il suo esito viene fissato allo scadere della <strong>finestra di rilavorazione</strong>: 30 minuti dopo il resoconto del subagent, oppure alla fine della sessione se avviene prima.</p>
 <table>
   <thead><tr><th>Esito</th><th>Quando</th></tr></thead>
   <tbody>
@@ -172,35 +197,41 @@ listed here follows the grid.
     <tr><td><code>cancelled</code></td><td>nessun resoconto (un compito che non risponde mai si chiude dopo 24 ore), oppure fermato</td></tr>
   </tbody>
 </table>
-<p>«Simile» significa che le parole distinte in comune tra le due descrizioni sono almeno la metà di tutte le loro parole distinte, ignorando le parole comuni e il tag della classe.</p>
+<p>Due descrizioni contano come «simili» quando le parole distinte in comune sono almeno la metà di tutte le loro parole distinte, ignorando le parole comuni e il tag della classe di attività.</p>
 <h3>Celle, numeri e decadimento</h3>
-<p>Gli esiti vengono conservati in <strong>celle</strong> del tipo classe × livello × effort, ad esempio <code>edit-specified · sonnet · medium</code>. Ogni cella fornisce:</p>
+<p>Gli esiti confluiscono in <strong>celle</strong> del tipo classe di attività × livello × effort — ad esempio <code>edit-specified · sonnet · medium</code>. Ogni cella calcola quattro indicatori:</p>
 <ul>
   <li><strong>Successo al primo tentativo (FPY)</strong>: success ÷ (success + rework + failure), ossia quante volte il lavoro è andato bene subito (vedi <a href="#fpy">Successo al primo tentativo</a>);</li>
   <li><strong>tasso di rilavorazione</strong>: rework ÷ (success + rework + failure);</li>
   <li><strong>costo per compito</strong>: il costo medio stimato, ricavato dalla stima del motore stesso;</li>
   <li><strong>costo per compito riuscito</strong>: costo per compito ÷ FPY. Un modello economico che sbaglia spesso può avere un costo per successo più alto di uno più caro.</li>
 </ul>
-<p>I dati aggregati decadono con un <strong>tempo di dimezzamento</strong> di 30 giorni (<code>halfLifeDays</code>): il lavoro di un mese fa pesa la metà rispetto a quello di oggi. Vengono mantenuti a due livelli: <strong>utente</strong> (tu su tutti i progetti) e <strong>progetto</strong> (identificato dal remote git o, in mancanza, dalla cartella radice).</p>
-<p>I compiti annullati, quelli rischiosi, quelli senza classe, quelli su modelli esterni alle quattro famiglie e quelli senza effort noto vengono registrati ma non usati per l'apprendimento. Le classi di sola lettura e le celle con meno di cinque compiti costituiscono segnali deboli e vengono segnalate come tali. Per ogni classe, la cella consigliata è quella con il minor costo per compito riuscito tra quelle con almeno tre compiti, senza mai scendere sotto la griglia per <code>review-debug</code> e <code>design-open</code>. Fino alla versione 0.3 si tratta di un dato puramente informativo: il router non interviene in base a questo dato.</p>
+<p>I dati aggregati decadono con un <strong>tempo di dimezzamento</strong> di 30 giorni (<code>halfLifeDays</code>): il lavoro di un mese fa pesa la metà rispetto a quello di oggi. Le statistiche vengono mantenute su due livelli: <strong>utente</strong> (tu su tutti i progetti) e <strong>progetto</strong> (identificato dal remote git o, in mancanza, dalla cartella radice).</p>
+<p>Non tutto entra però nei consigli e nell'apprendimento:</p>
+<ul>
+  <li><strong>Esclusioni dall'apprendimento</strong>: i compiti annullati, quelli rischiosi, quelli senza classe di attività, quelli su modelli esterni alle quattro famiglie e quelli senza effort noto vengono registrati, ma non usati per l'apprendimento.</li>
+  <li><strong>Segnali deboli</strong>: le classi di attività di sola lettura e le celle con meno di cinque compiti danno segnali deboli e vengono segnalate come tali.</li>
+  <li><strong>Cella consigliata</strong>: per ogni classe di attività, è quella con il minor costo per compito riuscito tra le celle con almeno tre compiti, senza mai scendere sotto la griglia per <code>review-debug</code> e <code>design-open</code>. Fino alla versione 0.3 è un dato solo informativo: il router non modifica le scelte in base a questo valore.</li>
+</ul>
 <h3>Compattazione</h3>
-<p>La compattazione chiude i compiti la cui finestra è scaduta, ne accoda gli esiti e li incorpora negli aggregati. Gira all'avvio della sessione, quando apri o aggiorni la vista d'uso e prima di generare il report; ripeterla è sicuro, perché nessun compito viene mai contato due volte.</p>
+<p>Gli eventi grezzi restano aperti finché la finestra di rilavorazione non si chiude. La compattazione chiude i compiti scaduti, ne accoda gli esiti e li incorpora negli aggregati. Gira all'avvio della sessione, quando apri o aggiorni la vista d'uso e prima di generare il report; ripeterla è sicuro, perché nessun compito viene mai contato due volte.</p>
+<p>Tra gli indicatori raccolti, uno è il cuore dell'intero sistema: il successo al primo tentativo.</p>
 
 <h2 id="fpy">Successo al primo tentativo: il numero dietro ogni scelta</h2>
-<p>Il <strong>successo al primo tentativo</strong> (FPY, dall'inglese <em>first-pass yield</em>) arriva dal mondo manifatturiero. Su una linea di produzione indica la quota di pezzi che escono buoni al primo giro, senza rilavorazioni né scarti. Una linea con il 95% di FPY rilavora o butta via un pezzo su venti. Nessuno considera buono un pezzo rilavorato: è stato pagato due volte.</p>
-<p>model-router applica la stessa logica al lavoro affidato a un subagent. Ogni avvio di subagent è un pezzo: è buono al primo tentativo se nella mezz'ora successiva nulla ha dovuto rifarlo.</p>
+<p>Un modello economico che sbaglia spesso non fa risparmiare: fa pagare due volte lo stesso lavoro. Il <strong>successo al primo tentativo</strong> (FPY, dall'inglese <em>first-pass yield</em>) nasce proprio nel mondo manifatturiero per misurare questo effetto. Su una linea di produzione indica la quota di pezzi che escono buoni al primo giro, senza rilavorazioni né scarti: con un FPY del 95%, un pezzo su venti va rifatto o buttato, e nessuno conta come buono un pezzo rilavorato.</p>
+<p>model-router applica la stessa logica ai subagent. Ogni avvio è un pezzo: è buono al primo tentativo se nella mezz'ora successiva nulla ha dovuto rifarlo.</p>
 <h3>Come si calcola</h3>
-<p>Per ciascuna cella (classe × livello × effort, ad esempio <code>edit-specified · haiku · low</code>):</p>
+<p>Per ciascuna cella (classe di attività × livello × effort, ad esempio <code>edit-specified · haiku · low</code>):</p>
 <p><code>FPY = success ÷ (success + rework + failure)</code></p>
 <ul>
-  <li><strong>success</strong> conta a favore dell'FPY; <strong>rework</strong> e <strong>failure</strong> contano a sfavore. Gli esiti vengono determinati come spiegato in <a href="#stats">Come vengono raccolte le statistiche</a>.</li>
-  <li>I compiti <strong>cancelled</strong> restano fuori da entrambi i termini: un compito che hai interrotto tu, o che non ha mai risposto, non dice nulla sull'adeguatezza del modello.</li>
-  <li>I conteggi vengono <strong>pesati nel tempo</strong> prima della divisione: con un dimezzamento di 30 giorni, un successo di un mese fa vale mezzo successo. L'FPY riflette come si comportano i modelli sul tuo lavoro oggi, non come andavano in primavera.</li>
+  <li><strong>success</strong> conta a favore dell'FPY; <strong>rework</strong> e <strong>failure</strong> contano a sfavore. Gli esiti sono determinati con le regole spiegate in <a href="#stats">Come vengono raccolte le statistiche</a>.</li>
+  <li>I compiti <strong>cancelled</strong> restano fuori da entrambi i termini: un compito che hai fermato tu, o che non ha mai risposto, non dice nulla sull'adeguatezza del modello.</li>
+  <li>I conteggi vengono <strong>pesati nel tempo</strong> prima della divisione: con un dimezzamento di 30 giorni, un successo di un mese fa vale mezzo successo. L'FPY riflette quindi come rendono i modelli sul tuo lavoro oggi, non mesi fa.</li>
 </ul>
 <h3>Perché l'FPY e non solo il prezzo</h3>
-<p>Il listino prezzi dice quanto costa eseguire un compito, ma non quanto costa un compito <em>riuscito</em>. Un lavoro che torna indietro si paga di nuovo: con il nuovo tentativo, con la sessione principale che lo sistema e con il tuo tempo. L'FPY trasforma il prezzo nel numero che conta davvero, il <strong>costo per compito riuscito</strong>:</p>
+<p>Il listino prezzi indica quanto costa eseguire un compito, non quanto costa ottenerne uno <em>riuscito</em>. Un lavoro che torna indietro si paga di nuovo: con il secondo tentativo, con la sessione principale che lo sistema e con il tuo tempo. L'FPY traduce il prezzo nel numero che conta davvero, il <strong>costo per compito riuscito</strong>:</p>
 <p><code>cost per successful task = cost per task ÷ FPY</code></p>
-<p>Ecco un esempio con due celle per lo stesso tipo di lavoro, venti compiti chiusi ciascuna:</p>
+<p>Confrontiamo due celle sullo stesso tipo di lavoro, venti compiti chiusi ciascuna:</p>
 <table>
   <thead><tr><th>Cella</th><th>success / rework / failure</th><th>FPY</th><th>Costo per compito</th><th>Costo per compito riuscito</th></tr></thead>
   <tbody>
@@ -208,39 +239,42 @@ listed here follows the grid.
     <tr><td><code>sonnet · low</code></td><td>18 / 2 / 0</td><td>90%</td><td>0,050 $</td><td>0,056 $</td></tr>
   </tbody>
 </table>
-<p>Haiku costa meno della metà a singolo compito, eppure ogni risultato buono costa di più perché tre compiti su quattro tornano indietro. E la tabella è persino generosa: i quindici compiti da rifare sono costati anche tempo alla sessione principale e a te, voci che nessun listino mostra. Vale però anche il contrario: per una semplice ricerca un modello piccolo ci prende diciannove volte su venti, e pagare per uno più grande non porta alcun vantaggio.</p>
+<p>Haiku costa meno della metà a singolo compito, eppure ogni risultato buono costa di più perché tre compiti su quattro tornano indietro. E la tabella è persino generosa: i quindici compiti da rifare hanno consumato anche tempo della sessione principale e tuo, voci che nessun listino mostra. Vale però anche il contrario: per una semplice ricerca un modello piccolo ci prende diciannove volte su venti, e pagare per uno più grande non porta alcun vantaggio.</p>
 <h3>Come leggerlo</h3>
 <ul>
-  <li>Il riquadro in Overview è 🟢 dall'85%, 🟡 dal 70%, 🔴 sotto. Le barre per livello ed effort usano gli stessi colori.</li>
+  <li>Il riquadro in Overview è 🟢 dall'85%, 🟡 dal 70%, 🔴 sotto. Le barre per livello ed effort usano la stessa scala colori.</li>
   <li>Il <strong>tasso di rilavorazione</strong> è l'altra faccia dell'FPY: <code>rework ÷ (success + rework + failure)</code>. La somma dei due dà il 100% meno il tasso di fallimento.</li>
   <li>Una cella con meno di cinque compiti rappresenta un segnale <strong>debole</strong> (⚪): il 100% su due compiti è fortuna, non statistica.</li>
-  <li>Anche per le classi di <strong>sola lettura</strong> (<code>read-search</code>, <code>read-analyze</code>) l'FPY è marcato come debole. Chi legge non scrive file, quindi il segnale più forte di rilavorazione, cioè qualcuno che modifica gli stessi file subito dopo, non scatta mai: una ricerca scadente tende a sembrare un successo.</li>
-  <li>L'FPY misura le scelte sul <em>tuo</em> lavoro basandosi su segnali che possono prendere abbagli: se modifichi un file scritto da un subagent per motivi che non c'entrano nulla col suo compito, quel lavoro viene contato come rilavorazione. Su molti compiti il rumore si compensa; su pochi no, ed è per questo che le celle piccole sono considerate deboli.</li>
+  <li>Anche per le classi di attività di <strong>sola lettura</strong> (<code>read-search</code>, <code>read-analyze</code>) l'FPY è marcato come debole. Chi legge non scrive file, quindi il segnale più forte di rilavorazione — qualcuno che modifica gli stessi file subito dopo — non scatta mai, e una ricerca scadente tende a sembrare un successo.</li>
+  <li>I segnali automatici possono prendere abbagli: se modifichi un file scritto da un subagent per motivi estranei al suo compito, quel lavoro viene contato come rilavorazione. Su molti compiti il rumore si compensa; su pochi no, ed è per questo che le celle piccole restano deboli.</li>
 </ul>
 <h3>Come lo usa il router</h3>
-<p><strong>Oggi (versioni 0.2 e 0.3) l'FPY informa, ma non guida.</strong> L'opzione <code>adapt</code> è disattivata e il router sceglie solo in base alla griglia. L'FPY alimenta i riquadri e le barre di <code>/model-router</code>, il report e, per ciascuna classe, una <strong>cella consigliata</strong>: quella col minor costo per compito riuscito tra le celle con almeno tre compiti, mai sotto la griglia per <code>review-debug</code> e <code>design-open</code>. Quando un consiglio continua a discostarsi dalla griglia, sei tu a intervenire aggiungendo un'eccezione nella sezione <code>## Model routing</code> del progetto.</p>
-<p><strong>Dalla versione 0.4 (prevista) l'FPY guiderà le scelte.</strong> Con <code>adapt</code> attivo, per ogni cella il router non tiene un singolo valore di FPY ma un intervallo di valori plausibili modellato come distribuzione Beta: <code>alpha</code> cresce con i successi pesati nel tempo, <code>beta</code> con le rilavorazioni e i fallimenti pesati. A ogni avvio di subagent estrae un FPY plausibile da ciascuna cella candidata vicina alla scelta della griglia, divide il costo della cella per quel valore e sceglie quella col minor costo per successo. È il <strong>Thompson sampling</strong>:</p>
+<p><strong>Oggi (versioni 0.2 e 0.3) l'FPY informa, ma non guida.</strong> L'opzione <code>adapt</code> è disattivata e il router segue solo la griglia. L'FPY alimenta i riquadri e le barre di <code>/model-router</code>, il report e, per ogni classe di attività, una <strong>cella consigliata</strong>: quella con il minor costo per compito riuscito tra le celle con almeno tre compiti, mai sotto la griglia per <code>review-debug</code> e <code>design-open</code>. Quando un consiglio continua a discostarsi dalla griglia, puoi intervenire tu aggiungendo un'eccezione nella sezione <code>## Model routing</code> del progetto.</p>
+<p><strong>Dalla versione 0.4 (prevista) l'FPY guiderà le scelte.</strong> Con <code>adapt</code> attivo, per ogni cella il router non tiene un solo valore di FPY ma un intervallo di valori plausibili modellato come distribuzione Beta: <code>alpha</code> cresce con i successi pesati nel tempo, <code>beta</code> con le rilavorazioni e i fallimenti pesati. A ogni avvio di subagent estrae un FPY plausibile da ciascuna cella candidata vicina alla scelta della griglia, divide il costo della cella per quel valore e sceglie quella con il minor costo per successo. È il <strong>Thompson sampling</strong>:</p>
 <ul>
   <li>Una cella con molti dati estrae valori vicini al suo FPY misurato, quindi una scelta collaudata continua a vincere.</li>
-  <li>Una cella con pochi dati estrae valori molto dispersi, perciò di tanto in tanto vince l'estrazione e viene messa alla prova. Questa è l'esplorazione, e si riduce da sola man mano che i dati diventano chiari. È comunque limitata al 10% delle decisioni di una classe (<code>exploreCap</code>).</li>
+  <li>Una cella con pochi dati estrae valori molto dispersi, perciò di tanto in tanto vince l'estrazione e viene messa alla prova. Questa esplorazione si riduce da sola man mano che i dati diventano chiari, ed è comunque limitata al 10% delle decisioni di una classe di attività (<code>exploreCap</code>).</li>
   <li>Prima di avere dati, la scelta della griglia parte in vantaggio (<code>alpha = 2, beta = 1</code>, ossia un FPY atteso di due terzi) mentre le celle vicine partono alla pari (<code>1, 1</code>): vince la griglia finché i numeri non dimostrano il contrario.</li>
   <li>Un progetto parte dal tuo registro a livello utente, che pesa quanto cinque compiti (<code>projectPriorStrength</code>); man mano che accumula compiti propri, è il suo registro a decidere.</li>
   <li>L'esplorazione non scende mai sotto la griglia per <code>review-debug</code> e <code>design-open</code>, mai sotto i valori predefiniti di <code>## Model routing</code> del progetto e non tocca mai gli avvii rischiosi, che vengono misurati ma esclusi dall'apprendimento.</li>
 </ul>
-<div class="note"><p><strong>Perché prima si misura soltanto.</strong> Le versioni 0.2 e 0.3 si limitano a misurare, così puoi verificare in <code>/model-router</code> che i segnali abbiano senso sul tuo modo di lavorare prima di lasciar prendere decisioni automatiche.</p></div>
+<div class="note"><p><strong>Perché prima si misura soltanto.</strong> Le versioni 0.2 e 0.3 si limitano a misurare, così puoi verificare in <code>/model-router</code> che i segnali abbiano senso sul tuo modo di lavorare prima di lasciare spazio a decisioni automatiche.</p></div>
+<p>Ora che sai come leggere i numeri, vediamo in pochi passaggi come farli comparire sulla tua macchina.</p>
 
 <h2 id="see-stats">Far comparire le statistiche</h2>
+<p>Per vedere i primi dati non serve alcuna configurazione speciale, ma occorre rispettare cinque condizioni in sequenza:</p>
 <figure class="diagram">{{diagram:d10-see-stats}}<figcaption>Cinque passi per vedere le tue statistiche: installa, usa Claude Code 2.1.329 o successivo con le mod attive, lavora normalmente, lascia chiudere la finestra di rilavorazione, poi apri <code>/model-router</code> o il report.</figcaption></figure>
 <ol>
   <li><strong>Attiva le mod e usa Claude Code 2.1.329 o successivo.</strong> Se <code>/model-router</code> risulta un comando sconosciuto, la mod non è caricata.</li>
   <li><strong>Lascia attivo <code>measure</code>.</strong> È attivo per impostazione predefinita.</li>
-  <li><strong>Fai girare i subagent.</strong> Solo gli avvii di subagent diventano compiti. Etichetta gli avvii quando li scrivi a mano: un avvio senza tag che il router non sottopone al judge resta senza classe e non viene usato per l'apprendimento.</li>
+  <li><strong>Fai girare i subagent.</strong> Solo gli avvii di subagent diventano compiti. Etichetta gli avvii quando li scrivi a mano: un avvio senza tag che il router non sottopone al judge resta senza classe di attività e non viene usato per l'apprendimento.</li>
   <li><strong>Aspetta la chiusura della finestra di rilavorazione.</strong> Un compito viene conteggiato 30 minuti dopo il suo resoconto, oppure a sessione conclusa.</li>
   <li><strong>Apri <code>/model-router</code></strong>, oppure chiedi il <em>report di model-router</em>. L'apertura della vista esegue la compattazione per un massimo di 3 secondi; premi <code>r</code> per aggiornare.</li>
 </ol>
+<p>Una volta chiusi i primi compiti, puoi consultare tutto dal terminale oppure nel browser.</p>
 
 <h2 id="view">La vista d'uso e il report</h2>
-<p><code>/model-router</code> apre una finestra organizzata come le impostazioni di Claude Code, con quattro schede, un intervallo temporale (24h, 7d, 30d, all) e un livello (utente o progetto). Ciò che mostra è visibile solo a te: il modello non lo legge.</p>
+<p>Controllare le metriche non deve sporcare la conversazione né consumare contesto. Per questo <code>/model-router</code> apre una finestra organizzata come le impostazioni di Claude Code, con quattro schede, un intervallo temporale (24h, 7d, 30d, all) e un livello (utente o progetto). Ciò che vedi resta solo sul tuo schermo: il modello non lo legge.</p>
 <table>
   <thead><tr><th>Comando</th><th>Cosa fa</th></tr></thead>
   <tbody>
@@ -251,26 +285,34 @@ listed here follows the grid.
     <tr><td><code>/model-router help</code></td><td>Elenca gli argomenti e le scorciatoie da tastiera</td></tr>
   </tbody>
 </table>
-<p>Overview si apre con quattro riquadri: FPY (🟢 dall'85%, 🟡 dal 70%, 🔴 sotto), costo per successo (🟢 più economico o 🔴 più caro rispetto alla finestra precedente), rilavorazione (🟢 fino al 10%, 🟡 fino al 25%, 🔴 oltre) e avvii instradati (↓ downgrade, ↑ upgrade, = mantenuti). Un riquadro basato su meno di cinque compiti mostra ⚪ weak: troppi pochi dati per trarre conclusioni.</p>
+<p>La scheda Overview si apre con quattro riquadri di sintesi:</p>
+<ul>
+  <li><strong>FPY</strong>: 🟢 dall'85%, 🟡 dal 70%, 🔴 sotto;</li>
+  <li><strong>Costo per successo</strong>: 🟢 più economico o 🔴 più caro rispetto alla finestra precedente;</li>
+  <li><strong>Rilavorazione</strong>: 🟢 fino al 10%, 🟡 fino al 25%, 🔴 oltre;</li>
+  <li><strong>Avvii instradati</strong>: ↓ downgrade, ↑ upgrade, = mantenuti.</li>
+</ul>
+<p>Se un riquadro si basa su meno di cinque compiti mostra ⚪ weak: troppi pochi dati per trarre conclusioni.</p>
 <figure class="shot"><img src="{{img:mr-overview}}" alt="La scheda Overview: stato, riquadri KPI, grafici sparkline, barre FPY per livello ed effort, subagent e decisioni di routing della sessione corrente" loading="lazy"><figcaption>Overview: i riquadri, gli sparkline e le barre FPY degli ultimi 7 giorni, seguiti dai subagent e dalle decisioni di questa sessione. <span class="badge demo">Dati demo</span></figcaption></figure>
 <figure class="shot"><img src="{{img:mr-models}}" alt="La scheda Models: per livello ed effort, compiti chiusi, token, costo, FPY e costo per compito riuscito" loading="lazy"><figcaption>Models: per livello ed effort, compiti chiusi, token, costo, FPY con barra, costo per compito riuscito e ID dei modelli osservati. <span class="badge demo">Dati demo</span></figcaption></figure>
-<figure class="shot"><img src="{{img:mr-classes}}" alt="La scheda Classes: per classe di compito, scelta della griglia, miglior cella misurata, avvisi e celle" loading="lazy"><figcaption>Classes: per ogni classe di compito, la scelta della griglia accanto alla miglior cella misurata, gli indicatori di segnale debole e le singole celle; <code>*</code> indica quella consigliata. <span class="badge demo">Dati demo</span></figcaption></figure>
+<figure class="shot"><img src="{{img:mr-classes}}" alt="La scheda Classes: per classe di attività, scelta della griglia, miglior cella misurata, avvisi e celle" loading="lazy"><figcaption>Classes: per ogni classe di attività, la scelta della griglia accanto alla miglior cella misurata, gli indicatori di segnale debole e le singole celle; <code>*</code> indica quella consigliata. <span class="badge demo">Dati demo</span></figcaption></figure>
 <figure class="shot"><img src="{{img:mr-decisions}}" alt="La scheda Decisions: le ultime dodici decisioni di routing con azione, modello prima e dopo, tipo di subagent e motivo" loading="lazy"><figcaption>Decisions: le ultime dodici decisioni di routing di tutte le sessioni (UTC); <code>•</code> indica quelle della sessione corrente. <span class="badge demo">Dati demo</span></figcaption></figure>
-<p>I tasti funzionano non appena si apre la vista: Tab e Maiusc+Tab cambiano scheda, ↓ e ↑ scorrono la finestra temporale, <code>d</code> <code>w</code> <code>m</code> <code>a</code> la selezionano direttamente, <code>p</code> cambia livello, <code>o</code> apre il report, <code>r</code> aggiorna, Esc chiude.</p>
+<p>Le scorciatoie da tastiera sono attive appena si apre la vista: Tab e Maiusc+Tab cambiano scheda, ↓ e ↑ scorrono la finestra temporale, <code>d</code> <code>w</code> <code>m</code> <code>a</code> la selezionano direttamente, <code>p</code> cambia livello, <code>o</code> apre il report, <code>r</code> aggiorna, Esc chiude.</p>
 <figure class="shot"><img src="{{img:mr-help}}" alt="/model-router help: gli argomenti e i tasti della vista d'uso" loading="lazy"><figcaption><code>/model-router help</code>.</figcaption></figure>
-<p>La pagina del report mostra gli stessi numeri, calcolati con la medesima aggregazione, con l'andamento settimanale e una scheda per ciascuna classe. Viene scritta in <code>&lt;config dir&gt;/model-router/report.html</code> e aperta in locale.</p>
+<p>Se preferisci una vista più ampia, la pagina del report presenta gli stessi numeri — calcolati con la medesima aggregazione — accompagnati dall'andamento settimanale e da una scheda per ciascuna classe di attività. Viene scritta in <code>&lt;config dir&gt;/model-router/report.html</code> e aperta in locale.</p>
 <figure class="shot"><img src="{{img:mr-report}}" alt="La pagina del report di model-router: andamento settimanale di FPY e costo per compito riuscito, e decisioni del router per azione" loading="lazy"><figcaption>La parte superiore della pagina del report. <span class="badge demo">Dati demo</span></figcaption></figure>
+<p>Per farti un'idea concreta di come cambiano queste schermate nel tempo, seguiamo l'evoluzione dal primo avvio al primo mese di utilizzo.</p>
 
 <h2 id="real-session">Una sessione reale</h2>
-<p>Ecco cosa aspettarti una volta installato model-router: appena lo attivi, dopo il primo giorno, dopo la prima settimana e dopo il primo mese.</p>
+<p>Ecco cosa aspettarti dopo l'installazione di model-router: appena lo attivi, al termine del primo giorno, dopo una settimana e dopo un mese.</p>
 <h3>Attivazione</h3>
-<p>Installa il plugin, assicurati che le mod siano attive e di avere Claude Code 2.1.329 o successivo, poi avvia una sessione. Non c'è nient'altro da accendere: routing e misurazione sono attivi per impostazione predefinita. Controlla che <code>/model-router</code> sia riconosciuto; su una macchina ancora senza dati, Overview ti dirà che nessun subagent ha girato in questa sessione.</p>
-<p>A quel punto lavora come al solito. Ogni avvio di subagent riceve la sua riga 🔀; gli avvii etichettati diventano compiti; i numeri compaiono man mano che si chiudono le finestre di rilavorazione.</p>
+<p>Installa il plugin, assicurati che le mod siano attive e di avere Claude Code 2.1.329 o successivo, poi avvia una sessione. Non serve accendere altro: routing e misurazione sono attivi per impostazione predefinita. Verifica che <code>/model-router</code> sia riconosciuto; su una macchina ancora priva di dati, Overview ti dirà che nessun subagent ha girato in questa sessione.</p>
+<p>A quel punto lavora come al solito: ogni avvio di subagent mostra la sua riga 🔀, gli avvii etichettati diventano compiti e i numeri compaiono man mano che si chiudono le finestre di rilavorazione.</p>
 <div class="note"><p><strong>Perché alcune schermate mostrano dati dimostrativi.</strong> Le misurazioni reali sulla macchina dell'autore sono iniziate il 21 novembre 2026, quindi non esistono ancora una settimana o un mese intero di dati reali. Le schermate del primo giorno qui sotto sono autentiche. Le viste a sette e trenta giorni sono costruite a partire da un log di eventi dimostrativo, e ciascuna porta il badge <span class="badge demo">Dati demo</span>.</p></div>
 <div class="timeline">
-  <div><h3>Dopo un giorno</h3><p>Aspettati una manciata di compiti valutati. I riquadri segnano ⚪ weak perché ciascuno copre meno di cinque compiti, e non c'è ancora una finestra precedente con cui fare confronti. La scheda Decisions mostra già ogni decisione di routing col relativo motivo.</p></div>
-  <div><h3>Dopo sette giorni</h3><p>I riquadri iniziano a mostrare valori non appena coprono cinque o più compiti; dalla seconda settimana mostrano anche il confronto con la precedente. La scheda Classes si popola e le prime celle raggiungono la soglia dei tre compiti necessaria per esprimere un consiglio.</p></div>
-  <div><h3>Dopo un mese</h3><p>I numeri si stabilizzano, perché ogni cella raccoglie più compiti. Il dimezzamento a 30 giorni inizia a farsi sentire: il lavoro di un mese fa ora pesa la metà. Vale la pena dare un'occhiata ai consigli che si discostano dalla griglia, da cui può nascere un'eccezione in <code>## Model routing</code> per il progetto.</p></div>
+  <div><h3>Dopo un giorno</h3><p>Aspettati una manciata di compiti valutati. I riquadri segnano ⚪ weak perché ciascuno copre meno di cinque compiti, e non c'è ancora una finestra precedente con cui confrontarsi. La scheda Decisions mostra già ogni decisione di routing con il relativo motivo.</p></div>
+  <div><h3>Dopo sette giorni</h3><p>I riquadri iniziano a mostrare valori appena raggiungono cinque o più compiti; dalla seconda settimana compare anche il confronto con la precedente. La scheda Classes si popola e le prime celle toccano la soglia dei tre compiti necessaria per esprimere un consiglio.</p></div>
+  <div><h3>Dopo un mese</h3><p>I numeri si stabilizzano perché ogni cella raccoglie più compiti, e il dimezzamento a 30 giorni inizia a farsi sentire: il lavoro di un mese fa ora pesa la metà. Vale la pena controllare i consigli che divergono dalla griglia per valutare eventuali eccezioni in <code>## Model routing</code> per il progetto.</p></div>
 </div>
 <h3>Dopo un giorno</h3>
 <figure class="shot"><img src="{{img:mr-day1-overview}}" alt="La scheda Overview dopo il primo giorno di utilizzo reale: pochi compiti valutati, riquadri deboli, avvii instradati e subagent della sessione" loading="lazy"><figcaption>Overview dopo il primo giorno, dati reali. Un riquadro basato su meno di cinque compiti valutati mostra ⚪ weak.</figcaption></figure>
@@ -279,16 +321,30 @@ listed here follows the grid.
 <figure class="shot"><img src="{{img:mr-7d-overview}}" alt="La scheda Overview su sette giorni: riquadri KPI con variazioni rispetto alla settimana precedente, sparkline giornalieri e barre FPY per livello ed effort" loading="lazy"><figcaption>Overview sugli ultimi 7 giorni. Dati dimostrativi: le misurazioni reali sulla macchina dell'autore partono dal 21 novembre 2026.</figcaption></figure>
 <h3>Dopo un mese <span class="badge demo">Dati demo</span></h3>
 <figure class="shot"><img src="{{img:mr-30d-overview}}" alt="La scheda Overview su trenta giorni: riquadri KPI, sparkline a blocchi di tre giorni e barre FPY" loading="lazy"><figcaption>Overview sugli ultimi 30 giorni; gli sparkline raggruppano i dati a blocchi di tre giorni. Dati dimostrativi.</figcaption></figure>
-<figure class="shot"><img src="{{img:mr-30d-classes}}" alt="La scheda Classes su trenta giorni: per classe, la scelta della griglia, la miglior cella misurata e i consigli diversi dalla griglia" loading="lazy"><figcaption>Classes sugli ultimi 30 giorni, con i consigli che differiscono dalla griglia. Dati dimostrativi.</figcaption></figure>
+<figure class="shot"><img src="{{img:mr-30d-classes}}" alt="La scheda Classes su trenta giorni: per classe di attività, la scelta della griglia, la miglior cella misurata e i consigli diversi dalla griglia" loading="lazy"><figcaption>Classes sugli ultimi 30 giorni, con i consigli che differiscono dalla griglia. Dati dimostrativi.</figcaption></figure>
 <h3>Un singolo progetto o tutto ciò che fai</h3>
-<p>Premi <code>p</code> per passare da un livello all'altro. Il livello <strong>utente</strong> raccoglie i tuoi dati su tutti i progetti: offre il quadro più ampio ed è il primo a riempirsi. Il livello <strong>progetto</strong> isola il lavoro svolto in questo repository, identificato dal suo remote git o, in alternativa, dalla cartella radice: i numeri sono più piccoli, ma ti dicono se la griglia calza bene su questa specifica codebase. Se il livello progetto non mostra nulla, significa che i dati sono stati registrati sotto un'altra cartella o un altro remote.</p>
+<p>Premi <code>p</code> per passare da un livello di osservazione all'altro:</p>
+<ul>
+  <li><strong>Livello utente</strong>: raccoglie i tuoi dati su tutti i progetti, offre il quadro più ampio ed è il primo a riempirsi.</li>
+  <li><strong>Livello progetto</strong>: isola il lavoro svolto nel repository corrente, identificato dal suo remote git o, in alternativa, dalla cartella radice. I numeri sono più piccoli, ma ti mostrano se la griglia si adatta bene a questa specifica codebase.</li>
+</ul>
+<p>Se il livello progetto non mostra nulla, significa che i dati sono stati registrati sotto un'altra cartella o un altro remote.</p>
 <figure class="shot"><img src="{{img:mr-classes-project}}" alt="La scheda Classes a livello di progetto, per il repository product, su trenta giorni" loading="lazy"><figcaption>Livello progetto: Classes per il repository <code>product</code> su 30 giorni. <span class="badge demo">Dati demo</span></figcaption></figure>
 <figure class="shot"><img src="{{img:mr-classes-30d}}" alt="La scheda Classes a livello utente su trenta giorni" loading="lazy"><figcaption>Livello utente: Classes su 30 giorni, su tutti i progetti. <span class="badge demo">Dati demo</span></figcaption></figure>
+<p>Restano due aspetti pratici da conoscere prima di iniziare: dove vengono salvati i tuoi dati e quali sono i limiti attuali del plugin.</p>
 
 <h2 id="privacy">Privacy</h2>
-<p>Il plugin non invia da nessuna parte ciò che registra. Tutto resta nella cartella di configurazione attiva (<code>CLAUDE_CONFIG_DIR</code>, altrimenti <code>~/.claude</code>) dentro <code>model-router/</code>: il log degli eventi, che conserva i primi 2.000 caratteri dei prompt che digiti; le opzioni usate dalla compattazione; gli aggregati per utente e per progetto; e la pagina del report. Nulla viene scritto dentro i repository. L'unica chiamata del judge per ogni avvio instradato va al fornitore del modello esattamente come qualunque altra richiesta della tua sessione. Puoi disattivare la registrazione con <code>measure: false</code>; per azzerare i dati, elimina <code>&lt;config dir&gt;/model-router/</code>.</p>
+<p>Il plugin non invia da nessuna parte ciò che misura. Tutti i file restano in locale dentro <code>model-router/</code>, nella cartella di configurazione attiva (<code>CLAUDE_CONFIG_DIR</code>, altrimenti <code>~/.claude</code>):</p>
+<ul>
+  <li>il log degli eventi, che conserva i primi 2.000 caratteri dei prompt che digiti;</li>
+  <li>le opzioni usate dalla compattazione;</li>
+  <li>gli aggregati per utente e per progetto;</li>
+  <li>la pagina del report.</li>
+</ul>
+<p>Nulla viene scritto dentro i repository. L'unica chiamata esterna — quella del judge per ogni avvio instradato — va al fornitore del modello esattamente come qualunque altra richiesta della tua sessione. Se preferisci disattivare la registrazione, imposta <code>measure: false</code>; per azzerare i dati raccolti, elimina <code>&lt;config dir&gt;/model-router/</code>.</p>
 
 <h2 id="limits">Limiti</h2>
+<p>Tieni presenti quattro limiti della versione attuale:</p>
 <ul>
   <li>Vengono instradati solo gli avvii effettuati tramite lo strumento <code>Agent</code>; gli agenti interni ai plugin e gli agenti di workflow vengono misurati, ma non instradati.</li>
   <li>Il router non sceglie mai <code>fable</code> e, fino alla versione 0.3, non impone il minimo previsto dalla griglia per <code>review-debug</code> e <code>design-open</code>.</li>
