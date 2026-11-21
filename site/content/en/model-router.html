@@ -44,9 +44,9 @@
 <ol>
   <li>Your explicit choice in the conversation.</li>
   <li>The project's <code>## Model routing</code> section, if it names that kind of work or task class.</li>
-  <li>An agent definition that fixes its own model (in which case the model stays unchanged and only effort is passed).</li>
   <li>The grid.</li>
 </ol>
+<p>The exception is an agent definition that pins its own model: whatever the project section or the grid says, that model stays in place unless you specify a different one yourself, and only the effort is passed through, if the definition doesn't already pin it.</p>
 <figure class="diagram">{{diagram:d7-grid}}<figcaption>The grid: model tiers checked in order, four effort questions asked in order, and six task classes, each with its usual choice.</figcaption></figure>
 <h3>Model tiers</h3>
 <p>Scan the table from top to bottom and stop at the first row that fits the task:</p>
@@ -189,7 +189,7 @@ listed here follows the grid.
 <ul>
   <li><code>decision</code>: every routing decision;</li>
   <li><code>spawn</code>: every subagent launch, with type, name, and short description;</li>
-  <li><code>signal</code>: files written by the session and subagents, failed tool calls, prompts you type, interruptions, and resumes;</li>
+  <li><code>signal</code>: files written by the session and subagents, failed tool calls, the two prompts you type right after a subagent's report, interruptions, and resumptions;</li>
   <li><code>report</code>: each subagent's report, complete with tokens and estimated cost;</li>
   <li><code>session-end</code>: the closing of the session.</li>
 </ul>
@@ -199,7 +199,7 @@ listed here follows the grid.
   <thead><tr><th>Outcome</th><th>When it is assigned</th></tr></thead>
   <tbody>
     <tr><td><code>success</code></td><td>The subagent delivered its report and nothing within the window redid its work</td></tr>
-    <tr><td><code>rework</code></td><td>Within the window, the main session or another agent rewrote one of its files; or a similar launch of the same class followed; or one of the next two prompts you typed named its files or task</td></tr>
+    <tr><td><code>rework</code></td><td>Within the window, the main session or another agent rewrote one of its files; or a similar launch of the same class followed on the same files; or the same subagent received a correction after its report; or one of the next two prompts you wrote named its files or its task</td></tr>
     <tr><td><code>failure</code></td><td>The subagent failed, or was stopped by the parent session and redone</td></tr>
     <tr><td><code>cancelled</code></td><td>No report (a task that never responds closes after 24 hours), or interrupted</td></tr>
   </tbody>
@@ -370,7 +370,7 @@ listed here follows the grid.
 <h2 id="privacy">Privacy</h2>
 <p>The plugin sends nothing it measures off your machine. All files stay local inside <code>model-router/</code>, in the active config directory (<code>CLAUDE_CONFIG_DIR</code>, otherwise <code>~/.claude</code>):</p>
 <ul>
-  <li>the event log (<code>events.jsonl</code>), which keeps the first 2,000 characters of the prompts you type;</li>
+  <li>the event log (<code>events.jsonl</code>), which keeps the first 2,000 characters of the two prompts you type after a subagent's report, within the rework window, and of no others;</li>
   <li>the options used by compaction;</li>
   <li>user-level and project-level aggregates;</li>
   <li>the HTML report page.</li>
