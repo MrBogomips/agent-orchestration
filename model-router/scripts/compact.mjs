@@ -42,34 +42,72 @@ export function paths(configDir) {
   };
 }
 
-/** Every parseable record of an event log, in order; an unreadable file reads as empty. */
-export function readEvents(file) {
-  if (!existsSync(file)) return [];
-  return parseLines(readFileSync(file), 0).records;
+const CHUNK_BYTES = 1 << 20;
+
+/**
+ * Reads the complete lines of a file from byte `from`, one chunk at a time, so the file is never held whole (a
+ * log past 2 GB cannot be read in one piece). Calls `onLine(text, start)` for each line ending in a newline, with
+ * the byte offset of its start, and returns the offset just after the last complete line.
+ */
+function eachLine(file, from, onLine, chunkBytes = CHUNK_BYTES) {
+  const fd = openSync(file, 'r');
+  try {
+    const chunk = Buffer.alloc(Math.max(1, chunkBytes));
+    let carry = Buffer.alloc(0);
+    let carryStart = from;
+    let pos = from;
+    for (;;) {
+      const n = readSync(fd, chunk, 0, chunk.length, pos);
+      if (n === 0) break;
+      pos += n;
+      const data = carry.length ? Buffer.concat([carry, chunk.subarray(0, n)]) : chunk.subarray(0, n);
+      let at = 0;
+      for (let nl = data.indexOf(10, at); nl >= 0; nl = data.indexOf(10, at)) {
+        onLine(data.subarray(at, nl).toString('utf8'), carryStart + at);
+        at = nl + 1;
+      }
+      carry = Buffer.from(data.subarray(at));
+      carryStart += at;
+    }
+    return carryStart;
+  } finally {
+    closeSync(fd);
+  }
 }
 
-function parseLines(buffer, base) {
-  const records = [];
-  const starts = [];
-  let pos = 0;
-  while (pos < buffer.length) {
-    const nl = buffer.indexOf(10, pos);
-    if (nl < 0) break;
-    const line = buffer.subarray(pos, nl).toString('utf8').trim();
-    if (line) {
-      try {
-        const record = JSON.parse(line);
-        if (record && typeof record === 'object') {
-          records.push(record);
-          starts.push(base + pos);
-        }
-      } catch {
-        // a malformed line is skipped, never fatal
-      }
-    }
-    pos = nl + 1;
+/** The record on one line, or null for a blank or malformed line (skipped, never fatal). */
+function parseLine(text) {
+  const line = text.trim();
+  if (!line) return null;
+  try {
+    const record = JSON.parse(line);
+    return record && typeof record === 'object' ? record : null;
+  } catch {
+    return null;
   }
-  return { records, starts, end: base + pos };
+}
+
+/**
+ * The parseable records of an event log that `keep` accepts (all by default), in order, and how many parseable
+ * records it holds in all. `keep` may return a smaller copy of the record to hold; an absent file reads as empty.
+ */
+export function scanEvents(file, { keep = (r) => r, chunkBytes = CHUNK_BYTES } = {}) {
+  const records = [];
+  let total = 0;
+  if (!existsSync(file)) return { records, total };
+  eachLine(file, 0, (text) => {
+    const record = parseLine(text);
+    if (!record) return;
+    total += 1;
+    const kept = keep(record);
+    if (kept) records.push(kept === true ? record : kept);
+  }, chunkBytes);
+  return { records, total };
+}
+
+/** Every parseable record of an event log, in order; an absent file reads as empty. */
+export function readEvents(file, { chunkBytes = CHUNK_BYTES } = {}) {
+  return scanEvents(file, { chunkBytes }).records;
 }
 
 function readJson(file, fallback) {
@@ -131,11 +169,19 @@ export function releaseLock(file, token) {
   }
 }
 
+/** The records after `offset`, read from there on; an offset past the end (a log that shrank) starts over. */
 function readNewLines(file, offset) {
   if (!existsSync(file)) return { records: [], starts: [], end: 0, from: 0 };
-  const buffer = readFileSync(file);
-  const from = offset <= buffer.length ? offset : 0;
-  return { ...parseLines(buffer.subarray(from), from), from };
+  const from = offset <= statSync(file).size ? offset : 0;
+  const records = [];
+  const starts = [];
+  const end = eachLine(file, from, (text, start) => {
+    const record = parseLine(text);
+    if (!record) return;
+    records.push(record);
+    starts.push(start);
+  });
+  return { records, starts, end, from };
 }
 
 /**

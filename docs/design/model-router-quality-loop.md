@@ -272,6 +272,10 @@ Choices left to the builder, and where the build departs from the text above.
   and the run closes nothing (its tasks stay behind the offset and are closed, folded and appended by a later
   run). A torn line older than that has no writer left: the run ends it with a newline, so it stays one skipped
   line, and appends its outcomes after it.
+- **Reading a long log.** Nothing reads `events.jsonl` whole. Compaction reads from its stored offset, one chunk at
+  a time. The report and the usage view read the log in chunks too and keep only the records they show: outcomes and
+  decisions, plus, for the view, this session's reports and the spawns of this session's project. Memory follows
+  what is kept, not the size of the log.
 - **Options.** The mod saves the options compaction needs in `<config dir>/model-router/options.json` at each
   session start; compaction and the report read it when no `--options` is given.
 - **Cells** store aged evidence counts (`n`, `success`, `rework`, `failure`) and the means; `alpha` and `beta` are
@@ -289,7 +293,9 @@ Choices left to the builder, and where the build departs from the text above.
 Not built in 0.2 (nor in 0.3):
 
 - *Re-search* by reading the files a read-only subagent named: only the similar-start signal is measured.
-- Pruning of compacted events older than 90 days: rewriting the log could drop a line another session appends.
+- Pruning or rotation of compacted events older than 90 days: rewriting the log could drop a line another session
+  appends, a rename races with a writer's `cat >>`, and the all-time window and the trend read every outcome, so
+  archived outcomes would leave them. The log only grows; the readers above keep its cost to what they hold.
 - The two-level combination (`projectPriorStrength`): the report shows each project's own cells. It is used by
   selection from 0.4.
 - The tool error rate: `tool-error` signals are recorded but play no part in outcomes or the report yet.
