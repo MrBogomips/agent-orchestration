@@ -8,7 +8,7 @@ they may change before they ship.
 | Plugin | Version | In one line |
 |---|---|---|
 | `session-hub` | 0.2.4 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
-| `model-router` | 0.3.4 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
+| `model-router` | 0.3.5 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
 
@@ -65,7 +65,7 @@ The hook, the mods, the commands, the messages, the variables and the state fold
 `session-hub-scope-guard` hook, the `session-hub` and `model-router` mods, the `/session-hub` and `/model-router`
 commands, the `session-hub:scope` prompt section, the `[session-hub]` prefix of the guards', the mod's and the
 record script's messages, the `[model-router]` prefix of the router mod's debug log lines, the 🔀 that opens what the
-router mod shows the person (the usage view's title, its one-line answers and toasts, the line under an `Agent` row,
+router mod shows the person (the usage view's title, its one-line answers and transcript lines, the line under an `Agent` row,
 the report page's title), the `SESSION_HUB_*` variables, and the `session-hub/` and `model-router/` state folders. Two other markers are short
 on purpose: `mr` in the router's task-class tag (`[mr:<class>]`), and the message prefixes between sessions,
 `[master]` and `[<task> <repo>]`.

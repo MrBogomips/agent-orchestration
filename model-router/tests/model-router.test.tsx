@@ -30,14 +30,14 @@ const GRID = {
 
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
 
-type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[] }
+type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
 type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
 function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, text: FAST_ANSWER, usage: {} } }), answers: Answers = {}): World {
-  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [] }
+  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [], logs: [] }
   on('ui.open', ($, e) => {
     w.opens.push(e)
     return { value: answers.isPlaced === false ? { isPlaced: false, reason: 'no surface' } : { isPlaced: true } }
@@ -45,6 +45,10 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
   on('ui.close', ($, e) => {
     w.closes.push(e)
     return { value: undefined }
+  })
+  on('ui.log', ($, e, next) => {
+    if ((e as any).to !== 'debug') w.logs.push(String((e as any).text ?? ''))
+    return next(e)
   })
   on('ui.toast', ($, e) => {
     w.toasts.push(String((e as any).text ?? e))
@@ -292,7 +296,6 @@ describe('the choose-model line under an Agent row', () => {
       if (isBroken && e.key === 'route') return { deny: 'state gone' }
       return next(e)
     })
-    on('ui.log', () => ({ value: undefined }))
     world(on)
     await start($)
     isBroken = true
@@ -539,7 +542,7 @@ describe('/model-router usage view', () => {
     await ui.unmount()
   })
 
-  test('r reads again, o writes the report and toasts its path', async ($, on) => {
+  test('r reads again, o writes the report and logs its path in the transcript', async ($, on) => {
     const w = world(on)
     await run($, '')
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
@@ -547,6 +550,8 @@ describe('/model-router usage view', () => {
     expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(2)
     await ui.press({ key: 'report' })
     expect(w.runs.some((r) => String(r.argv[1]).endsWith('report.mjs'))).toBe(true)
+    expect(w.logs.some((l) => l.includes('report written to'))).toBe(true)
+    expect(w.toasts.some((t) => t.includes('report'))).toBe(false)
     await ui.unmount()
   })
 
