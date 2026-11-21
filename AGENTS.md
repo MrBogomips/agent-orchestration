@@ -76,7 +76,7 @@ version in `engines["claude-code"]` (mods exist from 2.1.287).
 
 ```bash
 bash tests/validate.sh
-node --test $(find . -path ./node_modules -prune -o -name '*.test.mjs' -print)
+node --test $(find . -path ./node_modules -prune -o -path ./.claude -prune -o -path ./site/dist -prune -o -name '*.test.mjs' -print)
 claude plugin validate ./session-hub --strict
 claude plugin validate ./model-router --strict
 node site/check.mjs                       # documentation site: build, links, images, translations

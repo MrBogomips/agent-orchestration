@@ -15,12 +15,29 @@ PLUGINS=0
 
 error() { echo "ERROR: $*"; ERRORS=$((ERRORS + 1)); }
 
+# The value of a top-level frontmatter key. A block scalar (`>`, `|`, `>-`, `|-`, `>+`, `|+`) is read from the
+# indented lines that follow it, joined with spaces, so an empty block reads as an empty value.
 frontmatter_value() {
     awk -v key="$1" '
         NR == 1 { if ($0 != "---") exit; next }
         /^---[ \t]*$/ { exit }
-        index($0, key ":") == 1 { v = substr($0, length(key) + 2); sub(/^[ \t]+/, "", v); gsub(/^["\x27]|["\x27]$/, "", v); print v; exit }
+        block {
+            if ($0 ~ /^[ \t]+[^ \t]/) { line = $0; sub(/^[ \t]+/, "", line); v = v (v == "" ? "" : " ") line; next }
+            if ($0 ~ /^[ \t]*$/) next
+            exit
+        }
+        index($0, key ":") == 1 {
+            v = substr($0, length(key) + 2); sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+            if (v ~ /^[>|][-+]?$/) { v = ""; block = 1; next }
+            gsub(/^["\x27]|["\x27]$/, "", v); print v; exit
+        }
+        END { if (block) print v }
     ' "$2"
+}
+
+# Whether the file opens a frontmatter with `---` and closes it with a later `---` line.
+frontmatter_closed() {
+    awk 'NR == 1 { if ($0 != "---") exit 1; next } /^---[ \t]*$/ { found = 1; exit } END { exit !found }' "$1"
 }
 
 for manifest in "$ROOT"/*/.claude-plugin/plugin.json; do
@@ -44,6 +61,7 @@ for manifest in "$ROOT"/*/.claude-plugin/plugin.json; do
             skill="$(basename "$sdir")"
             file="$sdir/SKILL.md"
             [ -f "$file" ] || { error "$folder/skills/$skill: SKILL.md is missing"; continue; }
+            frontmatter_closed "$file" || { error "$folder/skills/$skill: the frontmatter has no closing ---"; continue; }
             sname="$(frontmatter_value name "$file")"
             [ "$sname" = "$skill" ] || error "$folder/skills/$skill: frontmatter name '$sname' differs from its directory"
             [ -n "$(frontmatter_value description "$file")" ] || error "$folder/skills/$skill: description is missing"
