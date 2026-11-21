@@ -574,3 +574,41 @@ test('a write through a link made to a place that cannot be known is refused', a
   assert.match(verdict.reason, /could not evaluate/);
   await allowed('ln -s "$TARGET" l');
 });
+
+// Issue #66: find runs commands and writes files
+
+test('the command of find -exec, -execdir, -ok and -okdir is judged', async () => {
+  for (const command of ['find . -name x -exec touch /etc/x \\;', "find . -exec touch /etc/x ';'", 'find . -execdir touch /etc/x \\;',
+    'find . -ok rm /etc/x \\;', 'find . -okdir rm /etc/x \\;', 'find . -exec cp -t /etc {} +', 'find . -type f -exec sh -c "echo > /etc/x" \\;',
+    'find . -exec sudo tee /etc/x \\; -print', 'find src \\( -name a -o -name b \\) -exec rm /etc/x \\;']) {
+    await denied(command);
+  }
+  for (const command of ['find . -name x -exec touch /w/repo/x \\;', 'find . -exec rm {} \\;', 'find src -type f -exec sed -i s/a/b/ {} +',
+    'find . -execdir touch x \\;', 'find /tmp -exec rm {} \\;', 'find ../other -exec cat {} \\;', 'find . -name x -print']) {
+    await allowed(command);
+  }
+});
+
+test('{} stands for the starting points, which the files find hands are under', async () => {
+  for (const command of ['find /etc -exec rm {} \\;', 'find /etc -name x -execdir rm {} \\;', 'find /etc -exec mv {} {}.bak \\;',
+    'find /w/repo /etc -exec touch {} +', 'cd /etc && find . -exec rm {} \\;']) {
+    await denied(command);
+  }
+});
+
+test('the file of -fprint, -fprint0, -fprintf and -fls is a write target', async () => {
+  for (const command of ['find . -fprint /etc/x', 'find . -fprint0 /etc/x', 'find . -fprintf /etc/x "%p\\n"', 'find . -fls /etc/x']) {
+    assert.deepEqual(shellWriteTargets(command), ['/etc/x'], command);
+    await denied(command);
+  }
+  await allowed('find . -name "*.md" -fprint /w/repo/list.txt');
+});
+
+test('find -delete removes under its starting points', async () => {
+  for (const command of ['find /etc -name x -delete', 'find -L /etc -delete', 'find -H /w/repo /etc -delete', 'cd /etc && find -delete']) {
+    await denied(command);
+  }
+  for (const command of ['find . -name "*.tmp" -delete', 'find build -type f -delete', 'find /tmp/x -delete', 'find /etc -name x -print']) {
+    await allowed(command);
+  }
+});
