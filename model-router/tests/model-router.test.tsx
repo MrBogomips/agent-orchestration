@@ -444,7 +444,7 @@ describe('/model-router usage view', () => {
       await ui.press({ key: 'tab-models' })
       expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 7 days')
       await ui.press({ key: 'window-30d' })
-      expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 30 days · 9 closed tasks')
+      expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 30 days · 8 closed tasks')
 
       await ui.press({ key: 'tab-classes' })
       expect((await ui.find({ type: 'Text', text: /^Classes ·/ }))?.text).toContain('user level')

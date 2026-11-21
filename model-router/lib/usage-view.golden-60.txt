@@ -18,7 +18,7 @@ $/success by week           ▁    █  $0.098
 
 haiku·low      ███████████████████ 100%   $0.0047    2 tasks
 sonnet·low     ███████████████████ 100%    $0.023    3 tasks
-sonnet·medium  █████████████░░░░░░  67%    $0.060    4 tasks
+sonnet·medium  █████████████░░░░░░  67%    $0.075    3 tasks
 opus·high      ░░░░░░░░░░░░░░░░░░░   0%         –     1 task
 
 Session
@@ -36,11 +36,11 @@ Routing · 4 decisions this session
   explicit            █████░░░░░░░░░░░░░░░ 1
 
 ── Models ──────────────────────────────────────────────────
-Models · all time · 10 closed tasks · 519.3k tokens · $0.639
+Models · all time · 9 closed tasks · 514.3k tokens · $0.629
                 tasks  tokens    cost  FPY         $/success
 haiku·low           2  166.3k $0.0095  ██████ 100%   $0.0047
 sonnet·low          3   48.0k  $0.070  ██████ 100%    $0.023
-sonnet·medium       4   95.0k  $0.160  ████░░  67%    $0.060
+sonnet·medium       3   90.0k  $0.150  ████░░  67%    $0.075
 opus·high           1  210.0k  $0.400  ░░░░░░   0%         –
 Model ids: claude-haiku-5-5, claude-sonnet-5-5,
            claude-opus-5-5

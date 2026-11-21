@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GRID, LIVE, PROJECT, SESSION, T0, events, level, outcomes, usageData } from './usage-fixture.mjs';
-import { agedCells, classesOf, decisionsOf, headlineOf, inWindow, kpisOf, latestOutcomes, modelRows, seriesOf, sessionAgents, tally, trendOf } from './usage-data.mjs';
-import { metrics } from './aggregate.mjs';
+import { agedCells, buildUsageData, classesOf, decisionsOf, headlineOf, inWindow, kpisOf, latestOutcomes, modelRows, seriesOf, sessionAgents, tally, trendOf } from './usage-data.mjs';
+import { emptyLevel, metrics } from './aggregate.mjs';
 
 test('the all window of Classes is the report page\'s classes for the same level', () => {
   const list = outcomes();
@@ -84,6 +84,32 @@ test('the latest outcome of a task wins, and the trend is weekly', () => {
   const twice = [{ type: 'outcome', task: 'a', outcome: 'rework' }, { type: 'outcome', task: 'a', outcome: 'success' }];
   assert.deepEqual(latestOutcomes(twice).map((o) => o.outcome), ['success']);
   assert.ok(trendOf(outcomes()).length >= 3);
+});
+
+test('the trend skips an outcome whose time cannot be read and keeps the others', () => {
+  const trend = trendOf([
+    { outcome: 'success', ts: '2026-11-20T00:00:00Z', reportTs: 'bad' },
+    { outcome: 'success', ts: 'never' },
+    { outcome: 'failure', ts: '2026-11-18T00:00:00Z', reportTs: '2026-11-18T00:00:00Z', costUsd: 1 },
+  ]);
+  assert.deepEqual(trend, [{ week: '2026-11-16', n: 1, fpy: 0, costPerSuccess: null }]);
+});
+
+test('the Models tab counts the same closed tasks and cost as the KPI tiles: cancelled tasks are left out', () => {
+  const at = new Date(T0 - 3600000).toISOString();
+  const one = (task, outcome, costUsd) => ({
+    v: 1, type: 'outcome', ts: at, reportTs: at, task, class: 'edit-specified', tier: 'sonnet', effort: 'medium',
+    model: 'claude-sonnet-5-5', outcome, costUsd, tokens: 1000, learn: outcome !== 'cancelled',
+  });
+  const list = [one('s/a', 'success', 0.1), one('s/b', 'success', 0.1), one('s/c', 'cancelled', 1), one('s/d', 'cancelled', 1)];
+  const data = buildUsageData({ events: list, user: emptyLevel('user'), grid: GRID, now: T0, halfLifeDays: 30 });
+  const w = data.windows['7d'];
+  const tiles = w.headline.user.current;
+  assert.equal(tiles.closed, 2);
+  assert.equal(w.tasks, 2);
+  assert.equal(w.models.reduce((n, m) => n + m.n, 0), 2);
+  assert.equal(w.models[0].costSum, 0.2);
+  assert.equal(w.models[0].costPerSuccess, tiles.costPerSuccess);
 });
 
 test('the headline counts scored tasks, FPY, rework, cost per success and routed starts of a window', () => {

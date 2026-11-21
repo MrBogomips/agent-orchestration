@@ -794,7 +794,7 @@ tag. A task that never reports is closed as <code>cancelled</code> after 24 hour
 <h3>The numbers</h3>
 <table>
   <thead><tr><th style="width:30%">Measure</th><th>Meaning</th></tr></thead>
-  <tr><td>First-pass yield (FPY)</td><td>success ÷ (success + rework + failure): how often the work was right the first time. A cancelled task counts in the tasks, not in FPY.</td></tr>
+  <tr><td>First-pass yield (FPY)</td><td>success ÷ (success + rework + failure): how often the work was right the first time. A cancelled task is not scored: the views leave it out of every count, FPY and cost.</td></tr>
   <tr><td>Rework rate</td><td>rework ÷ (success + rework + failure)</td></tr>
   <tr><td>Cost per task</td><td>the mean estimated cost of a task, from the engine's own estimate</td></tr>
   <tr><td>Cost per successful task (<code>$/success</code>)</td><td>cost per task ÷ FPY: what one good result really costs, rework included. A cheap model that is often wrong can cost more per success than a dearer one.</td></tr>

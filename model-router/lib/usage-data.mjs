@@ -328,19 +328,21 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
   const windows = {};
   for (const window of WINDOW_NAMES) {
     const recent = inWindow(outcomes, window, now);
+    // The Models tab counts what the KPI tiles count: closed tasks, not cancelled ones.
+    const closed = recent.filter((o) => CLOSED.includes(o.outcome));
     const own = projectId ? recent.filter((o) => o.project?.id === projectId) : [];
     const levelClasses = (list, level, id) => (window === 'all'
       ? classesOf(agedCells(level, now, halfLifeDays), grid, { outcomes: list, projectId: id })
       : classesOf(tally(list.filter((o) => o.learn), (o) => `${o.class}|${o.tier}|${o.effort}`), grid, { outcomes: list, projectId: id }));
     windows[window] = {
-      tasks: recent.length,
+      tasks: closed.length,
       headline: {
         user: headlineOf(outcomes, allDecisions, window, now),
         project: projectId
           ? headlineOf(outcomes.filter((o) => o.project?.id === projectId), allDecisions.filter((d) => projectAgents.has(d.agentId)), window, now)
           : null,
       },
-      models: modelRows(recent),
+      models: modelRows(closed),
       classes: {
         user: levelClasses(recent, user, null),
         project: projectId ? levelClasses(own, projectLevel, projectId) : null,
