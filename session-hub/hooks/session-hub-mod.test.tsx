@@ -226,7 +226,8 @@ test('a registry call makes the session a master; the panel lists the children w
   await $.tool.call({ tool: 'Bash', command: 'node "/p/scripts/registry.mjs" upsert --hub /hub --entry \'{}\'' })
   const { text } = await $.command.run(RUN)
   expect(text).toMatch(/Role: master/)
-  expect(text).toMatch(/t42-product\s+running\s+busy\s+sonnet\/medium/)
+  expect(text).toMatch(/t42-product\s+running\s+busy\s+sonnet ▰▰▱▱ medium/)
+  expect(text).not.toMatch(/\x1b\[/)
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({
@@ -237,8 +238,57 @@ test('a registry call makes the session a master; the panel lists the children w
       props: { title: 'x', isFocused: false, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
     })
     expect((await ui.find({ type: 'Text', text: /t42-product/ }))?.text).toMatch(/busy/)
+    const drawn = JSON.stringify(await ui.drawn())
+    // The model bold in the sonnet colour, the bar and the word in the medium colour, the statuses in the theme's success.
+    expect(drawn).toMatch(/\{"color":"#7dd3fc","weight":"bold"[^}]*\},"children":\["sonnet"\]/)
+    expect(drawn).toContain('{"color":"#eab308"},"children":["▰▰"]')
+    expect(drawn).toContain('{"color":"#3a3f47"},"children":["▱▱"]')
+    expect(drawn).toContain('{"color":"success"},"children":["running      "]')
     await ui.unmount()
   }
+})
+
+const CHILD_START =
+  'cd /hub/product && env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub SESSION_HUB_SCOPE_ROOT=/hub/product ' +
+  'SESSION_HUB_HANDOFF=/hub/t.md SESSION_HUB_REGISTRY=/r.json claude --bg -n t42-product --model opus --effort high -- "Read and follow /hub/t.md"'
+const bashRow = (id: string, command: string) => ({
+  plugin: 'session-hub',
+  component: 'ToolUse',
+  requestId: id,
+  props: { tool_use_id: id, tool: 'Bash', input: { command }, isRunning: false, isErrored: false, isInterrupted: false },
+}) as const
+
+test('a child start in a master gets the start line under its Bash row, the row kept', async ($, on) => {
+  engine(on, {}, '/hub')
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Bash', command: CHILD_START, tool_use_id: 'tu1' } as never)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...bashRow('tu1', CHILD_START), surface } as never)
+    expect((await ui.find({ type: 'Text', text: /^ {2}⎿ {2}🔀 / }))?.text).toBe('  ⎿  🔀 opus   ▰▰▰▱ high   -> t42-product')
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
+    expect(drawn).toContain('"color":"#3b82f6"')
+    expect(drawn).toContain('{"color":"#f97316"},"children":["▰▰▰"]')
+    expect(drawn).not.toContain('#14b8a6')
+    await ui.unmount()
+  }
+})
+
+test('a Bash call that starts no child, or one in a child session, draws only its row', async ($, on) => {
+  engine(on, {}, '/hub')
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Bash', command: 'git status', tool_use_id: 'tu2' } as never)
+  const ui = await $.ui.mount({ ...bashRow('tu2', 'git status'), surface: 'terminal' } as never)
+  expect(await ui.find({ type: 'Text', text: /🔀/ })).toBeUndefined()
+  expect(JSON.stringify(await ui.drawn())).toMatch(/^\{"type":"engine","ref":\d+\}$/)
+})
+
+test('a child session gets no start line, even for a launch command', async ($, on) => {
+  engine(on, CHILD_ENV)
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Bash', command: 'echo hi', tool_use_id: 'tu3' } as never)
+  const ui = await $.ui.mount({ ...bashRow('tu3', 'echo hi'), surface: 'terminal' } as never)
+  expect(await ui.find({ type: 'Text', text: /🔀/ })).toBeUndefined()
 })
 
 test('the scope line rides the first prompt as context, and again after a compaction', async ($, on) => {
