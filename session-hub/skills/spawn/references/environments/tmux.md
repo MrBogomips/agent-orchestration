@@ -20,10 +20,10 @@ tmux split-window -v -d -t <last-child-pane-id> -l "$(( 100 * (n - k + 1) / (n -
 -e SESSION_HUB_GUARDS=<on|off>`, and first `-e HOME=…` and `-e CLAUDE_CONFIG_DIR=…` when *Launch command* in
 [environments.md](../environments.md) found those identity variables. Write no brackets.
 
-Then label the pane and keep it open when the child exits:
+Then tag the pane with the child's name and keep it open when the child exits:
 
 ```bash
-tmux select-pane -t <pane-id> -T <name>
+tmux set -p -t <pane-id> @session_hub_child <name>
 tmux set -p -t <pane-id> remain-on-exit on
 ```
 
@@ -34,8 +34,10 @@ tmux set -p -t <pane-id> remain-on-exit on
   call, as you would on a plain command line (`--settings '{"crossSessionInbound":"accept"}'`).
 - `-d` keeps the user's focus where it is. `remain-on-exit` keeps the pane, and the child's last screen, after the
   child exits; the user closes it with `prefix` then `x`.
-- The pane title (`select-pane -T`) names the child in `tmux list-panes -a -F '#{pane_title}'`, for the
-  duplicates check.
+- The pane option `@session_hub_child` names the child for the duplicates check and the live names of a
+  reconcile: `tmux list-panes -a -F '#{pane_dead} #{@session_hub_child}'` lists the live children as the lines that
+  start with `0` and have a name (a pane kept by `remain-on-exit` after its child ended starts with `1`). Never use the pane title (`select-pane -T`,
+  `#{pane_title}`): Claude Code sets the terminal title once it has drawn its interface, and the label is lost.
 - **Worktree:** see *Worktrees* in [hub-config.md](../hub-config.md); for a sibling worktree, `<dir>` is that
   worktree.
 - With `tabs`, when the user wants to watch a child: `tmux select-window -t <pane-id>`.

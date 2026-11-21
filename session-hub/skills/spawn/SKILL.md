@@ -41,7 +41,8 @@ repositories need a child at all.
    one in a line.
 4. **Duplicates.** For each piece, look for a live child that already follows it (same repository, and same task
    or name), in the record and in what the environment lists: `ListAgents`, the desktop app's linked sessions,
-   `herdr agent list`, `tmux list-panes -a`, `claude agents --json`. If one exists, send it the new request with
+   `herdr agent list`, tmux's tagged panes (`list-panes` in [tmux.md](references/environments/tmux.md)),
+   `claude agents --json`. If one exists, send it the new request with
    the `[master]` prefix instead of starting another, and say so.
 5. **Environment.** Pick it with the table in *Environments*, unless the configuration names one.
 6. **Master identity.** In Claude Code, `ListAgents` starts with `This session is <name> [<ref>]`: the name is

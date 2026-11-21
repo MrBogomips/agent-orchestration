@@ -33,6 +33,9 @@ In the master, ask:
 - [ ] Herdr: each pane gets `--env SESSION_HUB_ROLE=child` and the other five `SESSION_HUB_*` variables; tmux:
       the pane is made with `-e SESSION_HUB_ROLE=child` and the others; terminal and manual: the command starts
       with `env SESSION_HUB_ROLE=child …`
+- [ ] tmux, the child's name (issue #31): once the child has drawn its interface,
+      `tmux list-panes -a -F '#{pane_dead} #{@session_hub_child}'` shows `0 <name>` for its pane (the pane title
+      shows Claude Code's own title, which is why it is not used); after the child exits, the line starts with `1`
 - [ ] tmux, carried values (issue #30): with the hub's carried flags holding
       `--settings '{"crossSessionInbound":"accept"}'`, start a child; in it, `ps -o args= -p $PPID` (or the
       transcript's first lines) shows the JSON with its double quotes, and a carried value with `$HOME` arrives

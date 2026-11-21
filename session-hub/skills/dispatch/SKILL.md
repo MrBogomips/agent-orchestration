@@ -23,8 +23,8 @@ Starting a child is `session-hub:spawn`'s job; this skill decides when to call i
    *Master only* key and any dispatch criteria the hub adds in its instruction file: they extend the table below.
 2. **Children record.** Reconcile it with the live sessions, as `session-hub:spawn` does in its step 3, with
    `reconcile` (commands in *Children record* below). Take the live names from the same sources as
-   `session-hub:spawn` step 4 (`ListAgents`, `herdr agent list`, `tmux list-panes -a`, the desktop app's linked
-   sessions). They match the record because each child is started with `-n <name>`. If no list could be read,
+   `session-hub:spawn` step 4 (`ListAgents`, `herdr agent list`, tmux's live panes tagged `@session_hub_child`,
+   the desktop app's linked sessions). They match the record because each child is started with `-n <name>`. If no list could be read,
    skip the reconcile and say so. Report any child that became `lost`.
 3. **Repositories.** Resolve which repositories the work touches from the task and the hub's *Repositories*. When
    unsure, ask. Never guess.
