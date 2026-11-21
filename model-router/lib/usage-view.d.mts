@@ -1,4 +1,6 @@
-export type Row = { text: string; tone?: 'title' | 'dim' | 'warn' }
+export type Tone = 'title' | 'dim' | 'warn' | 'accent' | 'good' | 'fair' | 'bad'
+export type Segment = { text: string; tone?: Tone | null }
+export type Row = { text: string; tone?: Tone; segments?: Segment[] }
 export type View = { tab?: string | null; window?: string | null; level?: string | null; status?: Record<string, unknown> }
 export type Parsed =
   | { kind: 'toggle'; on: boolean }

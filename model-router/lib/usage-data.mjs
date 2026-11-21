@@ -163,6 +163,69 @@ export function trendOf(outcomes) {
     });
 }
 
+/**
+ * The headline numbers of a set of outcomes and of the routing decisions in the same span: closed tasks, first-pass
+ * yield, rework rate, cost per successful task, and the starts routed, by downgrade, upgrade and keep.
+ */
+export function kpisOf(outcomes, decisions) {
+  const cell = tally(outcomes.filter((o) => CLOSED.includes(o.outcome)), () => 'all').all;
+  const m = cell ? metrics(cell) : { n: 0, fpy: null, reworkRate: null, costPerSuccess: null };
+  const routed = { total: 0, downgrade: 0, upgrade: 0, keep: 0 };
+  for (const d of decisions) {
+    routed.total += 1;
+    if (d.action in routed) routed[d.action] += 1;
+  }
+  return { closed: m.n, fpy: m.fpy, reworkRate: m.reworkRate, costPerSuccess: m.costPerSuccess, routed };
+}
+
+/** How each window is cut for its sparklines: bucket count and size. `all` goes by week. */
+export const SERIES = Object.freeze({
+  '24h': { buckets: 8, ms: 3 * 3600000, unit: '3h' },
+  '7d': { buckets: 7, ms: DAY_MS, unit: 'day' },
+  '30d': { buckets: 10, ms: 3 * DAY_MS, unit: '3 days' },
+  all: { buckets: 12, ms: 7 * DAY_MS, unit: 'week' },
+});
+
+/**
+ * First-pass yield and cost per successful task in equal buckets across the window, oldest first, each null when
+ * no task closed in it. `all` is cut into the last 12 weeks.
+ */
+export function seriesOf(outcomes, window, now) {
+  const spec = SERIES[window] ?? SERIES['7d'];
+  const start = now - spec.buckets * spec.ms;
+  const groups = Array.from({ length: spec.buckets }, () => []);
+  for (const o of outcomes) {
+    const t = outcomeTime(o);
+    if (!Number.isFinite(t) || t <= start || t > now || !CLOSED.includes(o.outcome)) continue;
+    groups[Math.min(spec.buckets - 1, Math.floor((t - start - 1) / spec.ms))].push(o);
+  }
+  const points = groups.map((g) => {
+    if (!g.length) return null;
+    const m = metrics(tally(g, () => 'all').all);
+    return { n: m.n, fpy: m.fpy, costPerSuccess: m.costPerSuccess };
+  });
+  return { unit: spec.unit, points };
+}
+
+/** The decisions whose time falls in (from, to]. */
+const decisionsIn = (decisions, from, to) => decisions.filter((d) => {
+  const t = Date.parse(d.ts);
+  return Number.isFinite(t) && t > from && t <= to;
+});
+
+/**
+ * The headline numbers of a window and of the window of the same length before it (null for `all`), with the
+ * sparkline series. `outcomes` and `decisions` are already limited to the level.
+ */
+export function headlineOf(outcomes, decisions, window, now) {
+  const days = WINDOWS[window];
+  const current = days ? kpisOf(inWindow(outcomes, window, now), decisionsIn(decisions, now - days * DAY_MS, now)) : kpisOf(outcomes, decisions);
+  const previous = days
+    ? kpisOf(inWindow(outcomes, window, now - days * DAY_MS), decisionsIn(decisions, now - 2 * days * DAY_MS, now - days * DAY_MS))
+    : null;
+  return { current, previous, series: seriesOf(outcomes, window, now) };
+}
+
 /** Decision records counted by action; `session` limits them to one session. */
 export function decisionsOf(events, session = null) {
   const byAction = {};
@@ -257,6 +320,9 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
     .filter((e) => e?.type === 'decision' && typeof e.ts === 'string' && typeof e.action === 'string')
     .slice(-DECISIONS_KEPT)
     .map((d) => slimDecision(d, session));
+  const allDecisions = events.filter((e) => e?.type === 'decision' && typeof e.ts === 'string');
+  // A decision carries no project: the project level counts the decisions of this session's project's spawns.
+  const projectAgents = new Set(events.filter((e) => e?.type === 'spawn' && projectId && e.project?.id === projectId).map((e) => e.agentId));
   const windows = {};
   for (const window of WINDOW_NAMES) {
     const recent = inWindow(outcomes, window, now);
@@ -266,6 +332,12 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
       : classesOf(tally(list.filter((o) => o.learn), (o) => `${o.class}|${o.tier}|${o.effort}`), grid, { outcomes: list, projectId: id }));
     windows[window] = {
       tasks: recent.length,
+      headline: {
+        user: headlineOf(outcomes, allDecisions, window, now),
+        project: projectId
+          ? headlineOf(outcomes.filter((o) => o.project?.id === projectId), allDecisions.filter((d) => projectAgents.has(d.agentId)), window, now)
+          : null,
+      },
       models: modelRows(recent),
       classes: {
         user: levelClasses(recent, user, null),

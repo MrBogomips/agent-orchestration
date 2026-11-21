@@ -74,31 +74,45 @@ does not read it.
 
 ### The usage view
 
-A dialog pane in the style of `/usage`, with four tabs:
+A dialog pane laid out like Claude Code's own Settings dialog (`/usage`, `/stats`): a header row with 🧭 and the
+four tabs, a second row with the window (24h, 7d, 30d, all) and the level (user or project), the content, and a
+footer of key hints. The active tab and window are drawn as a teal block; the KPI tile borders share the teal.
+
+```text
+🧭 model-router [Overview]  Models   Classes   Decisions
+d:  24h  w: [7d] m:  30d  a:  all                p: user · project
+```
 
 | Tab | Shows |
 |---|---|
-| Overview | Routing on or off, measuring, adapt; this session's subagents by model with input, output, cache-read and cache-write tokens and cost; this session's routing decisions by action, with bars |
-| Models | Per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield (FPY) with a bar, cost per successful task, and the model ids seen in the window. A cancelled task counts in the tasks, not in FPY |
-| Classes | Per task class, over the window and at the level: n, FPY with a bar, rework rate, cost per successful task, the grid's choice next to the best measured cell, weak-signal flags, and each cell under its class (`*` marks the recommended one); then up to three recommendations that differ from the grid, each led by its FPY |
+| Overview | Routing on or off, measuring, adapt; the **KPI tiles** of the window: first-pass yield (FPY), cost per successful task, rework rate and routed starts (↓ downgrade, ↑ upgrade, = keep), each with its change against the window of the same length before it (green when better, red when worse) and a status dot (FPY 🟢 from 85%, 🟡 from 70%, 🔴 below; rework 🟢 up to 10%, 🟡 up to 25%, 🔴 above; cost 🟢 cheaper or 🔴 dearer; ⚪ under five tasks); sparklines of FPY and cost per success across the window; FPY bars per tier and effort, coloured the same way; this session's subagents by model with input, output, cache-read and cache-write tokens and cost; this session's routing decisions by action |
+| Models | The tiles, when the four fit on one row (70 columns); per tier and effort, over the window: closed tasks, tokens, cost, FPY with a bar, cost per successful task, and the model ids seen in the window. A cancelled task counts in the tasks, not in FPY |
+| Classes | The tiles, when they fit; per task class, over the window and at the level: n, FPY with a bar, rework rate, cost per successful task, the grid's choice next to the best measured cell, weak-signal flags, and each cell under its class (`*` marks the recommended one); then up to three recommendations that differ from the grid, each led by its FPY |
 | Decisions | The latest twelve routing decisions of every session (UTC), `•` marking this session's |
+
+The keys work as soon as the view opens, with no click:
 
 | Key | Does |
 |---|---|
-| `1`–`4`, or Tab onto a tab | Switches tab |
-| `d`, `w`, `m`, `a` | Window: last 24 hours, 7 days, 30 days, or all time |
+| Tab, Shift+Tab | Next or previous tab |
+| ↓, ↑ | Next or previous window: last 24 hours, 7 days, 30 days, all time |
+| `d`, `w`, `m`, `a` | That window directly |
 | `p` | Switches between your data across projects (user) and this project's |
 | `o` | Writes and opens the report page; a toast gives its path |
 | `r` | Refreshes: runs compaction and reads again |
+| Page Up, Page Down | Scroll a long tab |
 | Esc | Closes the view |
+
+Left and Right do not switch tabs as they do in Claude Code's own dialog: Claude Code does not pass them to a
+plugin's pane, and Left at the prompt opens the agents view.
 
 The `all` window of Classes shows the aged aggregates, the very numbers of the report page; shorter windows count
 the tasks whose report fell inside them. Opening the view runs compaction for at most 3 seconds; if it takes
 longer, the view shows the numbers as of the last compaction and says so.
 
 Where no pane can be placed (`claude -p`, a headless run, a terminal under 60 columns), the command prints the same
-rows as text: the tab you named, or all four. A real run of `claude -p "/model-router"` on a machine with two
-measured subagents:
+rows as text, without colours and with the status dots: the tab you named, or all four. A real run of
+`claude -p "/model-router overview"` on a machine with three measured subagents:
 
 ```text
 model-router: Usage · last 7 days · user level
@@ -106,56 +120,44 @@ model-router: Usage · last 7 days · user level
 ── Overview ────────────────────────────────────────────────────────────────────
 Status:               routing on · measuring on · adapt off
 
+Last 7 days · user level · 3 tasks scored · vs the one before
+╭─ FPY ───────╮ ╭─ $/success ─╮ ╭─ Rework ────╮ ╭─ Routed ────╮
+│    100%     │ │   $0.043    │ │     0%      │ │  7 starts   │
+│   ⚪ weak   │ │   ⚪ weak   │ │   ⚪ weak   │ │  ↓2 ↑0 =3   │
+╰─────────────╯ ╰─────────────╯ ╰─────────────╯ ╰─────────────╯
+
+FPY by day                  ▄  100%
+$/success by day            ▄  $0.043
+
+haiku·low      ████████████████████ 100%   $0.0049    2 tasks
+sonnet·medium  ████████████████████ 100%    $0.118     1 task
+
 Session
 No subagent has run in this session yet.
 
 Routing · 0 decisions this session
 No routing decision in this session yet.
 
-── Models ──────────────────────────────────────────────────────────────────────
-Models · last 7 days · 2 closed tasks · 166.3k tokens · $0.0097
-                tasks  tokens    cost  FPY                       $/success
-haiku·low           2  166.3k $0.0097  ████████████████████ 100%   $0.0049
-Model ids: claude-haiku-5-5
-
-── Classes ─────────────────────────────────────────────────────────────────────
-Classes · user level · last 7 days
-                       n  FPY                        rework $/success
-read-search            2  ████████████████████ 100%      0%   $0.0049
-  grid haiku·low · best: not enough data · read-only: weak signal, n < 5
-    haiku·low          2  ████████████████████ 100%      0%   $0.0049
-
-Recommendations
-  None differs from the grid.
-
-── Decisions ───────────────────────────────────────────────────────────────────
-Decisions · latest 2 of 2 · all sessions · UTC
-11-20 21:37  downgrade   sonnet → haiku·low    general-purpose: judge: fast at …
-11-20 21:48  downgrade   sonnet → haiku·low    Explore: judge: fast at 0.95
-
-Data read 2026-11-20 22:38 UTC.
+Data read 2026-11-21 00:51 UTC.
 /model-router help: tabs, windows, levels and keys.
 ```
 
-In a session with subagents, Overview reads like this (from the test data set):
+With more data, over the last 30 days (from the test data set, 62 columns, so the tiles stand two by two):
 
 ```text
-Session
-Subagents:            3 · $0.034
-Usage by model:
-   claude-sonnet-5-5: 1 × 52.0k tokens ($0.021)
-   claude-haiku-5-5:  2 × 2.0k input, 6.0k output, 950.0k cache read,
-                      50.0k cache write ($0.013)
-Dropped agents show total tokens only (from the log).
+Last 30 days · user level · 8 tasks scored · vs the one before
+╭─ FPY ───────╮ ╭─ $/success ─╮
+│   75% ▼25   │ │ $0.097 ▲93% │
+│   🟡 fair   │ │  🔴 dearer  │
+╰─────────────╯ ╰─────────────╯
+╭─ Rework ────╮ ╭─ Routed ────╮
+│   13% ▲13   │ │  5 starts   │
+│   🟡 some   │ │  ↓3 ↑0 =1   │
+╰─────────────╯ ╰─────────────╯
 
-Routing · 4 decisions this session
-  downgrade           ██████████░░░░░░░░░░ 2
-  keep                █████░░░░░░░░░░░░░░░ 1
-  explicit            █████░░░░░░░░░░░░░░░ 1
+FPY by 3 days            ▁   ██▆  67%
+$/success by 3 days          ▂▁█  $0.205
 ```
-
-The pane draws the same rows under a row of tab buttons, with the window, level, report and refresh keys at the
-bottom.
 
 ## Options
 

@@ -54,7 +54,7 @@ test('a requested tab prints that tab only', () => {
 
 test('the windows count different tasks', () => {
   const data = usageData();
-  const title = (window) => tabRows(data, { tab: 'models', window }, 80)[0].text;
+  const title = (window) => tabRows(data, { tab: 'models', window }, 80).find((r) => r.text.startsWith('Models ·')).text;
   assert.match(title('24h'), /3 closed tasks/);
   assert.match(title('7d'), /8 closed tasks/);
   assert.match(title('30d'), /9 closed tasks/);

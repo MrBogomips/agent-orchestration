@@ -3,6 +3,7 @@
 // See docs/design/model-router.md, "Command".
 // Plain ES module with no Node or engine imports, so both the mod and node tests load it.
 import { familyOf } from './tiers.mjs';
+import { TILES_ONE_ROW, fpyStatus, sparkRows, tileRows } from './usage-tiles.mjs';
 
 export const TABS = Object.freeze(['overview', 'models', 'classes', 'decisions']);
 export const TAB_TITLES = Object.freeze({ overview: 'Overview', models: 'Models', classes: 'Classes', decisions: 'Decisions' });
@@ -58,7 +59,7 @@ export function helpText() {
     '  report          write and open the HTML report; prints its path',
     '  help            this list',
     '',
-    'Keys: 1-4 or Left/Right/Tab switch tab · d/w/m/a window 24h/7d/30d/all ·',
+    'Keys: Tab/Shift+Tab switch tab · Up/Down or d/w/m/a window 24h/7d/30d/all ·',
     'p user/project · o report · r refresh (runs compaction) · Esc close.',
     'Where no pane fits (headless, -p, under 60 columns) the view prints as text.',
   ].join('\n');
@@ -144,8 +145,40 @@ function statusText(status) {
   return `routing ${routing} · measuring ${status.measuring ? 'on' : 'off'} · adapt ${adapt}`;
 }
 
+/** The headline of the window at the view's level: `{ current, previous, series }`, or null. */
+function headlineOf(data, view) {
+  const h = data.windows?.[view.window]?.headline;
+  return (view.level === 'project' ? h?.project : h?.user) ?? null;
+}
+
+const levelName = (data, view) => (view.level === 'project' ? `project ${data.project?.root ?? data.project?.id ?? ''}`.trim() : 'user level');
+
+/** The KPI tiles of the window, with the window of the same length before it as the comparison. */
+function headlineRows(data, view, width) {
+  const h = headlineOf(data, view);
+  const versus = view.window === 'all' ? '' : ' · vs the one before';
+  const when = WINDOW_TITLES[view.window];
+  const rows = [title(fit(`${when[0].toUpperCase()}${when.slice(1)} · ${levelName(data, view)} · ${h?.current?.closed ?? 0} tasks scored${versus}`, width))];
+  if (view.level === 'project' && !data.project) return [...rows, dim('This session has no project id yet.')];
+  return [...rows, ...tileRows(h, width)];
+}
+
+/** One tier·effort with its FPY bar, coloured as the FPY reads: 🟢, 🟡, 🔴, or dim under five tasks. */
+function modelBarRow(m, width) {
+  const L = 15;
+  const b = barWidth(width, L + 5 + 9 + 12);
+  const head = `${left(cell(m.tier, m.effort), L)}`;
+  const tail = `${right(fmtPct(m.fpy), 5)} ${right(fmtUsd(m.costPerSuccess), 9)} ${right(`${fmtNum(m.n)} task${m.n === 1 ? '' : 's'}`, 10)}`;
+  const text = fit(`${head}${bar(m.fpy, b)}${tail}`, width);
+  return { text, segments: [{ text: head }, { text: bar(m.fpy, b), tone: fpyStatus(m.fpy, m.n).tone }, { text: text.slice(head.length + b) }] };
+}
+
 function overviewRows(data, view, width) {
-  const rows = [row(labelled('Status:', statusText(view.status), width))];
+  const rows = [row(labelled('Status:', statusText(view.status), width)), blank(), ...headlineRows(data, view, width)];
+  const h = headlineOf(data, view);
+  if (h) rows.push(blank(), ...sparkRows(h.series).map((r) => row(fit(r.text, width))));
+  const models = data.windows?.[view.window]?.models ?? [];
+  if (models.length) rows.push(blank(), ...models.map((m) => modelBarRow(m, width)));
   const s = data.session ?? { models: [], agents: 0, cost: 0 };
   rows.push(blank(), title('Session'));
   if (!s.agents) {
@@ -189,7 +222,9 @@ function modelsRows(data, view, width) {
   const b = barWidth(width, fixed);
   rows.push(dim(fit(`${''.padEnd(L)} ${right('tasks', 5)} ${right('tokens', 7)} ${right('cost', 7)}  ${left('FPY', b + 5)} ${right('$/success', 9)}`, width)));
   for (const m of list) {
-    rows.push(row(fit(`${left(cell(m.tier, m.effort), L)} ${right(fmtNum(m.n), 5)} ${right(fmtTokens(m.tokensSum), 7)} ${right(fmtUsd(m.costSum), 7)}  ${bar(m.fpy, b)}${right(fmtPct(m.fpy), 5)} ${right(fmtUsd(m.costPerSuccess), 9)}`, width)));
+    const head = `${left(cell(m.tier, m.effort), L)} ${right(fmtNum(m.n), 5)} ${right(fmtTokens(m.tokensSum), 7)} ${right(fmtUsd(m.costSum), 7)}  `;
+    const text = fit(`${head}${bar(m.fpy, b)}${right(fmtPct(m.fpy), 5)} ${right(fmtUsd(m.costPerSuccess), 9)}`, width);
+    rows.push({ text, segments: [{ text: head }, { text: bar(m.fpy, b), tone: fpyStatus(m.fpy, m.n).tone }, { text: text.slice(head.length + b) }] });
   }
   const ids = new Map();
   for (const m of list) for (const id of m.models ?? []) ids.set(id, m.tier);
@@ -250,7 +285,11 @@ function decisionRows(data, view, width) {
   return rows;
 }
 
-const BUILDERS = { overview: overviewRows, models: modelsRows, classes: classRows, decisions: decisionRows };
+/** Models and Classes open with the tiles where the four fit on one row. */
+const withTiles = (build) => (data, view, width) =>
+  (width >= TILES_ONE_ROW ? [...headlineRows(data, view, width), blank(), ...build(data, view, width)] : build(data, view, width));
+
+const BUILDERS = { overview: overviewRows, models: withTiles(modelsRows), classes: withTiles(classRows), decisions: decisionRows };
 
 /**
  * The rows of one tab: `view` is `{ tab, window, level, status }`, `columns` the room. A missing tab, window or
