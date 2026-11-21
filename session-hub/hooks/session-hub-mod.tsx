@@ -81,6 +81,16 @@ async function walk($: $, path: string): Promise<{ real: string; isDir: boolean 
 
 const realpath = async ($: $, path: string) => (await walk($, path)).real
 
+// What a path is, its links followed: the shell check uses it to make sure the write root is an existing folder.
+async function fileKind($: $, path: string): Promise<'dir' | 'other' | 'missing'> {
+  const stat = await $.fs.stat(path, { resolve: true }).catch((error: unknown) => {
+    if (isNotFound(error)) return undefined
+    throw error
+  })
+  if (!stat) return 'missing'
+  return stat.kind === 'dir' ? 'dir' : 'other'
+}
+
 // The children record, read through the registry script: never written by the mod.
 async function readRecord($: $, master: SessionHubMaster, cwd: string): Promise<unknown> {
   const where = master.record ? ['--file', master.record] : ['--hub', master.hub ?? cwd]
@@ -194,6 +204,7 @@ export const register: Register = (on) => {
         cwd: await $.session.cwd(),
         home: await $.env.get('HOME'),
         realpath: (path: string) => realpath($, path),
+        fileKind: (path: string) => fileKind($, path),
       })
       return verdict.allow ? next(e) : { deny: verdict.reason }
     }

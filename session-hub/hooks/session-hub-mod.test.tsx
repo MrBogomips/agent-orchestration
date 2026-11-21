@@ -22,6 +22,10 @@ const COMPOSE = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputS
 
 type Fs = { stat?: () => { deny: string }; list?: () => { deny: string } | { value: never[] } }
 
+// The file system the tests stand in: the write root is an existing folder, nothing else exists.
+const rootOnly = (_: unknown, e: { path: string }) =>
+  e.path === '/w/repo' ? { value: { realPath: '/w/repo', kind: 'dir' } } : { deny: 'ENOENT' }
+
 function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails = false, sent: string[] = [], fs: Fs = {}) {
   on('env.get', (_, e) => {
     if (envFails) throw new Error('env unavailable')
@@ -29,7 +33,7 @@ function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails =
   })
   on('session.cwd', () => ({ value: cwd }))
   on('agent.list', () => ({ value: [] }))
-  on('fs.stat', fs.stat ?? (() => ({ deny: 'ENOENT' })))
+  on('fs.stat', fs.stat ?? (rootOnly as never))
   on('fs.list', fs.list ?? (() => ({ value: [] })))
   on('session.send', (_, e) => (sent.push(e.to), { isDelivered: true }))
   on('session.receive', (_, e) => ({ text: e.text }))
@@ -86,7 +90,7 @@ test('a shell write outside the write root is denied; inside it runs', async ($,
 
 test('a write through a link out of the root after a cd names the path and where it lands', async ($, on) => {
   const stat = (_: unknown, e: { path: string }) =>
-    e.path === '/w/repo/design-link' ? { value: { realPath: '/w/design', kind: 'dir' } } : { deny: 'ENOENT' }
+    e.path === '/w/repo/design-link' ? { value: { realPath: '/w/design', kind: 'dir' } } : rootOnly(_, e)
   engine(on, CHILD_ENV, '/w/repo', false, [], { stat } as never)
   on('tool.call', () => ({ result: {} }))
   const verdict = await $.tool.call({ tool: 'Bash', command: 'cd /w/repo && echo x >> design-link/docs/notes.md; echo done' })
@@ -104,6 +108,45 @@ test('a Monitor command is checked like a Bash command; a Monitor socket is left
   expect('deny' in inside).toBe(false)
   const socket = await $.tool.call({ tool: 'Monitor', ws: { url: 'wss://x' }, description: 'd', timeout_ms: 1000 })
   expect('deny' in socket).toBe(false)
+})
+
+test('a write root that is not a folder blocks the shell write', async ($, on) => {
+  const file = (_: unknown, e: { path: string }) =>
+    e.path === '/w/repo' ? { value: { realPath: '/w/repo', kind: 'file' } } : { deny: 'ENOENT' }
+  engine(on, CHILD_ENV, '/w/repo', false, [], { stat: file } as never)
+  on('tool.call', () => ({ result: {} }))
+  const notFolder = await $.tool.call({ tool: 'Bash', command: 'echo x > /w/repo/a.txt' })
+  expect('deny' in notFolder && notFolder.deny).toMatch(/could not evaluate.*SESSION_HUB_SCOPE_ROOT is not a directory/)
+})
+
+const anyFolder = (_: unknown, e: { path: string }) => ({ value: { realPath: e.path, kind: 'dir' } })
+
+test('a write root of / blocks the shell write as too wide', async ($, on) => {
+  engine(on, { ...CHILD_ENV, SESSION_HUB_SCOPE_ROOT: '/' }, '/w/repo', false, [], { stat: anyFolder } as never)
+  on('tool.call', () => ({ result: {} }))
+  const verdict = await $.tool.call({ tool: 'Bash', command: 'touch /etc/x' })
+  expect('deny' in verdict && verdict.deny).toMatch(/could not evaluate.*too wide/)
+})
+
+test('a write root equal to the home folder blocks the shell write as too wide', async ($, on) => {
+  engine(on, { ...CHILD_ENV, SESSION_HUB_SCOPE_ROOT: '/Users/me' }, '/w/repo', false, [], { stat: anyFolder } as never)
+  on('tool.call', () => ({ result: {} }))
+  const verdict = await $.tool.call({ tool: 'Bash', command: 'touch /etc/x' })
+  expect('deny' in verdict && verdict.deny).toMatch(/could not evaluate.*too wide/)
+})
+
+test('a write root that does not exist blocks the shell write', async ($, on) => {
+  engine(on, CHILD_ENV, '/w/repo', false, [], { stat: () => ({ deny: 'ENOENT' }) })
+  on('tool.call', () => ({ result: {} }))
+  const verdict = await $.tool.call({ tool: 'Bash', command: 'echo x > /w/repo/a.txt' })
+  expect('deny' in verdict && verdict.deny).toMatch(/could not evaluate.*SESSION_HUB_SCOPE_ROOT does not exist/)
+})
+
+test('a write through a symbolic link the same command makes is denied', async ($, on) => {
+  engine(on, CHILD_ENV)
+  on('tool.call', () => ({ result: {} }))
+  const verdict = await $.tool.call({ tool: 'Bash', command: 'ln -s /etc/x l && echo y >> l' })
+  expect('deny' in verdict && verdict.deny).toMatch(/writes \/w\/repo\/l \(resolves to \/etc\/x\), outside the write root/)
 })
 
 test('a stat error other than not-found blocks the shell write', async ($, on) => {

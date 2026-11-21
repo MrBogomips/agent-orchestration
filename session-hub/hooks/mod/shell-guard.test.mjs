@@ -2,7 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { readRole } from './role.mjs';
-import { judgeShell, shellWriteTargets } from './shell-guard.mjs';
+import { judgeShell as judgeShellWith, shellWriteTargets } from './shell-guard.mjs';
+
+// The write root must be an existing folder: these tests stand in a file system where every folder they name is one.
+const judgeShell = (input) => judgeShellWith({ fileKind: async () => 'dir', ...input });
 
 test('redirections are write targets; /dev and fd duplications are not', () => {
   assert.deepEqual(shellWriteTargets('echo hi >> /a/out.txt'), ['/a/out.txt']);
@@ -317,4 +320,184 @@ test('a relative cd without a known working folder makes later relative targets 
   const verdict = await judge('cd sub && touch x', { cwd: undefined });
   assert.equal(verdict.allow, false);
   assert.match(verdict.reason, /could not evaluate/);
+});
+
+// Issue #51: tokenizer misreads that hid a write
+
+const denied = async (command, extra = {}) => {
+  const verdict = await judge(command, extra);
+  assert.equal(verdict.allow, false, command);
+  return verdict;
+};
+const allowed = async (command, extra = {}) => assert.deepEqual(await judge(command, extra), { allow: true }, command);
+
+test('<> opens its target for writing', async () => {
+  assert.deepEqual(shellWriteTargets('echo hi 1<>/etc/x'), ['/etc/x']);
+  assert.deepEqual(shellWriteTargets('exec 3<> /etc/y'), ['/etc/y']);
+  await denied('echo hi 1<>/etc/x');
+  await allowed('exec 3<>/w/repo/fifo');
+});
+
+test('<< inside arithmetic is a shift, not a here-document', async () => {
+  await denied('echo $((1<<2))\ntouch /etc/x');
+  await denied('(( x = 1 << 2 ))\ntouch /etc/x');
+  await denied('echo "$((1<<2))"\ntouch /etc/x');
+  assert.deepEqual(shellWriteTargets('echo $((1<<2)) > /w/repo/n'), ['/w/repo/n']);
+  assert.deepEqual(shellWriteTargets('(( y = 3 > 2 ))'), []);
+  await allowed('echo $(( (1 << 4) + 2 )) > /w/repo/n');
+  await allowed('(( n <<= 1 )); echo $n > out.txt');
+});
+
+test('$((…) ) that is not arithmetic is read as a command substitution', async () => {
+  await denied('echo $((echo x; touch /etc/x) )');
+});
+
+test('a here-document whose delimiter never comes is refused', async () => {
+  for (const command of ['cat <<EOF\nhello', 'let x<<2\ntouch /etc/x', 'cat <<-END\n\tx\n  END']) {
+    const verdict = await denied(command);
+    assert.match(verdict.reason, /could not evaluate.*unterminated here-document/, command);
+  }
+  await allowed('cat <<EOF > /w/repo/x\nbody\nEOF');
+  await allowed('cat <<-END > /w/repo/x\n\tbody\n\tEND\necho done');
+});
+
+test("$'…' is read with its backslash escapes", async () => {
+  assert.deepEqual(shellWriteTargets("echo $'a\\'b' > /etc/x #'"), ['/etc/x']);
+  assert.deepEqual(shellWriteTargets("touch $'/etc/\\x78'"), ['/etc/x']);
+  assert.deepEqual(shellWriteTargets("touch $'/etc/\\170\\t'"), ['/etc/x\t']);
+  await denied("echo $'a\\'b' > /etc/x #'");
+  await allowed("printf $'a\\tb\\n' > /w/repo/t.txt");
+  assert.throws(() => shellWriteTargets("echo $'unclosed"), /quote/);
+});
+
+test('$"…" is a double-quoted word', () => {
+  assert.deepEqual(shellWriteTargets('echo x > $"/etc/x"'), ['/etc/x']);
+});
+
+// Issue #52: command substitutions that were not analysed
+
+test('commands in backticks, quoted $(…), ${…} and unquoted here-document bodies are judged', async () => {
+  for (const command of ['echo `touch /etc/x`', 'echo "$(touch /etc/x)"', 'cat <<EOF\n$(touch /etc/x)\nEOF',
+    'cat <<EOF\n`touch /etc/x`\nEOF', 'echo "${x:-$(touch /etc/x)}"', 'echo ${x:-$(touch /etc/x)}',
+    'echo $((1 + $(touch /etc/x)))', 'echo "a `rm /etc/x` b"', 'echo `echo \\`touch /etc/x\\``',
+    'cat <(touch /etc/x)', 'diff <(ls) <(rm /etc/x)', 'cat <<EOF\n$(cat <<IN\nok\nIN\n)$(touch /etc/x)\nEOF']) {
+    await denied(command);
+  }
+});
+
+test('a quoted here-document body stays data', async () => {
+  for (const command of ["cat <<'EOF'\n$(touch /etc/x)\nEOF", 'cat <<"EOF"\n$(touch /etc/x)\nEOF', 'cat <<\\EOF\n`touch /etc/x`\nEOF',
+    'cat <<E\\OF\n$(touch /etc/x)\nEOF']) {
+    await allowed(command);
+  }
+  await allowed('cat <<EOF\n\\$(touch /etc/x) \\`touch /etc/y\\`\nEOF');
+});
+
+test('substitutions that write inside the root, and the usual commit idiom, still pass', async () => {
+  for (const command of ['echo "today: $(date)" > /w/repo/x', 'echo `date` >> log.txt', 'tee "$(pwd)/x" < /dev/null',
+    "git commit -m \"$(cat <<'EOF'\nfix: x > /etc/y\n\nbody `touch /etc/z`\nEOF\n)\"", 'gh pr create --body "$(cat <<EOF\nSee $(git log -1 --format=%s)\nEOF\n)"',
+    'cd "$(git rev-parse --show-toplevel)" && touch /w/repo/x']) {
+    await allowed(command);
+  }
+});
+
+test('a substitution runs in a subshell: its cd does not move the command after it', async () => {
+  await allowed('echo "$(cd /etc)" && touch ../x', { cwd: '/w/repo/sub' });
+  await denied('echo "$(cd /etc && touch x)"');
+});
+
+// Issue #53: zsh forms, eval and sh -c
+
+test('zsh clobbering redirections are redirections', async () => {
+  for (const command of ['echo x >! /etc/x', 'echo x >>! /etc/x', 'echo x &>! /etc/x', 'echo x &>>! /etc/x', 'echo x >>| /etc/x']) {
+    assert.deepEqual(shellWriteTargets(command), ['/etc/x'], command);
+    await denied(command);
+  }
+  await allowed('echo x >! /w/repo/x');
+});
+
+test('zsh precommand modifiers, repeat and coproc are wrappers', async () => {
+  for (const command of ['noglob touch /etc/x', 'nocorrect touch /etc/x', '- touch /etc/x', 'repeat 1 touch /etc/x',
+    'repeat 3 noglob rm /etc/x', 'coproc touch /etc/x', 'coproc w { touch /etc/x; }']) {
+    await denied(command);
+  }
+  await allowed('noglob rm /w/repo/a*');
+});
+
+test('zsh =command is the command', async () => {
+  await denied('=touch /etc/x');
+  await denied('=sudo =rm /etc/x');
+});
+
+test('eval and sh -c, bash -c, zsh -c are analysed when their string is literal', async () => {
+  for (const command of ['eval "touch /etc/x"', "eval 'echo x > /etc/x'", 'eval touch /etc/x', 'sh -c "touch /etc/x"',
+    "bash -c 'echo x > /etc/x'", 'zsh -c "rm /etc/x"', 'bash -lc "touch /etc/x"', 'bash -e -c "touch /etc/x" name',
+    'bash -o pipefail -c "touch /etc/x"', '/bin/sh -c "touch /etc/x"', 'sudo sh -c "echo x > /etc/x"', 'eval "cd /etc" && touch x',
+    'bash -c "bash -c \\"touch /etc/x\\""', 'xargs sh -c "touch /etc/x"']) {
+    await denied(command);
+  }
+  for (const command of ['eval "$(ssh-agent -s)"', 'sh -c "$CMD"', 'bash -c "echo hi > /w/repo/x"', 'bash script.sh',
+    'sh -c "cd /etc" && touch x', 'eval "echo x" > /w/repo/x']) {
+    await allowed(command);
+  }
+  const verdict = await denied('sh -c "echo \'unclosed"');
+  assert.match(verdict.reason, /could not evaluate/);
+});
+
+// Issue #55: descriptor words and the write root
+
+test('a target that starts with & is judged; only descriptor duplications are dropped', async () => {
+  await denied("cd /etc && touch '&x'");
+  await denied('touch /etc/\\&x');
+  assert.deepEqual(shellWriteTargets("touch '&x' && echo y >&2 2>&-"), ['&x']);
+});
+
+test('a write root of / or of the home folder is refused as too wide', async () => {
+  for (const scopeRoot of ['/', '/Users/me', '/Users/me/']) {
+    const role = readRole({ role: 'child', master: 'hub', scopeRoot });
+    const verdict = await judge('touch /etc/x', { role });
+    assert.equal(verdict.allow, false, scopeRoot);
+    assert.match(verdict.reason, /could not evaluate.*too wide/, scopeRoot);
+  }
+});
+
+test('a write root that does not exist or is not a folder is refused', async () => {
+  const missing = await judge('touch /w/repo/x', { fileKind: async () => 'missing' });
+  assert.match(missing.reason, /could not evaluate.*SESSION_HUB_SCOPE_ROOT does not exist/);
+  const file = await judge('touch /w/repo/x', { fileKind: async () => 'other' });
+  assert.match(file.reason, /could not evaluate.*SESSION_HUB_SCOPE_ROOT is not a directory/);
+  const realRoot = await judge('touch /w/repo/x', { realpath: async (path) => path.replace('/w/repo', '/Users/me') });
+  assert.match(realRoot.reason, /too wide/);
+});
+
+// Issue #54: links made and used in one command
+
+test('a hard link to a file outside the root is refused', async () => {
+  for (const command of ['ln /etc/x h && echo y >> h', 'ln /etc/x h', 'ln /etc/x', 'ln -f /etc/x /w/repo/h', 'cp -l /etc/x h',
+    'cp --link /etc/x h', 'cp -al /etc /w/repo/copy', 'ln -t /w/repo /etc/x', 'cd /etc && ln x /w/repo/h']) {
+    const verdict = await denied(command);
+    assert.match(verdict.reason, /hard link to \/etc/, command);
+  }
+  for (const command of ['ln a b', 'ln /w/repo/a /w/repo/b', 'cp -l a b', 'ln /tmp/a b', 'cp -al src dst']) {
+    await allowed(command);
+  }
+});
+
+test('a symbolic link made in the command is followed by the writes after it', async () => {
+  for (const command of ['ln -s /etc/x l && echo y >> l', 'ln -s /etc l && touch l/x', 'ln -sf /etc/x l; cp a l',
+    'ln -s ../../x sub/l && echo y >> sub/l', 'ln -s /etc d/ && echo y > d/etc/x', 'ln -s /etc/x && echo y >> x',
+    'ln -sr ../x l && echo y > l', 'cp -s /etc/x l && echo y >> l', 'ln -s /etc a && ln -s a/x b && echo y > b']) {
+    const verdict = await denied(command);
+    assert.match(verdict.reason, /outside the write root/, command);
+  }
+  for (const command of ['ln -s /w/design design-link', 'ln -s ../shared/a sub/l && echo y >> sub/l', 'ln -s ../a sub/l && echo y > sub/l',
+    'ln -s /tmp/x l && echo y > l', 'ln -sf target.txt link.txt && echo y >> link.txt']) {
+    await allowed(command);
+  }
+});
+
+test('a write through a link made to a place that cannot be known is refused', async () => {
+  const verdict = await denied('ln -s "$TARGET" l && echo y > l');
+  assert.match(verdict.reason, /could not evaluate/);
+  await allowed('ln -s "$TARGET" l');
 });

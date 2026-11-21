@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync, spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, linkSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -188,6 +188,24 @@ describe('evaluate', () => {
   test('blocks an input that is not an object or has no tool name', () => {
     assert.equal(evaluate(null, childEnv()).allow, false);
     assert.equal(evaluate({ tool_input: { file_path: join(root, 'x') } }, childEnv()).allow, false);
+  });
+
+  test('blocks a write to a file with more than one hard link, whatever the tool', () => {
+    linkSync(join(outside, 'b.txt'), join(root, 'src', 'hard.txt'));
+    for (const tool of ['Edit', 'Write']) {
+      const result = evaluate({ tool_name: tool, tool_input: { file_path: join(root, 'src', 'hard.txt') } }, childEnv());
+      assert.equal(result.allow, false, tool);
+      assert.match(result.reason, /hard link/, tool);
+      assert.match(result.reason, /2 names/, tool);
+    }
+    const notebook = { tool_name: 'NotebookEdit', tool_input: { notebook_path: join(root, 'src', 'hard.txt') } };
+    assert.equal(evaluate(notebook, childEnv()).allow, false);
+    assert.equal(evaluate(edit(join(root, 'src', 'a.txt')), childEnv()).allow, true);
+  });
+
+  test('a folder with several links is not a hard-linked file', () => {
+    mkdirSync(join(root, 'src', 'nested', 'deeper'), { recursive: true });
+    assert.equal(evaluate(edit(join(root, 'src', 'nested')), childEnv()).allow, true);
   });
 
   test('allows a tool that does not write files', () => {

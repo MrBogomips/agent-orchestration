@@ -2,7 +2,9 @@
 // session-hub-scope-guard: PreToolUse hook on Edit, Write and NotebookEdit.
 //
 // In a child session (SESSION_HUB_ROLE=child) it blocks a file write whose real path is not under
-// SESSION_HUB_SCOPE_ROOT. It does nothing in any other session, or when SESSION_HUB_GUARDS=off.
+// SESSION_HUB_SCOPE_ROOT, and a write to an existing file with more than one hard link (a hard link has no real path
+// that leads elsewhere, so another name of the file may be outside the root). It does nothing in any other session,
+// or when SESSION_HUB_GUARDS=off.
 // It fails closed: when it cannot evaluate a call in a child, it blocks and says why.
 //
 // Output contract: exit 0 with no output allows the call; exit 2 with the reason on stderr blocks it,
@@ -12,6 +14,8 @@ import { lstatSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { checkRootFolder, checkRootSetting } from './mod/write-root.mjs';
 
 const PREFIX = '[session-hub]';
 // Path fields per tool, in the order they are looked up.
@@ -48,21 +52,26 @@ export function guardMode(env) {
 const realpath = (path) => realpathSync.native(path);
 
 function scopeRoot(env) {
-  const raw = env.SESSION_HUB_SCOPE_ROOT;
-  if (typeof raw !== 'string' || raw === '' || !isAbsolute(raw)) {
-    throw new Error(`SESSION_HUB_SCOPE_ROOT is ${raw ? `not an absolute path (${raw})` : 'not set'}`);
-  }
+  const raw = checkRootSetting(env.SESSION_HUB_SCOPE_ROOT);
   let real;
   try {
     real = realpath(raw);
   } catch {
-    throw new Error(`SESSION_HUB_SCOPE_ROOT does not exist (${raw})`);
+    return checkRootFolder({ raw, real: raw, kind: 'missing' });
   }
-  if (!statSync(real).isDirectory()) throw new Error(`SESSION_HUB_SCOPE_ROOT is not a directory (${raw})`);
-  if (real === realpath(sep) || real === realpath(homedir())) {
-    throw new Error(`SESSION_HUB_SCOPE_ROOT is too wide (${raw}): a write root may not be / or the home folder`);
+  const kind = statSync(real).isDirectory() ? 'dir' : 'other';
+  return checkRootFolder({ raw, real, kind, home: realpath(homedir()) });
+}
+
+// A file with several names: one of them may be outside the root, and a path cannot tell where the others are.
+function hardLinks(path) {
+  try {
+    const stat = lstatSync(path);
+    return stat.isFile() ? stat.nlink : 1;
+  } catch (error) {
+    if (error.code === 'ENOENT') return 1;
+    throw error;
   }
-  return real;
 }
 
 function exists(path) {
@@ -116,8 +125,13 @@ export function evaluate(input, env) {
     if (!Object.hasOwn(WRITE_TOOLS, input.tool_name)) return ALLOW;
     const raw = targetPath(input);
     const target = resolveTarget(raw);
-    if (isUnder(target, root)) return ALLOW;
-    return block(`${raw} is outside this child's write root ${root}. ${outOfScopeAdvice}`);
+    if (!isUnder(target, root)) return block(`${raw} is outside this child's write root ${root}. ${outOfScopeAdvice}`);
+    const names = hardLinks(target);
+    if (names <= 1) return ALLOW;
+    return block(
+      `${raw} is a hard link (the file has ${names} names), and the guard cannot tell whether another name is ` +
+        `outside this child's write root ${root}: a write here would change the file under every name. ${outOfScopeAdvice}`,
+    );
   } catch (error) {
     return block(
       `the scope guard could not evaluate this call (${error.message}). A guard that cannot evaluate does not ` +
