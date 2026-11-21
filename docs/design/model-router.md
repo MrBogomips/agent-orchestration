@@ -73,7 +73,9 @@ write the skill's text fresh.
 - For subagents, the agent passes both values on the start call. The effort parameter exists on the start tool
   in the current release (`research/mods-capabilities.md`, C.9); the reference pack says otherwise and is out of
   date on this point.
-- An agent definition that fixes its own model keeps it. The skill does not override project agents.
+- An agent definition that fixes its own model keeps it. The skill does not override project agents: this is an
+  exception to the project's defaults and to the grid, not a rule between them, so unless the user names a model
+  for it, such an agent gets only an effort, and only when its definition sets none.
 - `session-hub:spawn` loads this skill when it is installed (`shared-contract.md`).
 
 ## Mod `model-router`

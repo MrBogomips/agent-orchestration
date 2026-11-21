@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { effortBar, plainLine } from './lib/route-line.mjs';
+import { RECOMMENDATIONS_VERSION, recommend, recommendationsFile } from './lib/aggregate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GRID_PATH = join(HERE, 'grid.json');
@@ -233,4 +234,27 @@ test('SKILL.md shows the choose-model line as lib/route-line.mjs writes it', () 
     const cells = ['one', 'two', 'three', 'four'][i];
     assert.match(body, new RegExp(`\`${level}\` ${cells}`), `SKILL.md does not say how many cells ${level} fills`);
   }
+});
+
+// The hints file has no writer before 0.4: its shape is fixed now, so the skill and the writer read the same fields.
+test('the quality hints the skill reads are the fields the recommendations file holds', () => {
+  const grid = loadGrid();
+  const file = recommendationsFile({}, grid, { now: Date.parse('2026-11-21T00:00:00Z') });
+  assert.equal(file.version, RECOMMENDATIONS_VERSION);
+  const entry = file.classes['edit-specified'];
+  assert.deepEqual(Object.keys(entry).sort(), ['effort', 'n', 'source', 'tier']);
+  const { tier, effort, source } = recommend({}, 'edit-specified', grid);
+  assert.deepEqual({ tier: entry.tier, effort: entry.effort, source: entry.source }, { tier, effort, source });
+  const body = section(loadSkill(), '## Quality hints (optional)');
+  for (const field of ['classes', 'tier', 'effort', 'source']) assert.match(body, new RegExp('`' + field + '`'), `the skill does not name ${field}`);
+  assert.doesNotMatch(body, /its model and effort/, 'the file holds a tier, not a model');
+});
+
+test('a fixed agent model is an exception to the project defaults and the grid, not a rule between them', () => {
+  const body = section(loadSkill(), '## Order of precedence');
+  const rules = body.split('\n').filter((l) => /^\d+\. /.test(l));
+  assert.ok(rules.every((l) => !/agent definition/i.test(l)), 'the fixed-model rule is still a numbered rule');
+  const text = body.replace(/\s+/g, ' ');
+  assert.match(text, /whatever the project's defaults or the grid say/i);
+  assert.match(text, /never pass a model to such an agent/i);
 });

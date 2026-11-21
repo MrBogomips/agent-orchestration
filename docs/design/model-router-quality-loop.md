@@ -158,7 +158,17 @@ their outcomes feed the cells.
 
 `choose-model` also reads a short per-class recommendation (`quality/recommendations.json`, written by compaction
 from release 0.4, so absent before it) so that explicit choices benefit from the data. The skill must work when
-the file is missing. Its shape is fixed in 0.4; the 0.1 skill only reads the entry for the task's class as a hint.
+the file is missing. Its shape is fixed now, so the skill and the writer agree (`recommendationsFile()` in
+`lib/aggregate.mjs`; `grid.test.mjs` checks that the skill names the same fields):
+
+```json
+{ "version": 1, "generatedAt": "2026-11-21T00:00:00.000Z",
+  "classes": { "edit-specified": { "tier": "sonnet", "effort": "low", "source": "data", "n": 12 } } }
+```
+
+`tier` is a row of the grid's model table (not a model id), `source` is `data` (the cheapest cell per successful
+task with enough tasks) or `grid` (the class's default, repeated), and `n` the tasks behind a `data` entry. The
+skill reads the entry for the task's class as a hint.
 
 Everything here fails open: an error leaves the start unchanged and logs `error`.
 

@@ -366,8 +366,10 @@ sibling that uses it.
 
 1. An explicit choice by the user.
 2. The project's `## Model routing` section, when it names the kind of work or the task class.
-3. An agent definition that fixes its own model keeps it: no model is passed, only an effort if it has none.
-4. The grid.
+3. The grid.
+
+An agent definition that fixes its own model keeps it whatever rule 2 or 3 says (only the user can name another
+model for it): no model is passed, only an effort, and only if its definition sets none.
 
 Before the start, the agent writes one line `🔀 <model> <bar> <effort> -> <reason in under 12 words>` (the bar
 four cells, `▰` filled and `▱` empty: `low` one to `xhigh` four), passes `model` and `effort` on the start call, and begins the description with the class tag, `[mr:<class>]`, or
@@ -653,7 +655,7 @@ feedback, then raise the effort one level, then start one tier up with a handoff
 runs on `opus` at `medium` unless its own design work is hard.
 
 **Quality hints.** When `<config dir>/model-router/quality/recommendations.json` exists, `choose-model` reads the
-entry for the task's class as a hint. The hint never overrides the order of precedence, never goes below the grid
+entry for the task's class (`classes.<class>`: `tier`, `effort`, `source`, `n`) as a hint. The hint never overrides the order of precedence, never goes below the grid
 for `review-debug` or `design-open`, never goes below the project's defaults, and does not apply to a risky start.
 Releases up to 0.3 do not write this file.
 
