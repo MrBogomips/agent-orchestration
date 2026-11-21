@@ -19,8 +19,9 @@ marketplace (`~/git/MrBogomips/claude-plugins`).
 - `<plugin>/hooks/`: classic hooks and, from 0.2, the mod module in the same `hooks.json`.
 - `<plugin>/README.md`: what it does and why; an **Installation** section saying whether it works without the
   other plugin.
-- `tests/validate.sh`: structural checks; `tests/pr-checks.mjs`: version bumps and attribution against the base
-  branch; `*.test.mjs` next to the code they test (`node --test`);
+- `tests/ci.sh`: the whole automated check, run by the `validate` workflow and the pre-push hook
+  (`.githooks/pre-push`); `tests/validate.sh`: structural checks; `tests/pr-checks.mjs`: version bumps and
+  attribution against the base branch; `*.test.mjs` next to the code they test (`node --test`);
   `tests/scenarios/<skill>/`: manual scenario checklists.
 - `docs/design/` (authoritative), `docs/research/` (reference), `docs/manual/` (user manual), `drafts/` (working
   material, committed).
@@ -76,18 +77,18 @@ version in `engines["claude-code"]` (mods exist from 2.1.287).
 ## Verification
 
 ```bash
-bash tests/validate.sh
-node --test $(find . -path ./node_modules -prune -o -path ./.claude -prune -o -path ./site/dist -prune -o -name '*.test.mjs' -print)
-node tests/pr-checks.mjs origin/main      # version bumps; no attribution in the commits
-node site/check.mjs                       # documentation site: build, links, images, translations
-claude plugin validate ./session-hub --strict
-claude plugin validate ./model-router --strict
-claude plugin test ./session-hub
-claude plugin test ./model-router
+bash tests/ci.sh origin/main
 ```
 
-The `validate` workflow runs all of it on every pull request, with the Claude Code CLI pinned in
-`.github/workflows/validate.yml` (it needs no login for `plugin validate` and `plugin test`); `tests/validate.sh`
-also checks that each plugin's version is its newest `CHANGELOG.md` heading.
+One script runs every automated check, in order: `tests/validate.sh` (structure; each plugin's version is its
+newest `CHANGELOG.md` heading), the `*.test.mjs` unit tests, `tests/pr-checks.mjs` against the base ref given
+(version bumps; no attribution in commits or pull request text), `site/check.mjs` (build, links, images,
+translations), then `claude plugin validate --strict` and `claude plugin test` for each plugin. It runs every step,
+lists the failed ones and exits 1 if any failed; a missing `claude` CLI is a failure.
+
+The `validate` workflow runs the same script on every pull request and push to `main`, with the Claude Code CLI
+pinned in `.github/workflows/validate.yml` (no login needed). `main` requires the `validate` check through a
+repository ruleset: change the workflow's job name and the ruleset together. To run the check before each push:
+`git config core.hooksPath .githooks` once per clone (skip one push with `git push --no-verify`).
 
 The definition of done is `DoD.md`.
