@@ -496,6 +496,79 @@ test('a symbolic link made in the command is followed by the writes after it', a
   }
 });
 
+// Adversarial review of the fixes
+
+test('<< in arithmetic after a reserved word, in $[…] and in an array subscript is a shift', async () => {
+  for (const command of ['if ((1<<2)); then :; fi\ntouch /etc/x\n2', 'while ((x<<1)); do :; done\ntouch /etc/x\n1',
+    'echo $[1<<2]\ntouch /etc/x\n2]', 'a[1<<2]=3\ntouch /etc/x\n2]=3', 'x=1 a[1<<2]=3\ntouch /etc/x\n2]=3']) {
+    await denied(command);
+  }
+  await allowed('if (( n > 2 )); then echo big > out.txt; fi');
+  await allowed('echo $[1+2] > /w/repo/n');
+});
+
+test("zsh's >&|, >&!, >>&| and >>&! redirect both streams to a file", async () => {
+  for (const command of ['echo hi >&| /etc/x', 'echo hi >&! /etc/x', 'echo hi >>&! /etc/x', 'echo hi >>&| /etc/x']) {
+    assert.deepEqual(shellWriteTargets(command), ['/etc/x'], command);
+  }
+});
+
+test('a cd at the end of a pipeline may hold after it (zsh runs that part in the shell)', async () => {
+  await denied('true | cd /etc; touch x');
+  await allowed('cd /etc | cat; touch ../x', { cwd: '/w/repo/sub' });
+});
+
+test('brace expansion is expanded before judging', async () => {
+  for (const command of ['touch {/etc/x,}', 'touch /w/repo/{a,../../etc/b}', 'touch /etc/x{1..3}', 'echo > {/w/repo/a,/etc/b}']) {
+    await denied(command);
+  }
+  for (const command of ['touch {a,b}.txt', 'mkdir -p src/{lib,test}', "touch '{/etc/x,}'", 'touch f{1..3}', '{ touch a; }']) {
+    await allowed(command);
+  }
+});
+
+test('a case after a reserved word inside $(…) keeps its patterns', async () => {
+  await denied('echo $({ case x in x) touch /etc/y;; esac; })');
+  await denied('echo "$(if true; then case x in x) rm /etc/y;; esac; fi)"');
+});
+
+test('options that take no value on macOS do not hide the next word', async () => {
+  for (const command of ["sed -l -i '' s/a/b/ /etc/x", 'install -S src /etc/x', 'cp -S src /etc/x', 'env -P /usr/bin touch /etc/x',
+    "env -S 'touch /etc/x'", 'env --split-string="rm /etc/x"']) {
+    await denied(command);
+  }
+  assert.deepEqual(shellWriteTargets('cp -S .bak a /w/repo/b'), ['/w/repo/b']);
+});
+
+test("zsh's =command target, chdir and always blocks", async () => {
+  const equals = await denied('echo hi >> =mycmd');
+  assert.match(equals.reason, /could not evaluate/);
+  await allowed("echo hi > '=x'");
+  await denied('chdir /etc; touch x');
+  await denied('{ true } always { touch /etc/x }');
+  await denied('{ true; } always { rm /etc/x; }');
+});
+
+test('pathological inputs end quickly and fail closed', async () => {
+  const timed = async (command) => {
+    const start = Date.now();
+    const verdict = await judge(command);
+    assert.ok(Date.now() - start < 2000, `took ${Date.now() - start} ms`);
+    return verdict;
+  };
+  let arithmetic = 'x';
+  for (let k = 0; k < 40; k += 1) arithmetic = `$((${arithmetic}) )`;
+  await timed(`echo ${arithmetic}`);
+  const links = Array.from({ length: 30 }, (_, k) => `ln -s l${k + 1} l${k}; ln -s l${k + 1}/. l${k}`).join('; ');
+  await timed(`${links}; touch l0/x`);
+  const cds = Array.from({ length: 40 }, (_, k) => `cd d${k}`).join('; ');
+  const many = await timed(`${cds}; touch x`);
+  assert.equal(many.allow, false);
+  let nested = 'touch /etc/x';
+  for (let k = 0; k < 300; k += 1) nested = `echo "$(${nested})"`;
+  assert.equal((await timed(nested)).allow, false);
+});
+
 test('a write through a link made to a place that cannot be known is refused', async () => {
   const verdict = await denied('ln -s "$TARGET" l && echo y > l');
   assert.match(verdict.reason, /could not evaluate/);

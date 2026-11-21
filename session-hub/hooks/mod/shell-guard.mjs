@@ -5,12 +5,14 @@
 // Best effort, by design. The command is read as bash or zsh (the Bash tool runs zsh on macOS). It reads
 // redirections (zsh's `>!` and `>>!` and `<>` included) and the targets of common file-writing commands (tee, touch,
 // mkdir, rm, rmdir, truncate, unlink, cp, mv, ln, install, sed -i), behind assignments, wrappers (sudo, env, nice,
-// timeout, xargs, command, nohup, time, builtin, exec, coproc, and zsh's noglob, nocorrect, -, repeat N and
-// `=command`) and reserved words (if, then, elif, else, while, until, do, !, {, function). It reads the commands in
-// substitutions (`$(…)`, backticks, `<(…)`, also inside double quotes, `${…}`, arithmetic and here-documents whose
-// delimiter is not quoted) and in a literal line given to `eval` or to `sh`, `bash`, `zsh`, `dash` or `ksh -c`.
-// It follows the working folder through `cd` and `pushd` to a literal folder (absolute, `~`, `~/…`, or relative to
-// a known folder), so a later relative target is judged where it lands. It judges the source of a hard link
+// timeout, xargs, command, nohup, time, builtin, exec, coproc, env -S, and zsh's noglob, nocorrect, -, repeat N and
+// `=command`) and reserved words (if, then, elif, else, while, until, do, !, {, }, function, zsh's always). It reads
+// the commands in substitutions (`$(…)`, backticks, `<(…)`, also inside double quotes, `${…}`, arithmetic and
+// here-documents whose delimiter is not quoted) and in a literal line given to `eval` or to `sh`, `bash`, `zsh`,
+// `dash` or `ksh -c`. A target with braces is judged in every word its brace expansion gives.
+// It follows the working folder through `cd`, `chdir` and `pushd` to a literal folder (absolute, `~`, `~/…`, or
+// relative to a known folder), so a later relative target is judged where it lands; a change of folder in the last
+// part of a pipeline may hold after it (zsh runs that part in the shell). It judges the source of a hard link
 // (`ln`, `cp -l`), and a write that goes through a symbolic link the same command makes (`ln -s`, `cp -s`).
 // It does not judge targets it cannot know without running the shell (a variable, a command substitution, a glob, a
 // relative path after a `cd` to such a target, `cd -`, `popd`, or a wrapper's change of folder, a line given to
@@ -23,8 +25,9 @@
 //
 // It fails closed when it cannot evaluate a command it found targets in: no write root, a write root the classic
 // scope guard would refuse too (see write-root.mjs), an unknown role, a command it cannot read (see shell-words.mjs),
-// a path it cannot resolve (`~` without HOME, `~user`, a relative path without a working folder, a link that leads
-// nowhere, a link this command makes to a place it cannot know).
+// a path it cannot resolve (`~` without HOME, `~user`, zsh's `=name`, a relative path without a working folder, a
+// link that leads nowhere, a link this command makes to a place it cannot know), or a command that would cost too much
+// to follow (more than 64 possible folders, a brace expansion of more than 256 words).
 
 import { commandEffects, commandName, parseArgs, hasOption, shellLine, stripPrefix } from './shell-commands.mjs';
 import { tokenize } from './shell-words.mjs';
@@ -33,9 +36,12 @@ import { checkRootFolder, checkRootSetting } from './write-root.mjs';
 const PREFIX = '[session-hub]';
 const ALLOW = Object.freeze({ allow: true });
 const ALLOWED_ROOTS = Object.freeze(['/dev', '/tmp', '/private/tmp', '/var/folders', '/private/var/folders']);
-const DIRECTORY_CHANGES = Object.freeze(['cd', 'pushd', 'popd']);
+const DIRECTORY_CHANGES = Object.freeze(['cd', 'chdir', 'pushd', 'popd']);
 const MAX_DEPTH = 32;
 const MAX_LINK_HOPS = 40;
+// How many folders the shell may be in, and how many words a brace expansion may give, before the check gives up.
+const MAX_FOLDERS = 64;
+const MAX_EXPANSIONS = 256;
 
 const advice =
   'Do not retry this write through another command or tool. Send an `out-of-scope` message to the master, saying ' +
@@ -46,6 +52,13 @@ const advice =
 const UNKNOWN = Symbol('unknown folder');
 const MISSING = Symbol('missing folder');
 const unique = (list) => [...new Set(list)];
+
+// Each `cd` that may fail doubles the folders the shell may be in: past a bound, the check gives up (and denies).
+const folders = (list) => {
+  const found = unique(list);
+  if (found.length > MAX_FOLDERS) throw new Error('too many folders the shell may be in after these changes of folder');
+  return found;
+};
 
 /** Lexical normalisation of an absolute POSIX path: `.`, `..` and repeated slashes resolved. */
 export function normalizePath(path) {
@@ -90,7 +103,8 @@ function changeFolder(words, dirs, home) {
 const subshell = (state) => ({ dirs: state.dirs, fallback: [] });
 
 // Walks a token list in the order the shell runs it, following the folder through `cd` and `pushd`: a change
-// holds for the rest of the list, not outside a subshell `( … )`, a substitution, a pipeline or a background job.
+// holds for the rest of the list, not outside a subshell `( … )`, a substitution, a pipeline (but its last part) or
+// a background job.
 // A change that may fail (anything other than `cd X && …`) leaves both folders possible from the next `;`, `||` or
 // newline. Adds what it finds to `out`, each with the folders it may be relative to; returns the state at the end.
 function walk(tokens, start, env) {
@@ -106,12 +120,13 @@ function walk(tokens, start, env) {
     for (const list of token?.subs ?? []) inner(list, subshell(state));
     return token;
   };
-  const finish = () => {
-    const { words, changesDirectory } = stripPrefix(current.words);
+  // One simple command: what it writes, the line it hands to a shell, the folder it moves to.
+  const simple = (prefixed) => {
+    const { words, changesDirectory } = stripPrefix(prefixed);
     const dirs = changesDirectory ? [UNKNOWN] : state.dirs;
     const effects = commandEffects(words);
     const add = (kind, list) => env.out[kind].push(...list.map((word) => ({ word, dirs })));
-    add('targets', [...current.redirects.filter((word) => !word.descriptor), ...effects.targets]);
+    add('targets', effects.targets);
     add('ownLinks', effects.ownLinks);
     add('hard', effects.hard);
     env.out.symbolic.push(...effects.symbolic.map((link) => ({ ...link, dirs })));
@@ -122,12 +137,30 @@ function walk(tokens, start, env) {
       else inner(lexed, { dirs, fallback: [] });
     }
     if (words[0] && DIRECTORY_CHANGES.includes(commandName(words[0]))) {
-      state = { dirs: changeFolder(words, state.dirs, env.home), fallback: unique([...state.fallback, ...state.dirs]) };
+      state = { dirs: folders(changeFolder(words, state.dirs, env.home)), fallback: folders([...state.fallback, ...state.dirs]) };
     }
+  };
+  // The shell opens the redirections in its own folder. A `}` word ends a command too: zsh needs no `;` before it
+  // (`{ true } always { … }`).
+  const finish = () => {
+    const redirects = current.redirects.filter((word) => !word.descriptor);
+    env.out.targets.push(...redirects.map((word) => ({ word, dirs: state.dirs })));
+    let segment = [];
+    for (const word of current.words) {
+      if (word.value === '}' && !word.dynamic && segment.length > 0) {
+        simple(segment);
+        segment = [];
+      }
+      segment.push(word);
+    }
+    simple(segment);
     current = { words: [], redirects: [] };
   };
+  // Each part of a pipeline runs in a subshell, except, in zsh, the last one: a change of folder there may hold.
   const endPipeline = () => {
-    if (piped) state = pipeline;
+    if (piped) {
+      state = { dirs: folders([...pipeline.dirs, ...state.dirs]), fallback: folders([...pipeline.fallback, ...state.fallback]) };
+    }
     piped = false;
   };
   for (let i = 0; i < tokens.length; i += 1) {
@@ -158,7 +191,7 @@ function walk(tokens, start, env) {
       else if (token.value === '(') stack.push({ state, pipeline, piped });
       else if (token.value === ')') {
         if (stack.length > 0) ({ state, pipeline, piped } = stack.pop());
-      } else if (token.value !== '&&') state = { dirs: unique([...state.dirs, ...state.fallback]), fallback: [] };
+      } else if (token.value !== '&&') state = { dirs: folders([...state.dirs, ...state.fallback]), fallback: [] };
       if (token.value !== ')') pipeline = state;
     }
   }
@@ -182,12 +215,68 @@ export function shellWriteTargets(command) {
 const isUnder = (path, root) => path === root || path.startsWith(root === '/' ? '/' : `${root}/`);
 const isAllowedPlace = (path) => ALLOWED_ROOTS.some((root) => isUnder(path, root));
 
-// The absolute forms of a target, `..` still in them, one per folder it may be relative to; none when it cannot be
-// known without running the shell (a variable, a substitution, a glob, a relative path after a change of folder
-// that cannot be known). Throws when it names a place that cannot be resolved here.
+// The first brace pair of `text` that expands (`{a,b}`, `{1..3}`, `{a..c}`): where it opens and closes, and its words.
+function firstBrace(text) {
+  for (let open = text.indexOf('{'); open >= 0; open = text.indexOf('{', open + 1)) {
+    let depth = 0;
+    const commas = [];
+    for (let i = open; i < text.length; i += 1) {
+      if (text[i] === '{') depth += 1;
+      else if (text[i] === ',' && depth === 1) commas.push(i);
+      else if (text[i] === '}' && --depth === 0) {
+        const inner = text.slice(open + 1, i);
+        if (commas.length > 0) {
+          const cuts = [open, ...commas, i];
+          return { open, close: i, items: cuts.slice(1).map((cut, k) => text.slice(cuts[k] + 1, cut)) };
+        }
+        const numbers = inner.match(/^(-?\d+)\.\.(-?\d+)$/);
+        const letters = inner.match(/^([A-Za-z])\.\.([A-Za-z])$/);
+        const range = numbers ? [Number(numbers[1]), Number(numbers[2])] : letters && [letters[1].charCodeAt(0), letters[2].charCodeAt(0)];
+        if (range && Math.abs(range[1] - range[0]) < MAX_EXPANSIONS) {
+          const step = range[1] >= range[0] ? 1 : -1;
+          const items = [];
+          for (let n = range[0]; n !== range[1] + step; n += step) items.push(numbers ? String(n) : String.fromCharCode(n));
+          return { open, close: i, items };
+        }
+        break;
+      }
+    }
+  }
+  return undefined;
+}
+
+// A word as written and every word its brace expansion may give.
+function expandBraces(text) {
+  const found = new Set([text]);
+  const queue = [text];
+  while (queue.length > 0) {
+    const current = queue.pop();
+    const brace = firstBrace(current);
+    for (const item of brace?.items ?? []) {
+      const next = `${current.slice(0, brace.open)}${item}${current.slice(brace.close + 1)}`;
+      if (found.has(next)) continue;
+      found.add(next);
+      queue.push(next);
+      if (found.size > MAX_EXPANSIONS) throw new Error(`cannot judge ${text}: its brace expansion gives too many words`);
+    }
+  }
+  return [...found];
+}
+
+// The absolute forms of a target, `..` still in them, one per folder it may be relative to and per word of its brace
+// expansion; none when it cannot be known without running the shell (a variable, a substitution, a glob, a relative
+// path after a change of folder that cannot be known). Throws when it names a place that cannot be resolved here.
 function absoluteTargets(word, dirs, home) {
   if (word.dynamic || word.value === '') return [];
-  let value = word.value;
+  if (word.equals && word.value.length > 1) {
+    throw new Error(`cannot resolve ${word.value}: zsh reads =name as the path of the command name`);
+  }
+  const values = word.braces ? expandBraces(word.value) : [word.value];
+  return unique(values.flatMap((value) => absoluteForms(value, dirs, home)));
+}
+
+function absoluteForms(written, dirs, home) {
+  let value = written;
   if (value.startsWith('~')) {
     const user = value.slice(1).split('/')[0];
     if (user !== '') throw new Error(`cannot resolve ${value}: another user's home folder`);
@@ -242,8 +331,16 @@ async function madeLinks(symbolic, home, realpath) {
 
 // Where a path really lands, following the links the command makes (not yet on disk) and then `realpath`. A path
 // may land in several places when two of those links share a name. `except` is a link the path is the name of.
-function lander(links, realpath) {
+// Each path is resolved once: links that share a name would otherwise double the work at every level.
+function lander(made, realpath) {
+  const links = [...new Map(made.map((link) => [`${link.at}\0${link.to}`, link])).values()];
+  const known = new Map();
   const land = async (path, except, hops = 0) => {
+    const key = `${except ?? ''}\0${path}`;
+    if (!known.has(key)) known.set(key, await follow(path, except, hops));
+    return known.get(key);
+  };
+  const follow = async (path, except, hops) => {
     const through = links.filter(({ at }) => at !== except && isUnder(path, at));
     if (through.length === 0) return [await realpath(path)];
     if (hops >= MAX_LINK_HOPS) throw new Error(`cannot resolve ${path}: too many links`);

@@ -1,25 +1,34 @@
 // A small shell lexer for best-effort checks on a command line, read as bash or zsh: words with their quoting
 // removed, and the control and redirection operators as separate tokens. It does not expand anything; a word that
-// holds an expansion (`$name`, `${…}`, a substitution, arithmetic) or an unquoted glob character is flagged `dynamic`.
+// holds an expansion (`$name`, `${…}`, a substitution, arithmetic) or an unquoted glob character is flagged `dynamic`,
+// a word with an unquoted brace `braces` (brace expansion is left to the caller), a word that starts with an unquoted
+// `=` `equals` (zsh replaces `=name` with the path of a command).
 //
 // The commands inside a word's substitutions (`$(…)`, backticks, `<(…)`, `>(…)`, also inside double quotes, `${…}`
 // and arithmetic) are lexed too and kept on the word as `subs`, one token list each. A here-document's `<<` and
 // delimiter give no token; its body is data when the delimiter is quoted (`<<'EOF'`, `<<"EOF"`, `<<\EOF`), and
 // otherwise its substitutions come as `subst` tokens after the line that opened it. `<<` inside arithmetic
-// (`$((…))`, `((…))`) is a shift. An input redirection (`<`, `<<<`) is an `op` token `<` followed by the word it reads.
+// (`$((…))`, `((…))`, `$[…]`) and inside an array subscript (`a[1<<2]=3`) is a shift. An input redirection (`<`,
+// `<<<`) is an `op` token `<` followed by the word it reads.
 //
 // It throws when it cannot read the line the way the shell would: an unbalanced quote, `$(`, `${` or backtick, a
-// here-document whose delimiter never comes, an arithmetic expansion without its `))`.
+// here-document whose delimiter never comes, an arithmetic expansion without its `))`, nesting deeper than it reads.
 
 const OPERATORS = ['&&', '||', ';;', '|&', ';', '|', '&', '(', ')'];
-// Output redirections: bash's, `<>` (read and write), and zsh's `>!`, `>>!` and `>>|` (write over noclobber).
-const REDIRECT = /^(\d*|&)(<>|>>!|>>\||>>|>\||>!|>)/;
+// Output redirections: bash's, `<>` (read and write), and zsh's forms that write over noclobber (`>!`, `>>!`, `>>|`)
+// or send both streams to a file (`>&|`, `>&!`, `>>&|`, `>>&!`).
+const REDIRECT = /^(\d*|&)(<>|>>&!|>>&\||>&!|>&\||>>!|>>\||>>|>\||>!|>)/;
 const HEREDOC = /^<<(-?)[ \t]*/;
 const DESCRIPTOR = /^(\d+|-)(?=$|[\s;&|()<>])/;
 const WORD_END = /[\s;&|()<>]/;
 // What may follow `$` to make an expansion; any other `$` is a literal character.
 const EXPANSION_START = /[A-Za-z_0-9{(@*#?$!-]/;
+// Words after which a new command starts, as after an operator.
+const COMMAND_WORDS = Object.freeze(['if', 'then', 'elif', 'else', 'while', 'until', 'do', '!', '{', '}', 'time', 'always']);
+const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ASSIGNMENT_WORD = /^[A-Za-z_][A-Za-z0-9_]*(\[.*\])?\+?=/;
 const MAX_DEPTH = 32;
+const MAX_NESTING = 100;
 
 const ANSI_ESCAPES = Object.freeze({
   a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v',
@@ -89,17 +98,33 @@ function readDelimiter(src, start) {
 }
 
 /**
- * @typedef {{ type: 'word', value: string, dynamic: boolean, descriptor?: true, subs?: Token[][] }
- *   | { type: 'op', value: string } | { type: 'redirect', value: string, fd: string }
+ * @typedef {{ type: 'word', value: string, dynamic: boolean, descriptor?: true, braces?: true, equals?: true,
+ *   subs?: Token[][] } | { type: 'op', value: string } | { type: 'redirect', value: string, fd: string }
  *   | { type: 'subst', tokens: Token[] }} Token
  */
 
-// One source string being lexed: its text, the here-documents waiting for the next newline, and how deep the
-// nesting of substitutions goes.
-const context = (src, depth) => {
+// One source string being lexed: its text, the here-documents waiting for the next newline, how deep the nesting
+// goes (shared by every source of one command line), and the substitutions already lexed, by where they start.
+const context = (src, depth, budget = { nesting: 0 }) => {
   if (depth > MAX_DEPTH) throw new Error('substitutions nested too deeply');
-  return { src, depth, pending: [] };
+  return { src, depth, budget, pending: [], memo: new Map() };
 };
+
+// Runs `read` one nesting level deeper; a substitution, once lexed at a place, is not lexed again (a failed
+// arithmetic is lexed again as a command substitution, and nested ones would otherwise cost twice per level).
+function nested(ctx, key, read) {
+  const clean = ctx.pending.length === 0;
+  if (clean && ctx.memo.has(key)) return ctx.memo.get(key);
+  ctx.budget.nesting += 1;
+  try {
+    if (ctx.budget.nesting > MAX_NESTING) throw new Error('substitutions nested too deeply');
+    const result = read();
+    if (clean && ctx.pending.length === 0) ctx.memo.set(key, result);
+    return result;
+  } finally {
+    ctx.budget.nesting -= 1;
+  }
+}
 
 // Reads the bodies of the pending here-documents, starting at `start` (the line after the newline). Returns the
 // `subst` tokens of the bodies that are not data, and the index after the last delimiter line.
@@ -117,7 +142,7 @@ function readBodies(ctx, start) {
       lines.push(text);
     }
     if (!quoted) {
-      const body = context(lines.join('\n'), ctx.depth + 1);
+      const body = context(lines.join('\n'), ctx.depth + 1, ctx.budget);
       const subs = [];
       scanQuoted(body, 0, { terminator: null, subs });
       found.push(...subs.map((tokens) => ({ type: 'subst', tokens })));
@@ -142,7 +167,8 @@ function readBackticks(ctx, start, inDouble) {
     }
   }
   if (i >= ctx.src.length) throw new Error('unbalanced backquote');
-  return { tokens: lexAll(context(body, ctx.depth + 1)), end: i + 1 };
+  const tokens = nested(ctx, `\`${start}`, () => lexAll(context(body, ctx.depth + 1, ctx.budget)));
+  return { tokens, end: i + 1 };
 }
 
 // Reads one expansion that starts with `$` or a backtick at `i` (in a word, in double quotes, in a here-document
@@ -156,14 +182,18 @@ function readExpansion(ctx, i, subs, inDouble) {
   }
   if (src[i] !== '$') return -1;
   if (src.startsWith('$((', i)) {
-    const arithmetic = readArithmetic(ctx, i + 3, subs);
-    if (arithmetic >= 0) return arithmetic;
+    const arithmetic = readArithmetic(ctx, i + 3);
+    if (arithmetic.end >= 0) {
+      subs.push(...arithmetic.subs);
+      return arithmetic.end;
+    }
   }
   if (src[i + 1] === '(') {
     const { tokens, end } = lexList(ctx, i + 2, true);
     subs.push(tokens);
     return end;
   }
+  if (src[i + 1] === '[') return readBracket(ctx, i + 2, subs);
   if (src[i + 1] === '{') return readBraces(ctx, i + 2, subs, inDouble);
   return -1;
 }
@@ -203,63 +233,108 @@ function scanQuoted(ctx, start, { terminator, subs }) {
 
 // `${…}` from `start` (after the brace), with the expansions and quotes inside it. Returns where it ends.
 function readBraces(ctx, start, subs, inDouble) {
-  const src = ctx.src;
-  let depth = 1;
-  let i = start;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === '\\') {
-      i += 2;
-      continue;
+  const found = nested(ctx, `{${start}${inDouble ? '"' : ''}`, () => {
+    const src = ctx.src;
+    const inner = [];
+    let depth = 1;
+    let i = start;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      const end = readExpansion(ctx, i, inner, inDouble);
+      if (end >= 0) {
+        i = end;
+      } else if (c === '"') {
+        i = scanQuoted(ctx, i + 1, { terminator: '"', subs: inner }).end;
+      } else if (c === "'" && !inDouble) {
+        const close = src.indexOf("'", i + 1);
+        if (close < 0) throw new Error('unbalanced single quote');
+        i = close + 1;
+      } else {
+        if (c === '{') depth += 1;
+        if (c === '}') depth -= 1;
+        i += 1;
+        if (depth === 0) return { end: i, subs: inner };
+      }
     }
-    const end = readExpansion(ctx, i, subs, inDouble);
-    if (end >= 0) {
-      i = end;
-    } else if (c === '"') {
-      i = scanQuoted(ctx, i + 1, { terminator: '"', subs }).end;
-    } else if (c === "'" && !inDouble) {
-      const close = src.indexOf("'", i + 1);
-      if (close < 0) throw new Error('unbalanced single quote');
-      i = close + 1;
-    } else {
-      if (c === '{') depth += 1;
-      if (c === '}') depth -= 1;
-      i += 1;
-      if (depth === 0) return i;
-    }
-  }
-  throw new Error('unbalanced ${');
+    throw new Error('unbalanced ${');
+  });
+  subs.push(...found.subs);
+  return found.end;
 }
 
-// Arithmetic from `start` (after `$((` or `((`), with the expansions inside it. Returns the index after its `))`,
-// or -1 when a lone `)` shows it is not arithmetic (`$((cmd) )` is a substitution holding a subshell).
-function readArithmetic(ctx, start, subs) {
-  const src = ctx.src;
-  let depth = 0;
-  let i = start;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === '\\') {
-      i += 2;
-      continue;
+// Arithmetic from `start` (after `$((` or `((`), with the expansions inside it. Returns the index after its `))`
+// and the commands inside, or end -1 when a lone `)` shows it is not arithmetic (`$((cmd) )` is a substitution
+// holding a subshell).
+function readArithmetic(ctx, start) {
+  return nested(ctx, `(${start}`, () => {
+    const src = ctx.src;
+    const subs = [];
+    let depth = 0;
+    let i = start;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      const end = readExpansion(ctx, i, subs, false);
+      if (end >= 0) {
+        i = end;
+      } else if (c === '"') {
+        i = scanQuoted(ctx, i + 1, { terminator: '"', subs }).end;
+      } else if (c === '(') {
+        depth += 1;
+        i += 1;
+      } else if (c === ')') {
+        if (depth > 0) depth -= 1;
+        else return { end: src[i + 1] === ')' ? i + 2 : -1, subs };
+        i += 1;
+      } else {
+        i += 1;
+      }
     }
-    const end = readExpansion(ctx, i, subs, false);
-    if (end >= 0) {
-      i = end;
-    } else if (c === '"') {
-      i = scanQuoted(ctx, i + 1, { terminator: '"', subs }).end;
-    } else if (c === '(') {
-      depth += 1;
-      i += 1;
-    } else if (c === ')') {
-      if (depth > 0) depth -= 1;
-      else return src[i + 1] === ')' ? i + 2 : -1;
-      i += 1;
-    } else {
-      i += 1;
+    throw new Error('unterminated arithmetic: a (( without its ))');
+  });
+}
+
+// `$[…]` arithmetic or an array subscript, from `start` (after the `[`), with the expansions inside it. Returns the
+// index after its `]`.
+function readBracket(ctx, start, subs) {
+  const found = nested(ctx, `[${start}`, () => {
+    const src = ctx.src;
+    const inner = [];
+    let depth = 1;
+    let i = start;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      const end = readExpansion(ctx, i, inner, false);
+      if (end >= 0) {
+        i = end;
+      } else if (c === '"') {
+        i = scanQuoted(ctx, i + 1, { terminator: '"', subs: inner }).end;
+      } else if (c === "'") {
+        const close = src.indexOf("'", i + 1);
+        if (close < 0) throw new Error('unbalanced single quote');
+        i = close + 1;
+      } else {
+        if (c === '[') depth += 1;
+        if (c === ']') depth -= 1;
+        i += 1;
+        if (depth === 0) return { end: i, subs: inner };
+      }
     }
-  }
-  throw new Error('unterminated arithmetic: a (( without its ))');
+    throw new Error('unbalanced [: an arithmetic or a subscript without its ]');
+  });
+  subs.push(...found.subs);
+  return found.end;
 }
 
 const lexAll = (ctx) => {
@@ -273,14 +348,29 @@ const lexAll = (ctx) => {
 // Lexes from `start` to the end of the source, or, with `closing`, to the `)` that closes a `$(` or `<(`. Returns
 // the tokens and the index after where it stopped.
 function lexList(ctx, start, closing) {
+  if (closing) return nested(ctx, `$${start}`, () => lexTokens(ctx, start, true));
+  return lexTokens(ctx, start, false);
+}
+
+function lexTokens(ctx, start, closing) {
   const src = ctx.src;
   const tokens = [];
   let i = start;
   let word = null;
+  let wordAtCommand = false;
   let depth = 0;
   let cases = 0;
+  // Where a command may start: at the beginning, after an operator, a reserved word or an assignment.
+  const commandPosition = () => {
+    const last = tokens[tokens.length - 1];
+    if (last === undefined || last.type === 'op') return true;
+    return last.type === 'word' && !last.dynamic && (COMMAND_WORDS.includes(last.value) || ASSIGNMENT_WORD.test(last.value));
+  };
   const startWord = () => {
-    if (word === null) word = { type: 'word', value: '', dynamic: false };
+    if (word === null) {
+      wordAtCommand = commandPosition();
+      word = { type: 'word', value: '', dynamic: false };
+    }
     return word;
   };
   const addSubs = (subs) => {
@@ -288,12 +378,10 @@ function lexList(ctx, start, closing) {
     target.dynamic = true;
     if (subs.length > 0) target.subs = [...(target.subs ?? []), ...subs];
   };
-  const afterOperator = () => tokens.length === 0 || tokens[tokens.length - 1].type === 'op';
-  const atCommandStart = () => word === null && afterOperator();
   // A `case` keeps count so that the `)` after each of its patterns does not close a `$(`.
   const endWord = () => {
     if (word === null) return;
-    if (afterOperator() && word.value === 'case' && !word.dynamic) cases += 1;
+    if (wordAtCommand && word.value === 'case' && !word.dynamic) cases += 1;
     else if (word.value === 'esac' && !word.dynamic && cases > 0) cases -= 1;
     tokens.push(word);
     word = null;
@@ -364,12 +452,21 @@ function lexList(ctx, start, closing) {
       i = end;
       continue;
     }
+    // `a[1<<2]=3`: a subscript in an assignment is arithmetic.
+    if (c === '[' && word !== null && wordAtCommand && !word.dynamic && NAME.test(word.value)) {
+      const end = readBracket(ctx, i + 1, subs);
+      word.value += src.slice(i, end);
+      if (subs.length > 0) addSubs(subs);
+      i = end;
+      continue;
+    }
     const last = tokens[tokens.length - 1];
-    if (rest.startsWith('((') && word === null && (atCommandStart() || (last?.type === 'word' && last.value === 'for'))) {
-      const end = readArithmetic(ctx, i + 2, subs);
-      if (end >= 0) {
-        tokens.push({ type: 'word', value: src.slice(i, end), dynamic: true, ...(subs.length > 0 ? { subs } : {}) });
-        i = end;
+    if (rest.startsWith('((') && word === null && (commandPosition() || (last?.type === 'word' && last.value === 'for'))) {
+      const arithmetic = readArithmetic(ctx, i + 2);
+      if (arithmetic.end >= 0) {
+        const found = arithmetic.subs;
+        tokens.push({ type: 'word', value: src.slice(i, arithmetic.end), dynamic: true, ...(found.length > 0 ? { subs: found } : {}) });
+        i = arithmetic.end;
         continue;
       }
     }
@@ -425,8 +522,11 @@ function lexList(ctx, start, closing) {
       tokens.push({ type: 'op', value: op });
       continue;
     }
+    const fresh = word === null;
     const plain = startWord();
     if (c === '*' || c === '?' || c === '[' || (c === '$' && EXPANSION_START.test(src[i + 1] ?? ''))) plain.dynamic = true;
+    if (c === '{' || c === '}') plain.braces = true;
+    if (fresh && c === '=') plain.equals = true;
     plain.value += c;
     i += 1;
   }

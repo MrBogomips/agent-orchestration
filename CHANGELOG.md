@@ -11,7 +11,12 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
 
 - The shell check reads a command as bash and zsh do where it used to let a write outside the write root through:
   `<>`; `<<` inside arithmetic, which hid the rest of the command as a here-document; `$'…'` quoting; zsh's `>!`,
-  `>>!`, `&>!` and `&>>!`, `noglob`, `nocorrect`, `-`, `repeat N` and `=command`; `coproc`.
+  `>>!`, `&>!` and `&>>!`, `noglob`, `nocorrect`, `-`, `repeat N` and `=command`; `coproc`. Also, found in review:
+  `<<` in `((…))` after a reserved word, in `$[…]` and in an array subscript; zsh's `>&|` and `>&!`; brace
+  expansion; a `cd` at the end of a zsh pipeline; `chdir`; zsh's `always`; `env -S` and `env -P`; `sed -l`, `cp -S`
+  and `install -S`, which take no value on macOS.
+- Inputs built to make the check run for seconds or out of memory (nested failed arithmetic, links that share a
+  name, a long run of relative `cd`s) end quickly; past a bound the command is denied.
 - The commands inside backticks, inside `$(…)` in double quotes, `${…}` and arithmetic, inside `<(…)` and `>(…)`,
   and in the body of a here-document whose delimiter is not quoted are judged. So is the literal line given to
   `eval` or to `sh`, `bash`, `zsh`, `dash` or `ksh -c`.

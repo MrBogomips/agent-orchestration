@@ -2,6 +2,8 @@
 // command, the files a command writes, the links it makes, and the command line it hands to a shell (`eval`,
 // `sh -c`). Works on the words of one simple command, as `shell-words.mjs` gives them.
 
+import { tokenize } from './shell-words.mjs';
+
 // Wrappers before the real command: their options that take a value, the ones whose value is optional and only
 // attached, the ones that change the folder, and how many operands come before the command. `noglob`, `nocorrect`,
 // `-` and `repeat N` are zsh's.
@@ -11,7 +13,7 @@ const WRAPPERS = Object.freeze({
       '--close-from', '--other-user', '--role', '--type', '--chdir', '--command-timeout'],
     chdir: ['-D', '--chdir'],
   },
-  env: { values: ['-u', '-C', '-S', '--unset', '--chdir', '--split-string'], chdir: ['-C', '--chdir'] },
+  env: { values: ['-u', '-C', '-S', '-P', '--unset', '--chdir', '--split-string'], chdir: ['-C', '--chdir'], split: ['-S', '--split-string'] },
   nice: { values: ['-n', '--adjustment'] },
   timeout: { values: ['-s', '-k', '--signal', '--kill-after'], operands: 1 },
   xargs: {
@@ -31,26 +33,28 @@ const WRAPPERS = Object.freeze({
   coproc: {},
 });
 // Reserved words that may come before a command; `function` also takes the function's name.
-const RESERVED = Object.freeze(['if', 'then', 'elif', 'else', 'while', 'until', 'do', '!', '{']);
+const RESERVED = Object.freeze(['if', 'then', 'elif', 'else', 'while', 'until', 'do', '!', '{', '}', 'always']);
 const ALL_ARGS = Object.freeze(['tee', 'touch', 'mkdir', 'rm', 'rmdir', 'truncate', 'unlink']);
 const LAST_ARG = Object.freeze(['cp', 'mv', 'ln', 'install']);
 const TARGET_DIRECTORY = Object.freeze(['-t', '--target-directory']);
-// Options that take a value, per command: only the target directory among them is written.
+// Options that take a value, per command: only the target directory among them is written. A short option that
+// takes a value with GNU but none on macOS (`cp -S`, `sed -l`) is read as taking none: then at worst an extra word is
+// judged as a file, and none is hidden.
 const VALUE_OPTIONS = Object.freeze({
   touch: ['-r', '-d', '-t', '--reference', '--date'],
   mkdir: ['-m', '--mode'],
   truncate: ['-s', '-r', '--size', '--reference'],
-  install: ['-m', '-o', '-g', '-t', '-S', '--mode', '--owner', '--group', '--target-directory', '--suffix'],
-  cp: ['-t', '-S', '--target-directory', '--suffix'],
-  mv: ['-t', '-S', '--target-directory', '--suffix'],
-  ln: ['-t', '-S', '--target-directory', '--suffix'],
+  install: ['-m', '-o', '-g', '-t', '--mode', '--owner', '--group', '--target-directory', '--suffix'],
+  cp: ['-t', '--target-directory', '--suffix'],
+  mv: ['-t', '--target-directory', '--suffix'],
+  ln: ['-t', '--target-directory', '--suffix'],
 });
-const SED_VALUES = Object.freeze(['-e', '-f', '-l', '--expression', '--file', '--line-length']);
+const SED_VALUES = Object.freeze(['-e', '-f', '--expression', '--file', '--line-length']);
 const SED_SCRIPTS = Object.freeze(['-e', '-f', '--expression', '--file']);
 // Shells whose `-c` runs a command line; their options that take a value.
 const SHELLS = Object.freeze(['sh', 'bash', 'zsh', 'dash', 'ksh']);
 const SHELL_VALUES = Object.freeze(['-o', '+o', '-O', '+O', '--rcfile', '--init-file']);
-const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*(\[.*\])?\+?=/;
 
 const isOption = (word) => word.value.startsWith('-') && word.value !== '-';
 
@@ -141,9 +145,17 @@ export function stripPrefix(words) {
     const wrapper = WRAPPERS[name];
     const parsed = parseArgs(after, { ...wrapper, stopAtOperand: true });
     if (hasOption(parsed.options, wrapper.chdir ?? [])) changesDirectory = true;
-    rest = parsed.rest.slice(wrapper.operands ?? 0);
+    rest = [...splitWords(parsed.options, wrapper.split ?? []), ...parsed.rest.slice(wrapper.operands ?? 0)];
   }
   return { words: rest, changesDirectory };
+}
+
+// `env -S 'cmd args'`: the string is split into words that come before the rest. A string that is not literal
+// gives nothing to judge.
+function splitWords(options, names) {
+  return options
+    .filter((option) => names.includes(option.name) && option.value && !option.value.dynamic)
+    .flatMap((option) => tokenize(option.value.value).filter((token) => token.type === 'word'));
 }
 
 function sedTargets(args) {
