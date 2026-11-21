@@ -8,7 +8,7 @@ they may change before they ship.
 | Plugin | Version | In one line |
 |---|---|---|
 | `session-hub` | 0.2.4 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
-| `model-router` | 0.3.2 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
+| `model-router` | 0.3.4 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
 
@@ -64,8 +64,9 @@ Each plugin works without the other. Where they meet, a skill names the other pl
 The hook, the mods, the commands, the messages, the variables and the state folders carry the plugin's name: the
 `session-hub-scope-guard` hook, the `session-hub` and `model-router` mods, the `/session-hub` and `/model-router`
 commands, the `session-hub:scope` prompt section, the `[session-hub]` prefix of the guards', the mod's and the
-record script's messages, the `[model-router]` prefix of the router mod's log lines, the `SESSION_HUB_*`
-variables, and the `session-hub/` and `model-router/` state folders. Two other markers are short
+record script's messages, the `[model-router]` prefix of the router mod's debug log lines, the 🔀 that opens what the
+router mod shows the person (the usage view's title, its one-line answers and toasts, the line under an `Agent` row,
+the report page's title), the `SESSION_HUB_*` variables, and the `session-hub/` and `model-router/` state folders. Two other markers are short
 on purpose: `mr` in the router's task-class tag (`[mr:<class>]`), and the message prefixes between sessions,
 `[master]` and `[<task> <repo>]`.
 
@@ -149,9 +150,9 @@ one file per environment).
 | `model-router:choose-model` | skill | States the grid. Loads whenever an agent is about to start a subagent, a child session or a workflow of agents, and makes it pass a model and an effort explicitly. |
 | `model-router:setup` | skill | Writes or updates a `## Model routing` section in the project's instruction file with the project's defaults and exceptions, only after the user's explicit yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs` and gives the user the page's path. Computes nothing itself. |
-| `model-router` | mod | `hooks/model-router.tsx`, registered as a module in `hooks/hooks.json`. Routes subagent starts that carry no model and records the quality loop's events. Thin glue over the plain modules in `lib/`. |
+| `model-router` | mod | `hooks/model-router.tsx`, registered as a module in `hooks/hooks.json`. Routes subagent starts that carry no model, draws under each `Agent` call's row the model and effort the subagent got, and records the quality loop's events. Thin glue over the plain modules in `lib/`. |
 | `/model-router` | command | Registered by the mod: the usage view, a tabbed dialog (Overview, Models, Classes, Decisions) with a text fallback; `on` or `off` for the session; `report`; `help`. See [Commands](#commands). |
-| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the usage view's rows (`usage-view.mjs`), its tiles and sparklines (`usage-tiles.mjs`) and keys (`usage-nav.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
+| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the choose-model line (`route-line.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the usage view's rows (`usage-view.mjs`), its tiles and sparklines (`usage-tiles.mjs`) and keys (`usage-nav.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
 | `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes outcomes and updates the aggregates under a lock; the report renders them into one self-contained page and opens it; `usage.mjs` compacts within a 3-second budget and prints the usage view's data as JSON. |
 | `grid.json` | data | The same grid in machine-readable form, with each class's usual choice (`default`); the judge's prompt is generated from it. |
 | `grid.test.mjs` | test | Fails when `grid.json` and the two skills drift apart. |
@@ -368,8 +369,8 @@ sibling that uses it.
 3. An agent definition that fixes its own model keeps it: no model is passed, only an effort if it has none.
 4. The grid.
 
-Before the start, the agent writes one line `<model> · <effort> · <reason in under 12 words>`, passes `model`
-and `effort` on the start call, and begins the description with the class tag, `[mr:<class>]`, or
+Before the start, the agent writes one line `🔀 <model> <bar> <effort> -> <reason in under 12 words>` (the bar
+four cells, `▰` filled and `▱` empty: `low` one to `xhigh` four), passes `model` and `effort` on the start call, and begins the description with the class tag, `[mr:<class>]`, or
 `[mr:<class>!]` for a risky start. Before delegating at all, the skill asks whether the task is small enough to do
 inline, and sends a follow-up to a subagent already started on the same topic instead of starting a new one.
 
@@ -718,10 +719,21 @@ yield, rework rate, cost per task and per successful task, the explored share, a
 weekly trend and the router's decisions. The router does not use the data until 0.4. The same aggregation
 (`lib/usage-data.mjs`) feeds the page and the terminal's usage view, so the two show the same numbers.
 
+### The line under an Agent row
+
+The mod writes one `$.state` member per `Agent` call (`route`, keyed by the call's `tool_use_id`) when
+`agent.spawn` answers: the model the subagent started on, the routed or explicit effort, and a reason built by
+`lib/route-line.mjs` from the routing case and the decision (`explicit: …`, `fixed: …`, `judge: <class>; lowered
+from <tier>`, `keep: …`). When no effort is known at the start, the subagent's first `turn.step` fills it in. A
+`ui.render` hook on `ToolUse` rows whose `tool` is `Agent` reads the member of the row's `requestId`, keeps the
+engine's row and draws one line under it, `🔀 opus ▰▰▰▱ high -> …`, with the model coloured by tier and the bar
+and effort by level. With no member, or on any error, the row is drawn alone. Calls made together in one message
+are drawn by the engine as one "background agents launched" row; their lines show in the ctrl+o transcript.
+
 ### The usage view
 
 `/model-router` opens a dialog pane (`model-router-usage`, opened with `focus`, `closeOnEscape` and 24 rows inline)
-drawn by a `ui.render` hook, laid out like Claude Code's Settings dialog: a header row with 🧭 and the tabs, a row
+drawn by a `ui.render` hook, laid out like Claude Code's Settings dialog: a header row with 🔀 and the tabs, a row
 with the window and the level, the tab's rows, a footer of key hints. The active tab and window are teal blocks. The mod runs `scripts/usage.mjs` with this session's id, its project and its live agents from
 `$.agent.list()` on stdin; the script runs compaction in a child process for at most 3 seconds, reads
 `events.jsonl` and the aggregates once and prints the data of every tab for every window (24h, 7d, 30d, all) and

@@ -66,7 +66,10 @@ write the skill's text fresh.
 ## Skill `choose-model`
 
 - Triggers when the agent is about to start a subagent, a child session, or a workflow of agents.
-- Output: for each start, one line `model · effort · reason in under 12 words`.
+- Output: for each start, one plain-text line `🔀 <model> <bar> <effort> -> <reason in under 12 words>`, for
+  example `🔀 opus ▰▰▰▱ high -> review with unknown cause, going up`. The bar has four cells, `▰` filled and `▱`
+  empty: `low` one, `medium` two, `high` three, `xhigh` four. No dots, a plain `->`. It works with mods off;
+  `lib/route-line.mjs` writes the same line and `grid.test.mjs` checks the skill's examples against it.
 - For subagents, the agent passes both values on the start call. The effort parameter exists on the start tool
   in the current release (`research/mods-capabilities.md`, C.9); the reference pack says otherwise and is out of
   date on this point.
@@ -140,6 +143,34 @@ reload, a subagent started earlier runs at its inherited effort, which fails ope
 carries is kept. Otherwise the judge's level is set when its `effort_confidence` passes the bar (`low` needs the
 downgrade bar, higher levels the upgrade bar); risky work gets at least `high`. `max` is never set.
 
+### The choose-model line under an Agent row
+
+The skill's line says what the agent meant to start; the mod draws, under each `Agent` call's row, what the
+subagent actually got after routing. A `ui.render` hook on `{ component: 'ToolUse', props: { tool: 'Agent' } }`
+keeps the engine's row (`await next(e)` in its tree) and adds one line:
+
+```
+  ⎿  🔀 haiku  ▰▱▱▱ low    -> judge: read-search; lowered from sonnet
+```
+
+- **What it shows.** The model the subagent started on (`agent.spawn`'s answer, shown by tier name), its effort
+  and the reason. The effort is the routed one or the call's; when neither is set, the line says `default` (four
+  empty cells, the word dim) until the subagent's first `turn.step`, and keeps it when that step carries no level. The reason names the case: `explicit`,
+  `fixed`, `judge: <class>; lowered from <tier>` / `raised from` / `kept <tier>` (`, effort set` when only the
+  effort changed), `judge: risky work; raised from <tier>`, or `keep: <why>` (router off, a fork, a session-wide
+  model, a judge error). `lib/route-line.mjs` builds the text and the colours.
+- **Where it lives.** One `$.state` family member per call, keyed by `tool_use_id` (`route` in the contract),
+  written at `agent.spawn` and again at the subagent's first step when the effort was unknown. The row's
+  `requestId` is the same id, so the render hook reads its member and redraws when it is written; the value
+  survives a reload of the mod.
+- **Colours.** Model in bold: haiku `#ececec`, sonnet `#7dd3fc`, opus `#3b82f6`, fable `#fb923c`. Effort bar and
+  word: low `#22c55e`, medium `#eab308`, high `#f97316`, xhigh `#ef4444`; empty cells `#3a3f47`; the reason dim.
+  The model and effort columns are padded so the lines of several calls align.
+- **Never breaks the row.** With no member yet (before the start, after a refused start, a call the router never
+  saw) the hook answers the row alone, and its `.catch` does the same on any error.
+- **Limit.** Several `Agent` calls in one message are drawn by Claude Code as one "N background agents launched"
+  row, not as `ToolUse` rows: their lines show in the ctrl+o transcript only.
+
 ### Failure
 
 Fail open: a judge error, a timeout or an unreadable answer leaves the request unchanged. This is the opposite
@@ -202,12 +233,12 @@ counts, `$` costs and text bars sized to the room.
 **The usage view** is a dialog pane: `$.ui.open({ id: 'model-router-usage', focus: true, closeOnEscape: true,
 rows: 24 })`, drawn by a `ui.render` hook on its `Pane`. Its layout follows Claude Code's Settings dialog (`/usage`,
 `/stats`): a header row with the title and the tabs, a second row of sub-tabs, the content, and a footer of key
-hints in italics. The identity is the 🧭 icon and a teal accent (`#14b8a6`), used only for the title, the active
+hints in italics. The identity is 🔀 and a teal accent (`#14b8a6`), used only for the title, the active
 tab and window (drawn as an inverse block, as Claude Code draws its active tab) and the tile borders; status
 colours are the theme's success, warning and error, and everything else keeps the theme's colours.
 
 ```
-🧭 model-router [Overview]  Models   Classes   Decisions
+🔀 model-router [Overview]  Models   Classes   Decisions
 d:  24h  w: [7d] m:  30d  a:  all                p: user · project
 ...
 Tab/⇧Tab tab · ↑/↓ period · p level · o: report · r: refresh · Esc
@@ -218,7 +249,7 @@ row of its own because only Classes and the tiles depend on it. The view has fou
 
 | Tab | Shows |
 |---|---|
-| Overview | A status line (routing on or off for the session, measuring, adapt). The **KPI tiles** of the window at the level: first-pass yield, cost per successful task, rework rate and routed starts (by downgrade ↓, upgrade ↑, keep =). Each tile carries the change against the window of the same length before it (▲/▼, in points for the rates and in percent for the cost; green when better, red when worse, whatever the direction) and a status dot: FPY 🟢 from 85%, 🟡 from 70%, 🔴 below; rework 🟢 up to 10%, 🟡 up to 25%, 🔴 above; cost 🟢 cheaper or 🔴 dearer than before; ⚪ under five scored tasks. Four tiles stand on one row from 70 columns, two by two below. Two **sparklines**, first-pass yield and cost per success, in equal buckets across the window (24h: 3 hours, 7d: a day, 30d: 3 days, all: the last 12 weeks by week). The **tier·effort bars** of the window, coloured by the FPY thresholds (dim under five tasks). **Session**: this session's subagents by model, with input, output, cache-read and cache-write tokens and cost, and the total. **Routing**: this session's decisions counted by action (downgrade, upgrade, keep, explicit, forced-risk, error). |
+| Overview | A status line (routing on or off for the session, measuring, adapt). The **KPI tiles** of the window at the level: first-pass yield, cost per successful task, rework rate and routed starts (by downgrade ↓, upgrade ↑, keep =). Each tile carries the change against the window of the same length before it (▲/▼, in points for the rates and in percent for the cost; green when better, red when worse, whatever the direction) and a status dot: FPY 🟢 from 85%, 🟡 from 70%, 🔴 below; rework 🟢 up to 10%, 🟡 up to 25%, 🔴 above; cost 🟢 cheaper or 🔴 dearer than before, ⚪ no prior with no earlier window (always for `all`); ⚪ under five scored tasks. Four tiles stand on one row from 70 columns, two by two below. Two **sparklines**, first-pass yield and cost per success, in equal buckets across the window (24h: 3 hours, 7d: a day, 30d: 3 days, all: the last 12 weeks by week). The **tier·effort bars** of the window, coloured by the FPY thresholds (dim under five tasks). **Session**: this session's subagents by model, with input, output, cache-read and cache-write tokens and cost, and the total. **Routing**: this session's decisions counted by action (downgrade, upgrade, keep, explicit, forced-risk, error). |
 | Models | The tiles when they fit on one row; then per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar coloured as above, cost per successful task; the model ids seen in the window, on one line. A task closed `cancelled` counts in the tasks but not in the first-pass yield or the tiles. |
 | Classes | The tiles when they fit on one row; then per class, over the window and at the level: n, first-pass yield with a bar, rework rate, cost per successful task, the best measured cell next to the grid's choice, weak-signal flags; under each class its cells. Then up to three recommendation rows that differ from the grid, each led by the recommended cell's first-pass yield. |
 | Decisions | The latest routing decisions, all sessions, newest last: time, action, model before and after, effort, subagent type, reason. |
@@ -303,7 +334,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 |---|---|
 | 0.1 | `choose-model`, `setup`. |
 | 0.2 | The mod, the decision log, the command, the options; the quality loop measuring only, and `report`. |
-| 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. |
+| 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. From 0.3.4, the 🔀 identity and the coloured choose-model line under `Agent` rows. |
 | 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
 
 ## Open points

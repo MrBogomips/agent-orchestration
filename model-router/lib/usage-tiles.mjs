@@ -10,7 +10,7 @@ const TILE_INNER = 13;
 const DELTA_CAP = 999;
 const BLOCKS = '▁▂▃▄▅▆▇█';
 // Emoji drawn two columns wide whatever their length in UTF-16 units.
-const WIDE = new Set(['🟢', '🟡', '🔴', '⚪', '🧭']);
+const WIDE = new Set(['🟢', '🟡', '🔴', '⚪', '🔀']);
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 

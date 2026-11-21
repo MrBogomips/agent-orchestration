@@ -1,7 +1,8 @@
 #!/bin/sh
 # Renders docs/manual/manual.html to docs/manual/user-manual.pdf with headless Chrome.
 # CHROME may name the browser; the default is Google Chrome on macOS.
-# The screenshots in images/ are made separately: see tools/ (ansi2html.mjs, shot.sh, demo-events.mjs).
+# The screenshots in images/ are made separately: tools/screenshots.sh retakes every model-router one (with
+# demo-events.mjs, bounds.mjs, ansi2html.mjs and shot.sh); the session-hub ones were taken by hand with shot.sh.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 chrome=${CHROME:-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}

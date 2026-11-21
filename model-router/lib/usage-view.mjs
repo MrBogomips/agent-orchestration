@@ -3,6 +3,7 @@
 // See docs/design/model-router.md, "Command".
 // Plain ES module with no Node or engine imports, so both the mod and node tests load it.
 import { familyOf } from './tiers.mjs';
+import { ROUTE_ICON } from './route-line.mjs';
 import { TILES_ONE_ROW, fpyStatus, sparkRows, tileRows } from './usage-tiles.mjs';
 
 export const TABS = Object.freeze(['overview', 'models', 'classes', 'decisions']);
@@ -48,7 +49,7 @@ export function parseArgs(text) {
 /** The arguments and the keys of the view, one line each. */
 export function helpText() {
   return [
-    'Usage: /model-router [tab] [window] [level] | on | off | report | help',
+    `${ROUTE_ICON} Usage: /model-router [tab] [window] [level] | on | off | report | help`,
     '',
     '  (none)          the usage view on Overview, last 7 days, user level',
     '  overview|models|classes|decisions',
@@ -322,7 +323,7 @@ export function textView(data, view, columns) {
   const v = { ...DEFAULT_VIEW, ...Object.fromEntries(Object.entries(view ?? {}).filter(([, x]) => x !== null && x !== undefined)) };
   if (!has(WINDOW_TITLES, v.window)) v.window = DEFAULT_VIEW.window;
   const tabs = TABS.includes(view?.tab) ? [view.tab] : TABS;
-  const out = [`Usage · ${WINDOW_TITLES[v.window] ?? v.window} · ${v.level === 'project' ? 'project' : 'user'} level`];
+  const out = [`${ROUTE_ICON} Usage · ${WINDOW_TITLES[v.window] ?? v.window} · ${v.level === 'project' ? 'project' : 'user'} level`];
   for (const tab of tabs) {
     out.push('', `── ${TAB_TITLES[tab]} ${'─'.repeat(Math.max(0, width - TAB_TITLES[tab].length - 4))}`);
     out.push(...tabRows(data, { ...v, tab }, width).map((r) => r.text));

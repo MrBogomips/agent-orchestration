@@ -215,6 +215,93 @@ describe('effort without rewriting the tool call', () => {
   })
 })
 
+// The row of an Agent call, as the engine raises it for the transcript.
+const AGENT_ROW = {
+  plugin: 'model-router',
+  component: 'ToolUse',
+  requestId: 'tu1',
+  props: { tool_use_id: 'tu1', tool: 'Agent', input: { description: 'list src files', prompt: 'List the files under src.' }, isRunning: true, isErrored: false, isInterrupted: false },
+} as const
+
+/** The choose-model line drawn under the row, as one text, or undefined when only the row is drawn. */
+async function routeLine(ui: any): Promise<string | undefined> {
+  return (await ui.find({ type: 'Text', text: /^ {2}⎿ {2}🔀 / }))?.text
+}
+
+describe('the choose-model line under an Agent row', () => {
+  test('a routed start shows the model and effort it got, and what the router changed', async ($, on) => {
+    world(on)
+    await start($)
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ ...AGENT_ROW, surface })
+      expect(await routeLine(ui)).toBe('  ⎿  🔀 haiku  ▰▱▱▱ low    -> judge: read-search; lowered from opus')
+      const drawn = JSON.stringify(await ui.drawn())
+      // The engine's own row first, kept whole, then the line.
+      expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
+      expect(drawn).toContain('"color":"#ececec"')
+      expect(drawn).toContain('{"color":"#22c55e"},"children":["▰"]')
+      expect(drawn).toContain('{"color":"#3a3f47"},"children":["▱▱▱"]')
+      await ui.unmount()
+    }
+  })
+
+  test('an explicit model is kept; the effort comes from the first step when the call gives none', async ($, on) => {
+    world(on)
+    await start($, { model: 'opus' }, { model: 'opus' })
+    const ui = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal' })
+    expect(await routeLine(ui)).toBe('  ⎿  🔀 opus   ▱▱▱▱ default -> explicit: the call names the model')
+    await step($, 'ag1', 'high')
+    expect(await routeLine(ui)).toBe('  ⎿  🔀 opus   ▰▰▰▱ high   -> explicit: the call names the model')
+    expect(JSON.stringify(await ui.drawn())).toContain('"color":"#3b82f6"')
+    await ui.unmount()
+  })
+
+  test('an explicit effort is shown at once', async ($, on) => {
+    world(on)
+    await start($, { model: 'sonnet', effort: 'xhigh' }, { model: 'sonnet' })
+    const ui = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal' })
+    expect(await routeLine(ui)).toBe('  ⎿  🔀 sonnet ▰▰▰▰ xhigh  -> explicit: the call names the model')
+    await ui.unmount()
+  })
+
+  test('risky work says it was raised', async ($, on) => {
+    world(on, () => ({ value: { isAnswered: true, text: '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.9}', usage: {} } }))
+    await start($, {}, { parentModel: 'claude-sonnet-5' })
+    const ui = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal' })
+    expect(await routeLine(ui)).toBe('  ⎿  🔀 opus   ▰▰▰▱ high   -> judge: risky work; raised from sonnet')
+    await ui.unmount()
+  })
+
+  test('before the start, after a denied start and on other tools only the row is drawn', async ($, on) => {
+    world(on, undefined, { denySpawn: 'no' })
+    const before = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal' })
+    expect(await routeLine(before)).toBe(undefined)
+    await before.unmount()
+    await start($).catch(() => undefined)
+    const denied = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal' })
+    expect(await routeLine(denied)).toBe(undefined)
+    await denied.unmount()
+    const bash = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal', props: { ...AGENT_ROW.props, tool: 'Bash', input: { command: 'ls' } } })
+    expect(await routeLine(bash)).toBe(undefined)
+    await bash.unmount()
+  })
+
+  test('a state that cannot be read draws the row alone', async ($, on) => {
+    let isBroken = false
+    on('state.get', ($, e: any, next: any) => {
+      if (isBroken && e.key === 'route') return { deny: 'state gone' }
+      return next(e)
+    })
+    on('ui.log', () => ({ value: undefined }))
+    world(on)
+    await start($)
+    isBroken = true
+    const ui = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal' })
+    expect(await routeLine(ui)).toBe(undefined)
+    await ui.unmount()
+  })
+})
+
 describe('/model-router', () => {
   test('off keeps every start for the session, on routes again', async ($, on) => {
     const w = world(on)
@@ -339,7 +426,7 @@ describe('/model-router usage view', () => {
     await run($, 'classes 30d')
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
-      expect(await ui.find({ type: 'Text', text: '🧭 model-router' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
       const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
       expect(keys).toEqual(['title', 'tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level', 'report', 'refresh'])
       const drawn = JSON.stringify(await ui.drawn())
@@ -495,7 +582,7 @@ describe('/model-router usage view', () => {
     expect(help.text).toContain('Usage: /model-router')
     expect(help.isTextDisplayOnly).toBe(true)
     const unknown = await run($, 'weekly')
-    expect(unknown.text).toContain('Unknown argument "weekly"')
+    expect(unknown.text).toContain('🔀 Unknown argument "weekly"')
     expect(unknown.text).toContain('Usage: /model-router')
     expect(w.opens.length).toBe(0)
   })
@@ -503,14 +590,14 @@ describe('/model-router usage view', () => {
   test('report writes the page and answers its path', async ($, on) => {
     world(on)
     const out = await run($, 'report')
-    expect(out.text).toBe('Report written to /home/u/.claude/model-router/report.html')
+    expect(out.text).toBe('🔀 Report written to /home/u/.claude/model-router/report.html')
     expect(out.isTextDisplayOnly).toBe(true)
   })
 
   test('a report that fails says so, not that the usage data is unreadable', async ($, on) => {
     world(on, undefined, { report: { exitCode: 1, stdout: '', stderr: 'disk full' } })
     const out = await run($, 'report')
-    expect(out.text).toBe('Could not write the report: disk full')
+    expect(out.text).toBe('🔀 Could not write the report: disk full')
   })
 
   test('on and off answer for the person only', async ($, on) => {
@@ -522,14 +609,14 @@ describe('/model-router usage view', () => {
   test('a script that fails answers one short line and never throws', async ($, on) => {
     world(on, undefined, { isPlaced: false, usage: { exitCode: 1, stdout: '', stderr: 'boom' } })
     const out = await run($, '', 80)
-    expect(out.text).toBe('Could not read the usage data: boom')
+    expect(out.text).toBe('🔀 Could not read the usage data: boom')
     expect(out.isTextDisplayOnly).toBe(true)
   })
 
   test('unreadable script output answers one short line too', async ($, on) => {
     world(on, undefined, { isPlaced: false, usage: { exitCode: 0, stdout: 'not json' } })
     const out = await run($, '', 80)
-    expect(out.text).toMatch(/^Could not read the usage data: /)
+    expect(out.text).toMatch(/^🔀 Could not read the usage data: /)
   })
 
   test('in the pane a failed read is shown in place of the rows', async ($, on) => {

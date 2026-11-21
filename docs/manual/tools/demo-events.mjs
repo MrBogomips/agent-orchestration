@@ -7,12 +7,17 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { projectId } from '../../../model-router/lib/project-id.mjs';
+
 const DAY = 86400000;
 const MIN = 60000;
 const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5', fable: 'claude-fable-5-5' };
+// The demo hub's two repositories. Their ids come from these remotes, so a session started in a clone with the same
+// remote (screenshots.sh makes one) finds its project's data whatever the folder.
+const DEMO_REMOTES = Object.freeze({ product: 'https://example.com/demo/product.git', design: 'https://example.com/demo/design.git' });
 const PROJECTS = [
-  { id: 'e8e1a273396fdd70', root: '/work/hub/product', share: 0.7 },
-  { id: '1a9b104b39b11dc3', root: '/work/hub/design', share: 0.3 },
+  { id: (await projectId({ remote: DEMO_REMOTES.product })).id, root: '/work/hub/product', share: 0.7 },
+  { id: (await projectId({ remote: DEMO_REMOTES.design })).id, root: '/work/hub/design', share: 0.3 },
 ];
 const COST = { haiku: [0.002, 0.012], sonnet: [0.02, 0.11], opus: [0.09, 0.42], fable: [0.35, 1.2] };
 const EFFORT_COST = { low: 0.7, medium: 1, high: 1.45, xhigh: 2 };

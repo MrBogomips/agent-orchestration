@@ -84,9 +84,9 @@ function decisionsBlock(decisions) {
 export function renderReport(data) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>model-router quality report</title><style>${STYLE}</style></head>
+<title>🔀 model-router quality report</title><style>${STYLE}</style></head>
 <body><main>
-<h1>model-router quality report</h1>
+<h1>🔀 model-router quality report</h1>
 <p class="meta">Generated ${esc(data.generatedAt)} from ${esc(data.configDir)} · ${num(data.events)} events · ${num(data.outcomes)} closed tasks. Nothing on this page left the machine.</p>
 <h2>Trend</h2><div class="card">${trendChart(data.trend)}${trendTable(data.trend)}</div>
 <h2>Router decisions</h2>${decisionsBlock(data.decisions)}

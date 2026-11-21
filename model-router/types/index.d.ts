@@ -10,9 +10,14 @@ export type UsageCache = {
   error?: string
 }
 
+/** The model and effort a subagent got, and why: the line drawn under its Agent call's row. */
+export type RouteLineState = { model: string; effort: string | null; reason: string }
+
 declare module 'claude-code' {
   interface PluginState {
     'model-router': {
+      /** The choose-model line of each Agent call, by its tool_use_id; null until the subagent starts. */
+      route: StateFamily<RouteLineState | null>
       /** Whether the router may change subagent starts in this session (`/model-router on|off`). */
       enabled: boolean
       /** The usage view's tab, window and level. */

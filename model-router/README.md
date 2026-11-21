@@ -16,10 +16,10 @@ task cost, so the grid can be checked against real work.
 
 | Name | Kind | What it does |
 |---|---|---|
-| `model-router:choose-model` | skill | The grid: four model tiers, four effort questions, the rules around them (go up when in doubt, risk is about the act, project defaults, the user wins, choose at start, escalation, a coordinator's own model), plus *inline or delegate* and *continue, do not restart*. For each start it writes one line `model · effort · reason`, passes `model` and `effort` on the start call, and tags the description with the task class (`[mr:<class>]`, `[mr:<class>!]` when risky). Agents with a fixed model keep it. |
+| `model-router:choose-model` | skill | The grid: four model tiers, four effort questions, the rules around them (go up when in doubt, risk is about the act, project defaults, the user wins, choose at start, escalation, a coordinator's own model), plus *inline or delegate* and *continue, do not restart*. For each start it writes one line `🔀 opus ▰▰▰▱ high -> reason` (an effort bar of four cells, `low` one to `xhigh` four), passes `model` and `effort` on the start call, and tags the description with the task class (`[mr:<class>]`, `[mr:<class>!]` when risky). Agents with a fixed model keep it. |
 | `model-router:setup` | skill | Writes or updates a *Model routing* section in the project's instruction file, `AGENTS.md` or else `CLAUDE.md`, with defaults and exceptions per kind of work or task class, only after the user says yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs`: compacts the quality data, writes a self-contained page and opens it. |
-| `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model. Records decisions, starts, signals and reports. Fails open. |
+| `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model. Draws under each `Agent` call the model and effort the subagent actually got, in colour (see [The choose-model line](#the-choose-model-line)). Records decisions, starts, signals and reports. Fails open. |
 | `/model-router` | command | The usage view: a dialog with four tabs (Overview, Models, Classes, Decisions), or the same rows as text where no pane fits; `on` and `off` switch routing for the session. See [Commands](#commands). |
 | `grid.json` | data | The grid in machine-readable form, with each class's usual choice. The judge's prompt is generated from it; `grid.test.mjs` fails when it and the skills drift apart. |
 | `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes the outcome of each task and keeps aggregates per user and per project; the report renders them; `usage.mjs` gives `/model-router` its data. The page and the command share one aggregation (`lib/usage-data.mjs`), so their numbers agree. |
@@ -36,6 +36,35 @@ task cost, so the grid can be checked against real work.
 The model is set when the subagent starts, the effort on each of the subagent's model requests; the start call
 itself is never changed, so the routing works in every permission mode, auto mode included. An effort the call
 already carries is kept.
+
+### The choose-model line
+
+Before each start, `choose-model` makes the agent write one plain-text line, which works with mods off:
+
+```text
+🔀 opus ▰▰▰▱ high -> review with unknown cause, going up
+🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check
+```
+
+🔀, the model, an effort bar of four cells (`▰` filled, `▱` empty: `low` one, `medium` two, `high` three, `xhigh`
+four), the effort, `->` and the reason in under 12 words.
+
+With the mod on, the same line is drawn in colour under each `Agent` call's row, with the model and effort the
+subagent **actually got** after routing, and the reason: `explicit` (the call named the model), `fixed` (the
+agent's definition fixes it), `judge: <class>; lowered from opus` (or `raised from`, `kept`, with `, effort set` when only the effort was set),
+`judge: risky work; raised from <tier>`, or `keep: <why>`.
+
+```text
+⏺ Agent([mr:read-search] Find the CSV writer)
+  ⎿  🔀 haiku  ▰▱▱▱ low    -> judge: read-search; lowered from sonnet
+```
+
+The model is bold, coloured by tier (haiku white, sonnet light blue, opus blue, fable orange); the bar and the
+effort by level (low green, medium yellow, high orange, xhigh red), empty cells dark grey; the reason dim. An effort
+nobody set shows four empty cells and a dim `default` until the subagent's first request; if that request carries
+no effort level either, the line keeps `default`. On any error only the row is drawn. Several `Agent` calls made in
+one message are drawn by Claude Code as one "background agents launched" row; their lines then show in the ctrl+o
+transcript.
 
 ### What is measured
 
@@ -74,18 +103,18 @@ does not read it.
 
 ### The usage view
 
-A dialog pane laid out like Claude Code's own Settings dialog (`/usage`, `/stats`): a header row with 🧭 and the
+A dialog pane laid out like Claude Code's own Settings dialog (`/usage`, `/stats`): a header row with 🔀 and the
 four tabs, a second row with the window (24h, 7d, 30d, all) and the level (user or project), the content, and a
 footer of key hints. The active tab and window are drawn as a teal block; the KPI tile borders share the teal.
 
 ```text
-🧭 model-router [Overview]  Models   Classes   Decisions
+🔀 model-router [Overview]  Models   Classes   Decisions
 d:  24h  w: [7d] m:  30d  a:  all                p: user · project
 ```
 
 | Tab | Shows |
 |---|---|
-| Overview | Routing on or off, measuring, adapt; the **KPI tiles** of the window: first-pass yield (FPY), cost per successful task, rework rate and routed starts (↓ downgrade, ↑ upgrade, = keep), each with its change against the window of the same length before it (green when better, red when worse) and a status dot (FPY 🟢 from 85%, 🟡 from 70%, 🔴 below; rework 🟢 up to 10%, 🟡 up to 25%, 🔴 above; cost 🟢 cheaper or 🔴 dearer; ⚪ under five tasks); sparklines of FPY and cost per success across the window; FPY bars per tier and effort, coloured the same way; this session's subagents by model with input, output, cache-read and cache-write tokens and cost; this session's routing decisions by action |
+| Overview | Routing on or off, measuring, adapt; the **KPI tiles** of the window: first-pass yield (FPY), cost per successful task, rework rate and routed starts (↓ downgrade, ↑ upgrade, = keep), each with its change against the window of the same length before it (green when better, red when worse) and a status dot (FPY 🟢 from 85%, 🟡 from 70%, 🔴 below; rework 🟢 up to 10%, 🟡 up to 25%, 🔴 above; cost 🟢 cheaper or 🔴 dearer, ⚪ no prior with no earlier window (always for `all`); ⚪ under five tasks); sparklines of FPY and cost per success across the window; FPY bars per tier and effort, coloured the same way; this session's subagents by model with input, output, cache-read and cache-write tokens and cost; this session's routing decisions by action |
 | Models | The tiles, when the four fit on one row (70 columns); per tier and effort, over the window: closed tasks, tokens, cost, FPY with a bar, cost per successful task, and the model ids seen in the window. A cancelled task counts in the tasks, not in FPY |
 | Classes | The tiles, when they fit; per task class, over the window and at the level: n, FPY with a bar, rework rate, cost per successful task, the grid's choice next to the best measured cell, weak-signal flags, and each cell under its class (`*` marks the recommended one); then up to three recommendations that differ from the grid, each led by its FPY |
 | Decisions | The latest twelve routing decisions of every session (UTC), `•` marking this session's |
@@ -115,7 +144,7 @@ rows as text, without colours and with the status dots: the tab you named, or al
 `claude -p "/model-router overview"` on a machine with three measured subagents:
 
 ```text
-model-router: Usage · last 7 days · user level
+model-router: 🔀 Usage · last 7 days · user level
 
 ── Overview ────────────────────────────────────────────────────────────────────
 Status:               routing on · measuring on · adapt off
@@ -192,7 +221,7 @@ receives the subagent type, its short description and the first 4,000 characters
 
 ## Limits
 
-- The mod needs Claude Code 2.1.329 or later (`engines` in `plugin.json`), tested on 2.1.329. The skills do not
+- The mod needs Claude Code 2.1.329 or later (`engines` in `plugin.json`), tested on 2.1.329 and 2.1.330. The skills do not
   need the mod.
 - Only starts made through the `Agent` tool are routed; a plugin's own `$.agent.spawn` and workflow agents are
   measured, not routed.
@@ -203,6 +232,8 @@ receives the subagent type, its short description and the first 4,000 characters
   `design-open` to the grid's floor.
 - Costs are the engine's estimates. Edits made outside the session's own tools are not seen.
 - Read-only classes and cells with fewer than five tasks are weak signals; the report flags them.
+- Several `Agent` calls made in one message are drawn by Claude Code as one "background agents launched" row:
+  the 🔀 lines then show only in the ctrl+o transcript, under each call.
 
 ## Installation
 
