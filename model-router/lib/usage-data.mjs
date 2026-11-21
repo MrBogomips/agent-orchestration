@@ -133,18 +133,20 @@ export function classesOf(cells, grid, { outcomes = [], projectId = null } = {})
     });
 }
 
-function weekOf(iso) {
-  const d = new Date(iso);
+function weekOf(time) {
+  const d = new Date(time);
   const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - ((d.getUTCDay() + 6) % 7) * DAY_MS);
   return monday.toISOString().slice(0, 10);
 }
 
-/** First-pass yield and cost per successful task per week (Monday, UTC). */
+/** First-pass yield and cost per successful task per week (Monday, UTC); an outcome with no readable time is skipped. */
 export function trendOf(outcomes) {
   const weeks = new Map();
   for (const o of outcomes) {
     if (!CLOSED.includes(o.outcome)) continue;
-    const week = weekOf(o.reportTs ?? o.ts);
+    const t = outcomeTime(o);
+    if (!Number.isFinite(t)) continue;
+    const week = weekOf(t);
     const w = weeks.get(week) ?? { week, n: 0, success: 0, cost: 0, costN: 0 };
     w.n += 1;
     if (o.outcome === 'success') w.success += 1;
