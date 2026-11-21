@@ -194,7 +194,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 <h2 id="panel">8. Controllare lo stato: <code>/session-hub</code> e il pannello laterale</h2>
 <p>Per avere il quadro completo delle sessioni figlie senza interrompere il lavoro dell'agente, la mod registra il comando <code>/session-hub</code>. La sua risposta è visibile solo a te e non viene inviata al modello.</p>
 <ul>
-  <li><strong>Nel master</strong>, stampa il percorso del registro e la tabella riassuntiva delle sessioni figlie, aprendo anche il pannello dedicato accanto alla chat. Ogni riga mostra lo stato registrato, lo stato in tempo reale dall'elenco delle sessioni, modello, effort e ultimo messaggio; il pannello si aggiorna ogni 30 secondi e a ogni esecuzione di <code>/session-hub</code>.</li>
+  <li><strong>Nel master</strong>, stampa il percorso del registro e la tabella riassuntiva delle sessioni figlie, aprendo anche il pannello dedicato accanto alla chat. Ogni riga mostra lo stato registrato, lo stato in tempo reale dall'elenco delle sessioni, modello, effort e ultimo messaggio; il pannello si aggiorna ogni 30 secondi e a ogni esecuzione di <code>/session-hub</code>. Il pannello usa gli stessi colori di <code>model-router</code>: il modello in grassetto nel colore della sua fascia, l'effort come barra di quattro celle (<code>▰▰▰▱ high</code>) nel colore del suo livello, lo stato in verde se la sessione lavora, in giallo se attende, è stata abbandonata o non compare nell'elenco, in rosso se è persa. Nella tabella del comando la barra c'è, i colori no.</li>
   <li><strong>In una sessione figlia</strong>, riepiloga ruolo, radice di scrittura, file di handoff, registro e stato delle protezioni.</li>
 </ul>
 <figure class="shot">
@@ -205,6 +205,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   <img src="{{img:sh-panel}}" alt="Il pannello delle sessioni figlie: per ciascuna lo stato, lo stato in tempo reale, il modello, l&#x27;effort e l&#x27;ultimo messaggio" loading="lazy">
   <figcaption>Le righe del pannello: stato nel registro, stato in tempo reale dall'elenco delle sessioni, modello ed effort, ultimo messaggio. <span class="badge demo">Dati dimostrativi</span></figcaption>
 </figure>
+<p>Quando il master avvia le sessioni figlie con un comando <code>Bash</code>, sotto la riga del comando compare una riga per ciascuna figlia, con gli stessi colori: modello, effort e nome, per esempio <code>⎿  🔀 opus   ▰▰▰▱ high   -&gt; t123-product</code>. La mod li legge dal comando di avvio scritto da <code>spawn</code>; un comando che non indica né modello né effort non ha questa riga.</p>
 <p>Ecco un esempio dell'output di <code>/session-hub</code> eseguito dentro una sessione figlia:</p>
 <pre><code>Role: child of "hub"
 Write root: /w/repo

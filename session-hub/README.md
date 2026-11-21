@@ -24,7 +24,7 @@ important one, the write scope, with a hook.
 | `session-hub:setup` | skill | Writes or updates the hub's *Child sessions* section, after an explicit yes. |
 | `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, or to a file with more than one hard link (another of its names may be outside), and tells the model to send an `out-of-scope` message to the master. |
 | `scripts/registry.mjs` | script | Reads and writes the children record, atomically. Used by the skills and, read only, by the mod. |
-| `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel. See *The mod* below. |
+| `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel and the start line under each child launch. See *The mod* below. |
 | `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel. See [Commands](#commands). |
 
 ### Roles
@@ -52,7 +52,8 @@ Code 2.1.329 or later (`engines` in `plugin.json`). With mods off, everything ab
 | Shell check | child | **Best effort.** Denies a `Bash` command whose redirections or file-writing commands (`tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install`, `sed -i`) target a path outside the write root. The command is read as bash or zsh (the shell of the `Bash` tool on macOS): zsh's `>!` and `>>!`, `noglob`, `repeat` and `=command` are read, and so are the commands inside substitutions (`$(…)`, backticks, `<(…)`, in double quotes and in here-documents with an unquoted delimiter) and the literal line given to `eval` or `sh -c`. A hard link to a file outside the root is denied, and so is a write through a symbolic link the same command makes to a place outside. A command it cannot read is denied with the reason. `/dev` and the system temporary folders are allowed. |
 | Origin marking | child | A message from another session, the master included, carries a line: information, not authorization. A prompt typed by the person carries none. |
 | Scope line | child, master | The role and the scope in the system prompt and, after the start and after each compaction, as context on the next prompt. |
-| Children panel | master | One row per child: status in the record, live status from the session list, model and effort, last message. Refreshed every 30 s and on `/session-hub`. |
+| Children panel | master | One row per child: status in the record, live status from the session list, model and effort, last message. Refreshed every 30 s and on `/session-hub`. Drawn with `model-router`'s look: the model bold in its tier's colour, the effort as a four-cell bar (`▰▰▰▱ high`) in its level's colour, the statuses green, yellow or red (running; waiting, abandoned or not listed; lost). |
+| Start line | master | Under a `Bash` call that starts children, one line per child with its model and effort: `⎿  🔀 opus   ▰▰▰▱ high   -> t42-product`. Read from the launch command (`claude` after `SESSION_HUB_ROLE=child`, also in `tmux send-keys`, or `herdr agent start`); a command that states neither model nor effort gets no line. |
 
 Guards fail closed: a send guard or shell check that fails refuses and says why. `SESSION_HUB_GUARDS=off` turns
 off the send guard and the shell check (and the hook); the marking and the scope line stay. The mod keeps no
@@ -66,7 +67,7 @@ answer is for you only: the model has the scope in its own scope line and reads 
 
 | Command | Does |
 |---|---|
-| `/session-hub` | In a child: its role, write root, handoff, record and whether the guards are on. In a master: the record's path and the children table (status, live status, model and effort, last message), sized to the terminal, and the children panel opened beside the chat. In any other session: that it has no role. |
+| `/session-hub` | In a child: its role, write root, handoff, record and whether the guards are on. In a master: the record's path and the children table (status, live status, model and effort as `▰▰▰▱ high`, last message), sized to the terminal, and the children panel opened beside the chat. In any other session: that it has no role. |
 | `/session-hub help` | What the command does. Any other argument prints the same. |
 
 In a session with no role (a real run of `claude -p "/session-hub"`):
@@ -145,7 +146,9 @@ without them the skills, the hook and the record work as in 0.1.
 
 Works without `model-router`. With `model-router` installed, `session-hub:spawn` loads
 `model-router:choose-model` to choose a child's model and effort when neither the user nor the hub's *Model* and
-*Effort* keys did; without it, a child inherits the master's model and effort and the report says so.
+*Effort* keys did; without it, a child inherits the master's model and effort and the report says so. The panel and
+the start line draw models and efforts with `model-router`'s colours from session-hub's own copy of them, so they
+look the same with or without `model-router`.
 
 Then run `session-hub:setup` in the hub to write its *Child sessions* section, or let `spawn` use the defaults.
 

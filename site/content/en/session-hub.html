@@ -1,4 +1,4 @@
-<!-- translated-from: it/session-hub.html sha256:df05340a0dbd -->
+<!-- translated-from: it/session-hub.html sha256:4ccaa8d07fd3 -->
 <h1>session-hub</h1>
 <p class="lede">When a task spans multiple repositories, trying to handle everything in a single session quickly loses focus and blurs boundaries. With <code>session-hub</code>, a <strong>master</strong> session opened at the hub root launches one or more <strong>child sessions</strong> — one per repository — that work in parallel.</p>
 <p>Each child session receives a written <strong>scope</strong>, a model, and an effort level, communicates only with the master, and forwards anything outside its perimeter to it. This lets you step directly into the child session for your domain and guide it closely, while the master coordinates everything else.</p>
@@ -195,7 +195,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 <h2 id="panel">8. Checking status: <code>/session-hub</code> and the side panel</h2>
 <p>To get a complete picture of child sessions without interrupting the agent's work, the mod registers the <code>/session-hub</code> command. Its output is visible only to you and is not sent to the model.</p>
 <ul>
-  <li><strong>In the master</strong>, it prints the path to the children record and a summary table of child sessions, and opens the dedicated panel beside the chat. Each row shows the recorded status, live status from the session list, model, effort, and last message; the panel refreshes every 30 seconds and whenever you run <code>/session-hub</code>.</li>
+  <li><strong>In the master</strong>, it prints the path to the children record and a summary table of child sessions, and opens the dedicated panel beside the chat. Each row shows the recorded status, live status from the session list, model, effort, and last message; the panel refreshes every 30 seconds and whenever you run <code>/session-hub</code>. The panel uses the same colors as <code>model-router</code>: the model in bold in its tier's color, effort as a four-cell bar (<code>▰▰▰▱ high</code>) in its level's color, and the status in green if the session is working, yellow if it is waiting, abandoned, or not in the list, and red if it is lost. The command's table includes the bar, but not the colors.</li>
   <li><strong>In a child session</strong>, it summarizes the role, write root, handoff file, children record, and guard status.</li>
 </ul>
 <figure class="shot">
@@ -206,6 +206,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   <img src="{{img:sh-panel}}" alt="The child sessions panel: for each one, status, live status, model, effort, and last message" loading="lazy">
   <figcaption>Panel rows: status in the children record, live status from the session list, model and effort, last message. <span class="badge demo">Demo data</span></figcaption>
 </figure>
+<p>When the master starts child sessions with a <code>Bash</code> command, a line appears below the command line for each child, in the same colors: model, effort, and name, for example <code>⎿  🔀 opus   ▰▰▰▱ high   -&gt; t123-product</code>. The mod reads them from the launch command written by <code>spawn</code>; a command that specifies neither model nor effort does not have this line.</p>
 <p>Here is an example of the output of <code>/session-hub</code> run inside a child session:</p>
 <pre><code>Role: child of "hub"
 Write root: /w/repo
