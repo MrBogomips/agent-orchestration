@@ -6,9 +6,11 @@ export function normalizeRemote(url) {
   if (typeof url !== 'string') return null;
   let s = url.trim();
   if (!s) return null;
+  // Only a URL with a scheme can name a port; in the scp form `host:1234/repo`, `1234` is the owner.
+  const hasScheme = /^[a-z+]+:\/\//i.test(s);
   s = s.replace(/^[a-z+]+:\/\//i, '');
   s = s.replace(/^[^@/]+@/, '');
-  s = s.replace(/^([^/:]+):\d+\//, '$1/');
+  if (hasScheme) s = s.replace(/^([^/:]+):\d+\//, '$1/');
   s = s.replace(/^([^/:]+):/, '$1/');
   s = s.replace(/\/+$/, '').replace(/\.git$/i, '').replace(/\/+$/, '');
   return s.toLowerCase() || null;

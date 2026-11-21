@@ -86,6 +86,16 @@ test('the latest outcome of a task wins, and the trend is weekly', () => {
   assert.ok(trendOf(outcomes()).length >= 3);
 });
 
+test('a class summary weighs each cell\'s means by the outcomes that carried a value', () => {
+  const cell = (tier, n, costN, costMean, tokensN, tokensMean) => ({
+    class: 'edit-specified', tier, effort: 'medium', model: null, n, success: n, rework: 0, failure: 0, costMean, costN, tokensMean, tokensN,
+  });
+  const cells = { a: cell('sonnet', 10, 1, 5, 1, 500), b: cell('opus', 1, 1, 1, 1, 100) };
+  const summary = classesOf(cells, GRID, { outcomes: [], projectId: null }).find((c) => c.cls === 'edit-specified').summary;
+  assert.equal(summary.costPerTask, 3);
+  assert.equal(summary.tokensPerTask, 300);
+});
+
 test('the trend skips an outcome whose time cannot be read and keeps the others', () => {
   const trend = trendOf([
     { outcome: 'success', ts: '2026-11-20T00:00:00Z', reportTs: 'bad' },

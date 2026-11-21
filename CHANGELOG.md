@@ -18,13 +18,14 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
 - Each hook that fails writes one debug line, `[model-router] <hook>: <error>`, before going on unchanged. At
   `agent.spawn`, an unreadable grid or project no longer loses the spawn record: it is written without them.
 - The cost and token means of a quality cell count only the outcomes that carried a cost or a token count (new
-  `costN` and `tokensN` weights, aged with the cell). Before, tasks with no cost pulled the means down.
+  `costN` and `tokensN` weights, aged with the cell), and a class summary weighs each cell's means the same way.
+  Before, tasks with no cost pulled the means down.
 - One outcome with an unreadable time no longer makes the report fail with `Invalid time value`: it is skipped.
 - The Models tab counts the closed tasks the KPI tiles count; cancelled tasks are left out of its counts, tokens and
   cost.
 - A remote URL that names a port (`ssh://git@github.com:22/o/r`, `https://github.com:443/o/r`) gives the same
-  project id as the other spellings. A project whose remote named a port gets a new id once, and starts its project
-  level afresh.
+  project id as the other spellings; in the scp form (`git@github.com:1234/r`) a numeric owner is kept. A project
+  whose remote named a port gets a new id once, and starts its project level afresh.
 
 ## model-router 0.3.7
 

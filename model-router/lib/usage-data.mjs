@@ -81,13 +81,16 @@ function combined(cells) {
   let tokensW = 0;
   for (const c of cells) {
     for (const k of Object.keys(sum)) sum[k] += c[k] ?? 0;
+    // Each mean weighs by the outcomes that carried its value (cells written before those weights: by n).
     if (isNum(c.costMean)) {
-      cost += c.costMean * (c.n ?? 0);
-      costW += c.n ?? 0;
+      const w = isNum(c.costN) ? c.costN : c.n ?? 0;
+      cost += c.costMean * w;
+      costW += w;
     }
     if (isNum(c.tokensMean)) {
-      tokens += c.tokensMean * (c.n ?? 0);
-      tokensW += c.n ?? 0;
+      const w = isNum(c.tokensN) ? c.tokensN : c.n ?? 0;
+      tokens += c.tokensMean * w;
+      tokensW += w;
     }
   }
   return { ...sum, costMean: costW ? cost / costW : null, tokensMean: tokensW ? tokens / tokensW : null };
