@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 520" role="img">
+  <title>The mod appends events to events.jsonl in the Claude Code config folder; when a task's rework window closes its outcome is decided, compaction folds the outcomes into cells by class, tier and effort, for you and for each project, and the usage view and the report show first-pass yield, rework rate and cost per success. Nothing is written inside your repositories.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+  </defs>
+
+  <!-- row 1 -->
+  <rect x="20" y="30" width="290" height="170" rx="14" class="d-node"/>
+  <circle cx="44" cy="54" r="12" class="d-fill"/><text x="44" y="59" class="d-num">1</text>
+  <text x="165" y="60" class="d-title">Events</text>
+  <text x="36" y="90" class="d-mono">decision · spawn</text>
+  <text x="36" y="110" class="d-mono">signal: write · tool-error</text>
+  <text x="36" y="130" class="d-mono">prompt · stop · resume</text>
+  <text x="36" y="150" class="d-mono">report · session-end</text>
+  <text x="36" y="176" class="d-note d-start">recorded by the mod</text>
+  <text x="36" y="193" class="d-note d-start">as they happen</text>
+
+  <path d="M355 60v120c0 14 56 22 110 22s110-8 110-22V60" class="d-node d-accent"/>
+  <ellipse cx="465" cy="60" rx="110" ry="20" class="d-node d-accent"/>
+  <circle cx="379" cy="102" r="12" class="d-fill"/><text x="379" y="107" class="d-num">2</text>
+  <text x="465" y="128" class="d-title">events.jsonl</text>
+  <text x="465" y="150" class="d-note">an append-only log</text>
+  <text x="465" y="168" class="d-note">in the config folder</text>
+
+  <rect x="620" y="30" width="280" height="170" rx="14" class="d-node"/>
+  <circle cx="644" cy="54" r="12" class="d-fill"/><text x="644" y="59" class="d-num">3</text>
+  <text x="760" y="84" class="d-title">The rework window closes</text>
+  <circle cx="760" cy="120" r="20" class="d-node d-primary"/>
+  <path d="M760 106V120L770 127" class="d-rule"/>
+  <text x="760" y="166" class="d-note">30 minutes after the report,</text>
+  <text x="760" y="184" class="d-note">or when the session ends</text>
+  <g class="d-edge"><path d="M310 115H351" marker-end="url(#a)"/><path d="M575 115H616" marker-end="url(#a)"/><path d="M765 200V266" marker-end="url(#a)"/></g>
+
+  <!-- row 2 -->
+  <rect x="630" y="270" width="270" height="160" rx="14" class="d-node"/>
+  <circle cx="654" cy="294" r="12" class="d-fill"/><text x="654" y="299" class="d-num">4</text>
+  <text x="765" y="300" class="d-title">Outcome</text>
+  <rect x="642" y="318" width="120" height="30" rx="15" class="d-node d-allow"/><text x="702" y="338" class="d-elabel ink d-mid">success</text>
+  <rect x="768" y="318" width="120" height="30" rx="15" class="d-node d-primary"/><text x="828" y="338" class="d-elabel ink d-mid">rework</text>
+  <rect x="642" y="356" width="120" height="30" rx="15" class="d-node d-block"/><text x="702" y="376" class="d-elabel ink d-mid">failure</text>
+  <rect x="768" y="356" width="120" height="30" rx="15" class="d-weak"/><text x="828" y="376" class="d-elabel d-mid">cancelled</text>
+  <text x="765" y="404" class="d-note">cancelled or risky tasks</text>
+  <text x="765" y="421" class="d-note">are not learned from</text>
+
+  <rect x="300" y="270" width="290" height="160" rx="14" class="d-node d-primary"/>
+  <circle cx="324" cy="294" r="12" class="d-fill"/><text x="324" y="299" class="d-num">5</text>
+  <text x="445" y="300" class="d-title">Compaction</text>
+  <text x="445" y="338" class="d-note">cells: class × tier × effort</text>
+  <text x="445" y="362" class="d-note">for you, and for each project</text>
+  <text x="445" y="386" class="d-note">a 30-day half-life ages them</text>
+
+  <rect x="20" y="270" width="240" height="160" rx="14" class="d-node d-allow"/>
+  <circle cx="44" cy="294" r="12" class="d-fill"/><text x="44" y="299" class="d-num">6</text>
+  <text x="150" y="300" class="d-title">What you see</text>
+  <text x="140" y="324" class="d-note">in /model-router</text>
+  <text x="140" y="341" class="d-note">and on the report page</text>
+  <text x="140" y="368" class="d-label d-mid b">first-pass yield</text>
+  <text x="140" y="390" class="d-label d-mid b">rework rate</text>
+  <text x="140" y="412" class="d-label d-mid b">cost per success</text>
+  <g class="d-edge"><path d="M630 350H594" marker-end="url(#a)"/><path d="M300 350H264" marker-end="url(#a)"/></g>
+
+  <!-- footer -->
+  <rect x="20" y="452" width="880" height="56" rx="12" class="d-zone"/>
+  <text x="460" y="476" class="d-label d-mid b">All of it lives under the Claude Code config folder (CLAUDE_CONFIG_DIR, else ~/.claude).</text>
+  <text x="460" y="496" class="d-label d-mid">Nothing is written inside your repositories, and nothing is sent anywhere.</text>
+</svg>

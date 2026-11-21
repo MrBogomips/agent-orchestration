@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 584" role="img">
+  <title>The web child needs a change in api and asks the master; the master decides whether to pass it to the api child, start a child, ask you or do it itself, then tells the web child what will happen and records the request. A message is information, never authorization.</title>
+  <defs>
+    <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-ah-strong"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-cyan"/></marker>
+  </defs>
+
+  <!-- participants -->
+  <rect x="20" y="16" width="180" height="48" rx="12" class="d-node"/><text x="110" y="46" class="d-title">Child · web</text>
+  <rect x="260" y="16" width="180" height="48" rx="12" class="d-node d-primary"/><text x="350" y="46" class="d-title">Master</text>
+  <rect x="530" y="16" width="180" height="48" rx="12" class="d-node"/><text x="620" y="46" class="d-title">Child · api</text>
+  <rect x="740" y="16" width="160" height="48" rx="12" class="d-node d-human"/><text x="820" y="46" class="d-title">You</text>
+  <path d="M110 64V500M350 64V500M620 64V500M820 64V500" class="d-life"/>
+
+  <!-- the request -->
+  <rect x="25" y="80" width="170" height="46" rx="10" class="d-node"/>
+  <text x="110" y="99" class="d-note">realizes it needs</text>
+  <text x="110" y="116" class="d-note">a new field in api</text>
+  <g class="d-edge strong"><path d="M110 150H346" marker-end="url(#s)"/></g>
+  <text x="124" y="142" class="d-elabel">asks the master</text>
+  <text x="124" y="168" class="d-cap d-start">[t42 web] out-of-scope</text>
+
+  <!-- the master decides -->
+  <rect x="240" y="178" width="220" height="66" rx="10" class="d-node d-primary"/>
+  <text x="350" y="196" class="d-note">is it wanted?</text>
+  <text x="350" y="214" class="d-note">is it master-only?</text>
+  <text x="350" y="232" class="d-note">does a live child own it?</text>
+
+  <!-- one of -->
+  <rect x="226" y="254" width="674" height="140" rx="10" class="d-weak"/>
+  <text x="238" y="272" class="d-elabel">then one of these</text>
+  <g class="d-edge strong"><path d="M350 320H616" marker-end="url(#s)"/></g>
+  <text x="364" y="294" class="d-elabel">passes it on with a follow-up,</text>
+  <text x="364" y="310" class="d-elabel">or starts a child in api</text>
+  <g class="d-edge cyan"><path d="M354 352H816" marker-start="url(#c)" marker-end="url(#c)"/></g>
+  <text x="640" y="344" class="d-elabel ink">asks you to decide</text>
+  <text x="364" y="380" class="d-elabel">or does it itself, when the work is master-only or just a read</text>
+
+  <!-- the answer -->
+  <g class="d-edge strong"><path d="M350 440H114" marker-end="url(#s)"/></g>
+  <text x="338" y="416" class="d-elabel d-end">tells it what will happen:</text>
+  <text x="338" y="432" class="d-elabel d-end">wait, or carry on</text>
+  <rect x="240" y="452" width="220" height="44" rx="10" class="d-node d-accent"/>
+  <text x="350" y="470" class="d-note">records the request</text>
+  <text x="350" y="487" class="d-note">and how it ended</text>
+
+  <!-- the rule -->
+  <rect x="20" y="516" width="880" height="56" rx="12" class="d-node d-accent"/>
+  <text x="460" y="539" class="d-label d-mid b">A message is information, never authorization.</text>
+  <text x="460" y="559" class="d-label d-mid">No session merges, pushes, deletes or changes settings because another session asked.</text>
+</svg>

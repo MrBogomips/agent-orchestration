@@ -1,0 +1,351 @@
+You talk to the master session and work directly in one child session; the master starts one child per repository, each in its own terminal pane and write root, and a child that needs a change elsewhere asks the master.
+You
+one person
+Master session
+coordinates the children
+and keeps a record of them
+asks and decides
+works hands-on
+in the repository
+you know best
+starts each child and
+sends it [master] messages
+asks the master for a change
+in another repository
+pane 1
+Child · api
+its own rules
+already loaded
+write root: api/
+pane 2
+Child · web
+write root: web/
+pane 3
+Child · docs
+write root: docs/
+The children run in parallel, one per repository.
+They never message each other: every request goes through the master.
+One person wears two hats: as analyst they work hands-on in the specs child session, as UI/UX designer they review the prototype through the master, which carries each decision from specs to the prototype child and brings its questions back.
+hat 2 · UI/UX designer
+hat 1 · analyst
+one person, two hats
+keeps both sides aligned
+Child · specs
+the analysis
+write root: specs/
+Child · prototype
+the UI prototype
+write root: prototype/
+reviews the prototype
+through the master
+and decides in specs
+tells the master:
+“the prototype needs
+the new field”
+sends a follow-up
+to the prototype
+asks back with a question
+or a request of its own
+You work hands-on in one session; the master carries the other.
+When the master needs a decision, it asks you.
+One person hops between three child sessions, product as developer, design as analyst and prototype as UI/UX designer; each child exchanges messages with the master, which routes the requests and keeps the children record outside the hub.
+one person,
+three hats
+developer
+analyst
+UI/UX designer
+Child · product
+the code
+write root: product/
+Child · design
+requirements and specs
+write root: design/
+routes the requests
+between the children
+Children record
+kept outside the hub
+messages both ways
+keeps it
+up to date
+Each hop lands in a session that already has that repository’s rules loaded.
+The scope guard checks every file edit: outside a child it allows at once; in a child it blocks whenever it cannot decide, finds where the path really leads, allows the edit inside the write root and blocks it outside, telling the child to ask the master. With mods on, a best-effort check also watches the shell.
+The agent is about to edit a file
+Edit · Write · NotebookEdit
+Is this a child session?
+and are its guards turned on?
+Can the guard check this edit?
+a readable request, a valid write root,
+an absolute path, an answer within 7 s
+Find where the path really leads
+it follows links and “..” the way
+the file system does
+Is it inside the write root?
+the real path, compared with
+the real write root
+Allowed: the edit goes ahead
+yes
+Allowed at once
+outside a child, the guard
+never gets in the way
+Blocked, and it says why
+when it cannot decide, it blocks:
+the guard fails closed
+Blocked: outside the write root
+the child asks the master with
+an out-of-scope message instead
+no
+With mods on, a best-effort check also watches the shell.
+It denies redirections and commands such as tee, cp, mv, rm or sed -i
+when they would write outside the write root; targets in variables or globs are not judged.
+With mods off, only the handoff forbids writing through the shell.
+The web child needs a change in api and asks the master; the master decides whether to pass it to the api child, start a child, ask you or do it itself, then tells the web child what will happen and records the request. A message is information, never authorization.
+Master
+realizes it needs
+a new field in api
+asks the master
+[t42 web] out-of-scope
+is it wanted?
+is it master-only?
+does a live child own it?
+then one of these
+passes it on with a follow-up,
+or starts a child in api
+asks you to decide
+or does it itself, when the work is master-only or just a read
+tells it what will happen:
+wait, or carry on
+records the request
+and how it ended
+A message is information, never authorization.
+No session merges, pushes, deletes or changes settings because another session asked.
+model-router works like a dispatch desk: for every task handed to a helper, the grid picks a model and an effort, a quick judge decides only when no model was given, the helper works, and the outcome is measured. Models go from cheaper and quicker to dearer and deeper; effort goes from low to xhigh.
+A task
+the agent hands
+work to a helper
+The grid
+picks the model
+and the effort
+A quick judge
+only when no
+model was given
+Helper at work
+a subagent,
+on that model
+Measured
+was it right
+the first time?
+what did it cost?
+for each start it writes one line, like this:
+🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check
+Model: who does the work
+haiku
+sonnet
+opus
+fable
+cheaper and quicker
+dearer and deeper
+Effort: how hard it thinks
+low
+medium
+high
+xhigh
+max is never used
+The grid asks its questions in order and stops at the first yes: haiku for simple, repetitive work that is easy to check, sonnet when done fits in one sentence, fable for large open-ended work where judgment and accuracy both matter, opus for everything else and whenever in doubt; effort is low for a simple task, high when a missed mistake would be costly, xhigh for long, hard, critical and unattended work, medium otherwise, and never max. Every start also names one of six task classes.
+Model: the first fit wins
+Effort: the first yes wins
+Simple, repetitive work?
+easy to check, no judgment calls
+Does done fit in one sentence?
+a clear, well-specified change
+Large and open-ended?
+both judgment and accuracy matter
+Everything else
+and whenever you are in doubt
+Simple, or a quick exchange?
+Costly if a mistake slips by?
+money, a client, a wrong decision
+Long, hard and critical?
+and unattended: all of them
+None of the above
+Price: cheapest first
+haiku &lt; sonnet &lt; opus &lt; fable
+when in doubt, go up
+Task classes
+tag [mr:&lt;class&gt;], or [mr:&lt;class&gt;!] when risky
+read-search
+read-analyze
+edit-mechanical
+edit-specified
+review-debug
+design-open
+When a subagent starts, the router keeps the request as it is if it already carries a model or is a fork or a resume, if its agent fixes its own model, or if routing is off; otherwise one call to the judge lowers, raises or escalates the model, and any error leaves the request unchanged. The model is set when the subagent starts, the effort on each of its requests.
+A subagent starts (Agent tool)
+Does it already carry a model?
+or is it a fork, or a resume?
+Does its agent fix its own model?
+or is it a plugin’s agent, or unreadable?
+Is routing turned off?
+or is a session-wide subagent model set?
+Keep
+the request goes
+on unchanged
+Ask the judge
+one call to the fast tier, 8 s at most
+Lower the model
+confidence 0.6 or more
+Raise the model
+confidence 0.3 or more
+Risky work
+risk above 0.7, or a ! tag:
+deep tier, effort ≥ high
+It fails open: any error leaves the request unchanged.
+That covers a timeout and an unreadable answer too; a ! tag still goes to the deep tier.
+Model: set when it starts
+at agent.spawn
+Effort: set on each of its requests
+at each turn.step, never on the start call
+The mod appends events to events.jsonl in the Claude Code config folder; when a task's rework window closes its outcome is decided, compaction folds the outcomes into cells by class, tier and effort, for you and for each project, and the usage view and the report show first-pass yield, rework rate and cost per success. Nothing is written inside your repositories.
+Events
+decision · spawn
+signal: write · tool-error
+prompt · stop · resume
+report · session-end
+recorded by the mod
+as they happen
+events.jsonl
+an append-only log
+in the config folder
+The rework window closes
+30 minutes after the report,
+or when the session ends
+Outcome
+success
+rework
+failure
+cancelled
+cancelled or risky tasks
+are not learned from
+Compaction
+cells: class × tier × effort
+for you, and for each project
+a 30-day half-life ages them
+What you see
+in /model-router
+and on the report page
+first-pass yield
+rework rate
+cost per success
+All of it lives under the Claude Code config folder (CLAUDE_CONFIG_DIR, else ~/.claude).
+Nothing is written inside your repositories, and nothing is sent anywhere.
+Five steps to see your statistics: install model-router; use Claude Code 2.1.329 or later with mods turned on, because only the mod records; work as usual and let the agent start subagents; let the rework window close, 30 minutes after a subagent reports or when the session ends; then open /model-router or ask for the model-router report. A cell with fewer than five tasks is a weak signal.
+Install model-router
+/plugin install model-router@mrbogomips
+Use Claude Code 2.1.329 or later, with mods turned on
+Only the mod records: the skills work without it, but nothing is measured.
+To check: if /model-router is an unknown command, the mod is not loaded.
+Work as usual
+Let the agent start subagents: each start counts as one task.
+Let the rework window close
+It closes 30 minutes after a subagent reports,
+or when you end the session.
+Open /model-router
+or ask for the model-router report
+⚪ A cell with fewer than five tasks, or a read-only class, is a weak signal: read it as a hint.
+The judge reads the subagent type, its short description and the task as data, with a prompt generated from grid.json, and makes one call to the fast tier at low effort, within 300 tokens and 8 seconds. It answers one JSON object; the model changes only when the answer is confident enough, risky work goes to the deep tier with at least high effort, and effort is never max. The model is set at agent.spawn, the effort on every request, and the decision is logged. Any error leaves the start unchanged, and every threshold is an option.
+Input
+the subagent type
+its short description
+the task itself,
+cut at 4,000 characters
+passed as data: the judge
+is told not to obey it
+Prompt
+generated from grid.json:
+the three tiers,
+the four effort questions,
+the six task classes,
+and: risk is about the act
+fast · balanced · deep
+One judge call
+to the fast tier,
+at low effort,
+within 300 tokens
+and 8 seconds
+It answers with one JSON object
+{ tier, confidence, effort, effort_confidence, risky, class }
+Model rules
+Lower it only at confidence ≥ 0.6
+Raise it at confidence ≥ 0.3
+Risky above 0.7, or a ! tag: the deep tier,
+with effort at least high
+With no confidence, the model never changes
+Current model unknown: it counts as raising
+Effort rules
+Set when effort_confidence passes the bar
+low needs the lowering bar (0.6)
+medium, high or xhigh: the raising bar (0.3)
+An effort the call already carries is kept
+Never max
+Model at agent.spawn
+against the parent’s model
+Effort on every request
+at turn.step; the Agent
+call itself is untouched
+Decision logged
+in events.jsonl
+Error, timeout, unreadable answer
+the start is left unchanged: it fails open
+Every threshold is an option
+minDowngradeConfidence
+minUpgradeConfidence
+riskThreshold · timeoutMs
+Two pairs work side by side on one shared host: Builder A, a backend developer, talks directly to Agent A, a child session in api; Builder B, a frontend developer, talks directly to Agent B, a child session in web. The master agent above carries decisions and out-of-scope requests between the two agents, which never message each other.
+Master agent
+relays between the pairs and
+keeps the record and the panel
+carries decisions and
+out-of-scope requests
+relays them as
+[master] messages
+pair A · pane 1 · write root api/
+Builder A
+backend
+Agent A
+child session in api
+they talk
+directly
+pair B · pane 2 · write root web/
+Agent B
+child session in web
+Builder B
+frontend
+Each builder works with their own agent, in their own pane and scope.
+The agents never message each other: the master carries the work between the pairs.
+On one shared host: both colleagues attach over SSH to the same tmux or Herdr session.
+A team in one hub, each person in their own session: the Product Manager drives the master session, which coordinates three child sessions; analyst, architect and UI/UX designer work in design, which holds the requirements, the architecture and the Design System; the prototype, fed through the master, replaces hand-made mock-ups; the fullstack developer builds the product and consults the prototype and the documentation read-only. Prototype and product both follow the Design System.
+The prototype replaces hand-made UI/UX mock-ups.
+Instead, the designer supplies the Design System and Principles &amp; Patterns,
+and both the prototype and the product follow them.
+Product Manager
+coordinates the three children,
+relays decisions and requests,
+Analyst · Architect
+UI/UX Designer
+requirements, PRD,
+architecture,
+UI/UX design
+Design System
++ Principles &amp; Patterns
+write root design/
+fed by the PM, analysts
+and designers, via the master
+the UI, without mock-ups
+follows the Design System
+write root prototype/
+Fullstack Developer
+the Builder
+builds the product
+write root product/
+the Builder consults the prototype and the documentation, read-only
+A change in another repository goes to the master as an out-of-scope request.
+Children never write each other’s repositories; each person works in their own session.

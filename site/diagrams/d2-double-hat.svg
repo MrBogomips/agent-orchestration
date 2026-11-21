@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 484" role="img">
+  <title>One person wears two hats: as analyst they work hands-on in the specs child session, as UI/UX designer they review the prototype through the master, which carries each decision from specs to the prototype child and brings its questions back.</title>
+  <defs>
+    <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-strong"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-cyan"/></marker>
+  </defs>
+
+  <!-- hats -->
+  <rect x="20" y="64" width="200" height="34" rx="17" class="d-weak"/>
+  <text x="120" y="86" class="d-elabel d-mid">hat 2 · UI/UX designer</text>
+  <rect x="20" y="108" width="200" height="34" rx="17" class="d-human"/>
+  <text x="120" y="130" class="d-elabel ink d-mid">hat 1 · analyst</text>
+
+  <!-- you -->
+  <circle cx="108" cy="184" r="19" class="d-human"/>
+  <path d="M70 250Q70 214 108 214Q146 214 146 250Z" class="d-human"/>
+  <text x="108" y="276" class="d-title">You</text>
+  <text x="108" y="294" class="d-note">one person, two hats</text>
+
+  <!-- master -->
+  <rect x="360" y="24" width="260" height="84" rx="14" class="d-node d-primary"/>
+  <text x="490" y="58" class="d-title">Master session</text>
+  <text x="490" y="82" class="d-note">keeps both sides aligned</text>
+
+  <!-- children -->
+  <rect x="230" y="296" width="260" height="100" rx="14" class="d-node"/>
+  <text x="360" y="330" class="d-title">Child · specs</text>
+  <text x="360" y="352" class="d-note">the analysis</text>
+  <text x="360" y="376" class="d-cap">write root: specs/</text>
+  <rect x="640" y="296" width="260" height="100" rx="14" class="d-node"/>
+  <text x="770" y="330" class="d-title">Child · prototype</text>
+  <text x="770" y="352" class="d-note">the UI prototype</text>
+  <text x="770" y="376" class="d-cap">write root: prototype/</text>
+
+  <!-- you and the sessions -->
+  <g class="d-edge dashed cyan"><path d="M220 81C270 70 310 64 356 64" marker-end="url(#c)"/></g>
+  <text x="140" y="32" class="d-elabel ink">reviews the prototype</text>
+  <text x="140" y="48" class="d-elabel ink">through the master</text>
+  <g class="d-edge cyan"><path d="M148 240C190 250 196 346 226 346" marker-start="url(#c)" marker-end="url(#c)"/></g>
+  <text x="20" y="352" class="d-elabel ink">works hands-on</text>
+  <text x="20" y="368" class="d-elabel ink">and decides in specs</text>
+
+  <!-- the flow -->
+  <g class="d-edge strong dashed">
+    <path d="M400 296C400 210 440 160 452 112" marker-end="url(#s)"/>
+    <path d="M850 292C850 170 760 70 624 66" marker-end="url(#s)"/>
+  </g>
+  <g class="d-edge strong"><path d="M560 108C580 190 690 210 712 292" marker-end="url(#s)"/></g>
+
+  <circle cx="404" cy="230" r="12" class="d-fill"/><text x="404" y="235" class="d-num">1</text>
+  <text x="384" y="190" class="d-elabel d-end">tells the master:</text>
+  <text x="384" y="206" class="d-elabel d-end">“the prototype needs</text>
+  <text x="384" y="222" class="d-elabel d-end">the new field”</text>
+
+  <circle cx="616" cy="184" r="12" class="d-fill"/><text x="616" y="189" class="d-num">2</text>
+  <text x="600" y="226" class="d-elabel d-end">sends a follow-up</text>
+  <text x="600" y="242" class="d-elabel d-end">to the prototype</text>
+
+  <circle cx="820" cy="175" r="12" class="d-fill"/><text x="820" y="180" class="d-num">3</text>
+  <text x="906" y="24" class="d-elabel d-end">asks back with a question</text>
+  <text x="906" y="40" class="d-elabel d-end">or a request of its own</text>
+
+  <path d="M230 418V426H900V418" class="d-rule"/>
+  <text x="565" y="450" class="d-label d-mid b">You work hands-on in one session; the master carries the other.</text>
+  <text x="565" y="470" class="d-label d-mid">When the master needs a decision, it asks you.</text>
+</svg>

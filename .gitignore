@@ -2,3 +2,4 @@
 docs/HANDOFF.md
 node_modules/
 .DS_Store
+site/dist/

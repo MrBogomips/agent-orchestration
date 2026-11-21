@@ -1,0 +1,54 @@
+<!-- translated-from: en/concept.html sha256:2a6eb5b6b74d -->
+<h1>Concetti di base</h1>
+<p class="lede">Quando un team usa Claude Code su più repository emergono due problemi distinti: le sessioni hanno bisogno di confini precisi e gli agenti del modello giusto. session-hub risolve il primo, model-router il secondo. Questa pagina spiega le idee alla base di entrambi, prima di passare ai comandi.</p>
+
+<h2 id="problem">Il problema</h2>
+<p>Un agente carica istruzioni, skill e agenti della cartella in cui viene avviato. Un prodotto distribuito tra backend, frontend, repository di design e documentazione richiede quindi una sessione avviata <em>dentro</em> ciascun repository: un'unica sessione nella radice, un subagent o l'opzione <code>--add-dir</code> partono tutti dalla cartella sbagliata e si perdono le regole specifiche del repository.</p>
+<p>Quando più sessioni di questo tipo girano insieme, servono dei paletti. Cosa può modificare ciascuna? Con chi parla? Dove finisce una richiesta che esula dal suo compito? Quale modello consuma? Senza risposte chiare, le sessioni in parallelo si pestano i piedi sugli stessi file e si passano richieste sottobanco che nessuno ha approvato.</p>
+<p>Dentro ogni sessione si nasconde poi un secondo costo, più silenzioso. Lasciato a sé stesso, un agente avvia ogni subagent con il proprio modello e il proprio effort. Una semplice ricerca tra i file gira così sul modello più costoso; una revisione complessa finisce magari su uno economico e torna indietro per una rilavorazione. Nessuno vede quale scelta abbia funzionato, perché nulla la misura.</p>
+
+<h2 id="hub">Hub, master e sessioni figlie</h2>
+<p>session-hub trasforma una cartella di repository in un <strong>hub</strong>. La sessione che apri nella radice dell'hub è il <strong>master</strong>: coordina il lavoro e non scrive mai nel repository di una sessione figlia. Per lavorare su un repository, il master avvia una <strong>sessione figlia</strong>, cioè una sessione completa di Claude Code la cui cartella di lavoro è quel repository (o un suo worktree), così da caricarne tutte le regole.</p>
+<figure class="diagram">{{diagram:d1-hub}}<figcaption>Un hub a colpo d'occhio: il master nella radice e una sessione figlia per repository, ciascuna vincolata alla propria radice di scrittura.</figcaption></figure>
+<p>Le sessioni figlie girano in parallelo. Il punto è proprio questo: puoi lavorare direttamente nella sessione figlia di cui conosci l'ambito, guidandola come faresti in qualsiasi altra sessione, mentre il master porta avanti le altre e smista ciò che passa tra loro. La pagina <a href="{{link:scenarios}}">Modi di lavorare</a> mostra come funziona sia da soli sia in team.</p>
+
+<h2 id="scope">Scope e radice di scrittura</h2>
+<p>All'avvio ogni sessione figlia riceve nel suo <strong>handoff</strong> uno <strong>scope</strong> scritto: l'obiettivo, cosa può modificare, cosa può solo leggere, le sessioni sorelle e le regole per i messaggi. L'unica cartella in cui una sessione figlia può creare e modificare file è la sua <strong>radice di scrittura</strong>: il suo repository, oppure un worktree creato dal master in una cartella adiacente.</p>
+<p>La radice di scrittura non è solo una regola scritta nell'handoff. Un hook, lo <em>scope guard</em>, controlla ogni modifica ai file fatta da una sessione figlia, risolve il percorso reale attraverso link simbolici e <code>..</code>, e blocca qualsiasi scrittura fuori dalla radice. Se non riesce a decidere, blocca l'operazione e spiega il perché: <strong>nel dubbio blocca</strong>. Una sessione figlia che ha bisogno di una modifica altrove invia invece un messaggio <code>out-of-scope</code> al master.</p>
+<figure class="diagram">{{diagram:d5-out-of-scope}}<figcaption>Una richiesta fuori dallo scope sale sempre al master, mai in orizzontale: se serve, il master chiede all'utente e poi gira la richiesta alla sessione figlia responsabile del repository, ne avvia una nuova o esegue lui stesso una lettura.</figcaption></figure>
+
+<h2 id="messages">I messaggi sono informazioni, non autorizzazioni</h2>
+<p>Le sessioni figlie parlano esclusivamente con il master e ogni messaggio inizia con un prefisso fisso, <code>[&lt;task&gt; &lt;repo&gt;] &lt;type&gt;: &lt;text&gt;</code>, dove il tipo è <code>question</code>, <code>out-of-scope</code>, <code>pr</code>, <code>done</code> o <code>abandoned</code>. I messaggi del master iniziano con <code>[master]</code>.</p>
+<p>Un messaggio tra sessioni trasporta informazioni, mai autorità: nessuna sessione esegue merge, push, cancellazioni o modifiche alle impostazioni perché glielo ha chiesto un'altra sessione. L'approvazione arriva sempre da una persona, nella propria sessione. Con le mod attive, la mod di session-hub impone il canale esclusivo verso il master e antepone a ogni messaggio proveniente da un'altra sessione una riga che ricorda che si tratta di un'informazione, non di un'autorizzazione.</p>
+
+<h2 id="routing">Scelta del modello per ogni attività</h2>
+<p>model-router fornisce all'agente una <strong>griglia</strong> sintetica per scegliere modello ed effort per ogni lavoro che delega. Ci sono quattro livelli di modello, valutati in ordine: <code>haiku</code> per compiti semplici e facili da verificare, <code>sonnet</code> quando il risultato atteso si riassume in una frase, <code>fable</code> per lavori ampi e aperti in cui la capacità di giudizio fa davvero la differenza, e <code>opus</code> per tutto il resto e ogni volta che sei in dubbio. Quattro domande stabiliscono l'effort, da <code>low</code> a <code>xhigh</code>. Sei <strong>classi di attività</strong> identificano il tipo di lavoro.</p>
+<figure class="diagram">{{diagram:d6-router-desk}}<figcaption>model-router come banco di smistamento: la griglia sceglie modello ed effort per ogni attività, un judge veloce interviene solo se non è stato indicato alcun modello, e l'esito finale viene misurato.</figcaption></figure>
+<p>L'agente scrive una riga a ogni avvio, così vedi la scelta nel momento stesso in cui viene presa:</p>
+<pre><code>🔀 opus ▰▰▰▱ high -> review with unknown cause, going up
+🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check</code></pre>
+<p>Quando l'avvio di un subagent integrato è ancora privo di modello, un modello <strong>judge</strong> veloce classifica l'attività e ne imposta uno. Se qualcosa va storto, l'avvio prosegue senza modifiche: il router <strong>in caso di errore lascia passare</strong>. I due plugin si comportano all'opposto di proposito: un controllo di sicurezza che lascia passare una scrittura è peggio di uno che blocca, mentre un router che blocca il lavoro è peggio di uno che non interviene.</p>
+
+<h2 id="measurement">Misurazione</h2>
+<p>Una griglia resta un'ipotesi finché non si confronta con il lavoro reale. model-router conta ogni avvio di subagent come un'attività e ne stabilisce l'esito una volta chiusa la finestra di rilavorazione: riuscito al primo colpo, rifatto, fallito o annullato. A partire da questi esiti calcola — per ogni classe di attività, livello di modello ed effort — il <strong>successo al primo tentativo</strong> (quante volte il lavoro era giusto subito), il <strong>tasso di rilavorazione</strong> e il <strong>costo per successo</strong>, che include anche il prezzo delle rilavorazioni.</p>
+<p>I dati vengono conservati sia a livello globale sia per singolo progetto, pesati nel tempo in modo che il lavoro più vecchio conti meno, e restano nella tua cartella di configurazione di Claude Code. Fino alla versione 0.3 il router si limita a misurare; la scelta automatica basata sui dati è prevista per la 0.4.</p>
+
+<h2 id="glossary">Glossario</h2>
+<table>
+  <thead><tr><th>Termine</th><th>Significato</th></tr></thead>
+  <tbody>
+    <tr><td>Hub</td><td>Una cartella che raccoglie più repository git, ciascuno con le proprie istruzioni, skill e agenti.</td></tr>
+    <tr><td>Master</td><td>La sessione aperta nell'hub. Coordina il lavoro e non scrive mai nel repository di una sessione figlia.</td></tr>
+    <tr><td>Sessione figlia</td><td>Una sessione di Claude Code avviata dal master in un repository (o in un suo worktree), così da caricare le regole di quel repository.</td></tr>
+    <tr><td>Radice di scrittura</td><td>L'unica cartella in cui una sessione figlia può creare e modificare file.</td></tr>
+    <tr><td>Handoff</td><td>Ciò che il master scrive per ogni sessione figlia: ruolo, obiettivo, scope, riferimenti, sessioni sorelle, regole per i messaggi e primo passo.</td></tr>
+    <tr><td>Registro delle sessioni figlie</td><td>Un file JSON, mantenuto dal master fuori dall'hub, con una voce per ogni sessione figlia.</td></tr>
+    <tr><td>Scope guard</td><td>L'hook che blocca le modifiche ai file di una sessione figlia fuori dalla sua radice di scrittura, e che nel dubbio blocca anche quando non riesce a decidere.</td></tr>
+    <tr><td>Mod</td><td>Un modulo caricato da un plugin in Claude Code per modificarne interfaccia o comportamento: un pannello, un comando, un hook sulla chiamata a uno strumento. Richiede che le mod siano attive.</td></tr>
+    <tr><td>Griglia</td><td>Le regole usate da model-router per scegliere il livello del modello e il grado di effort.</td></tr>
+    <tr><td>Classe di attività</td><td>Una delle sei etichette fisse che descrivono il tipo di lavoro, come <code>read-search</code> o <code>review-debug</code>.</td></tr>
+    <tr><td>Judge</td><td>Una singola chiamata a un modello veloce che classifica l'avvio di un subagent privo di modello e propone livello, effort e classe.</td></tr>
+    <tr><td>Successo al primo tentativo (FPY)</td><td>La quota di attività andate a buon fine al primo colpo.</td></tr>
+    <tr><td>Finestra di rilavorazione</td><td>L'intervallo dopo il resoconto di un subagent (30 minuti per impostazione predefinita, o la fine della sessione) entro cui un rifacimento viene ancora conteggiato a suo carico.</td></tr>
+  </tbody>
+</table>

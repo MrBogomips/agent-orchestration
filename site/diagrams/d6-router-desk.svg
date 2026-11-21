@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 470" role="img">
+  <title>model-router works like a dispatch desk: for every task handed to a helper, the grid picks a model and an effort, a quick judge decides only when no model was given, the helper works, and the outcome is measured. Models go from cheaper and quicker to dearer and deeper; effort goes from low to xhigh.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+  </defs>
+
+  <!-- five steps -->
+  <rect x="20" y="24" width="164" height="124" rx="14" class="d-node"/>
+  <circle cx="44" cy="48" r="12" class="d-fill"/><text x="44" y="53" class="d-num">1</text>
+  <text x="102" y="86" class="d-title">A task</text>
+  <text x="102" y="108" class="d-note">the agent hands</text>
+  <text x="102" y="125" class="d-note">work to a helper</text>
+
+  <rect x="199" y="24" width="164" height="124" rx="14" class="d-node d-primary"/>
+  <circle cx="223" cy="48" r="12" class="d-fill"/><text x="223" y="53" class="d-num">2</text>
+  <text x="281" y="86" class="d-title">The grid</text>
+  <text x="281" y="108" class="d-note">picks the model</text>
+  <text x="281" y="125" class="d-note">and the effort</text>
+
+  <rect x="378" y="24" width="164" height="124" rx="14" class="d-weak"/>
+  <circle cx="402" cy="48" r="12" class="d-fill"/><text x="402" y="53" class="d-num">3</text>
+  <text x="460" y="86" class="d-title">A quick judge</text>
+  <text x="460" y="108" class="d-note">only when no</text>
+  <text x="460" y="125" class="d-note">model was given</text>
+
+  <rect x="557" y="24" width="164" height="124" rx="14" class="d-node"/>
+  <circle cx="581" cy="48" r="12" class="d-fill"/><text x="581" y="53" class="d-num">4</text>
+  <text x="639" y="86" class="d-title">Helper at work</text>
+  <text x="639" y="108" class="d-note">a subagent,</text>
+  <text x="639" y="125" class="d-note">on that model</text>
+
+  <rect x="736" y="24" width="164" height="124" rx="14" class="d-node d-allow"/>
+  <circle cx="760" cy="48" r="12" class="d-fill"/><text x="760" y="53" class="d-num">5</text>
+  <text x="818" y="80" class="d-title">Measured</text>
+  <text x="818" y="101" class="d-note">was it right</text>
+  <text x="818" y="118" class="d-note">the first time?</text>
+  <text x="818" y="135" class="d-note">what did it cost?</text>
+
+  <g class="d-edge">
+    <path d="M184 86H195" marker-end="url(#a)"/><path d="M363 86H374" marker-end="url(#a)"/>
+    <path d="M542 86H553" marker-end="url(#a)"/><path d="M721 86H732" marker-end="url(#a)"/>
+  </g>
+
+  <!-- the line it writes -->
+  <path d="M281 148V164" class="d-rule"/>
+  <text x="210" y="184" class="d-elabel">for each start it writes one line, like this:</text>
+  <text x="210" y="206" class="d-mono">🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check</text>
+
+  <!-- model scale -->
+  <text x="20" y="252" class="d-head">Model: who does the work</text>
+  <rect x="20" y="268" width="200" height="50" rx="25" class="d-node d-tier1"/>
+  <text x="120" y="299" class="d-title">haiku</text>
+  <rect x="246" y="268" width="200" height="50" rx="25" class="d-node d-tier2"/>
+  <text x="346" y="299" class="d-title">sonnet</text>
+  <rect x="472" y="268" width="200" height="50" rx="25" class="d-node d-tier3"/>
+  <text x="572" y="299" class="d-title">opus</text>
+  <rect x="698" y="268" width="200" height="50" rx="25" class="d-node d-tier4"/>
+  <text x="798" y="299" class="d-title">fable</text>
+  <g class="d-edge"><path d="M30 338H884" marker-end="url(#a)"/></g>
+  <text x="30" y="358" class="d-label">cheaper and quicker</text>
+  <text x="888" y="358" class="d-label d-end">dearer and deeper</text>
+
+  <!-- effort scale -->
+  <text x="20" y="400" class="d-head">Effort: how hard it thinks</text>
+  <text x="20" y="434" class="d-label b">low</text>
+  <rect x="112" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="132" y="422" width="16" height="14" rx="3" class="d-empty"/><rect x="152" y="422" width="16" height="14" rx="3" class="d-empty"/><rect x="172" y="422" width="16" height="14" rx="3" class="d-empty"/>
+  <text x="246" y="434" class="d-label b">medium</text>
+  <rect x="338" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="358" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="378" y="422" width="16" height="14" rx="3" class="d-empty"/><rect x="398" y="422" width="16" height="14" rx="3" class="d-empty"/>
+  <text x="472" y="434" class="d-label b">high</text>
+  <rect x="564" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="584" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="604" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="624" y="422" width="16" height="14" rx="3" class="d-empty"/>
+  <text x="698" y="434" class="d-label b">xhigh</text>
+  <rect x="790" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="810" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="830" y="422" width="16" height="14" rx="3" class="d-fill"/><rect x="850" y="422" width="16" height="14" rx="3" class="d-fill"/>
+  <text x="900" y="400" class="d-note d-end">max is never used</text>
+</svg>

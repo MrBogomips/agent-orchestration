@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 790" role="img">
+  <title>The judge reads the subagent type, its short description and the task as data, with a prompt generated from grid.json, and makes one call to the fast tier at low effort, within 300 tokens and 8 seconds. It answers one JSON object; the model changes only when the answer is confident enough, risky work goes to the deep tier with at least high effort, and effort is never max. The model is set at agent.spawn, the effort on every request, and the decision is logged. Any error leaves the start unchanged, and every threshold is an option.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="d-arrowhead"/></marker>
+  </defs>
+
+  <!-- row 1: what goes in -->
+  <rect x="20" y="30" width="280" height="200" rx="14" class="d-node"/>
+  <circle cx="44" cy="54" r="12" class="d-fill"/><text x="44" y="59" class="d-num">1</text>
+  <text x="160" y="60" class="d-title">Input</text>
+  <text x="40" y="92" class="d-label">the subagent type</text>
+  <text x="40" y="111" class="d-label">its short description</text>
+  <text x="40" y="130" class="d-label">the task itself,</text>
+  <text x="40" y="149" class="d-label">cut at 4,000 characters</text>
+  <text x="40" y="186" class="d-note d-start">passed as data: the judge</text>
+  <text x="40" y="204" class="d-note d-start">is told not to obey it</text>
+
+  <rect x="320" y="30" width="280" height="200" rx="14" class="d-node"/>
+  <circle cx="344" cy="54" r="12" class="d-fill"/><text x="344" y="59" class="d-num">2</text>
+  <text x="460" y="60" class="d-title">Prompt</text>
+  <text x="340" y="92" class="d-label">generated from grid.json:</text>
+  <text x="340" y="111" class="d-label">the three tiers,</text>
+  <text x="340" y="130" class="d-label">the four effort questions,</text>
+  <text x="340" y="149" class="d-label">the six task classes,</text>
+  <text x="340" y="168" class="d-label">and: risk is about the act</text>
+  <text x="340" y="204" class="d-cap d-start">fast · balanced · deep</text>
+
+  <rect x="620" y="30" width="280" height="200" rx="14" class="d-node d-primary"/>
+  <circle cx="644" cy="54" r="12" class="d-fill"/><text x="644" y="59" class="d-num">3</text>
+  <text x="760" y="60" class="d-title">One judge call</text>
+  <text x="640" y="92" class="d-label">to the fast tier,</text>
+  <text x="640" y="111" class="d-label">at low effort,</text>
+  <text x="640" y="130" class="d-label">within 300 tokens</text>
+  <text x="640" y="149" class="d-label">and 8 seconds</text>
+  <g class="d-edge">
+    <path d="M300 130H316" marker-end="url(#a)"/>
+    <path d="M600 130H616" marker-end="url(#a)"/>
+    <path d="M760 230V256" marker-end="url(#a)"/>
+  </g>
+
+  <!-- row 2: the answer -->
+  <rect x="20" y="260" width="880" height="70" rx="14" class="d-node d-accent"/>
+  <circle cx="44" cy="284" r="12" class="d-fill"/><text x="44" y="289" class="d-num">4</text>
+  <text x="460" y="288" class="d-title">It answers with one JSON object</text>
+  <text x="460" y="314" class="d-mono d-mid">{ tier, confidence, effort, effort_confidence, risky, class }</text>
+  <g class="d-edge">
+    <path d="M235 330V356" marker-end="url(#a)"/>
+    <path d="M685 330V356" marker-end="url(#a)"/>
+  </g>
+
+  <!-- row 3: the rules -->
+  <rect x="20" y="360" width="430" height="190" rx="14" class="d-node"/>
+  <circle cx="44" cy="384" r="12" class="d-fill"/><text x="44" y="389" class="d-num">5</text>
+  <text x="66" y="389" class="d-head">Model rules</text>
+  <text x="40" y="420" class="d-label">Lower it only at confidence ≥ 0.6</text>
+  <text x="40" y="442" class="d-label">Raise it at confidence ≥ 0.3</text>
+  <text x="40" y="464" class="d-label">Risky above 0.7, or a ! tag: the deep tier,</text>
+  <text x="40" y="482" class="d-label">with effort at least high</text>
+  <text x="40" y="508" class="d-label">With no confidence, the model never changes</text>
+  <text x="40" y="530" class="d-label">Current model unknown: it counts as raising</text>
+
+  <rect x="470" y="360" width="430" height="190" rx="14" class="d-node"/>
+  <text x="490" y="389" class="d-head">Effort rules</text>
+  <text x="490" y="420" class="d-label">Set when effort_confidence passes the bar</text>
+  <text x="490" y="442" class="d-label">low needs the lowering bar (0.6)</text>
+  <text x="490" y="464" class="d-label">medium, high or xhigh: the raising bar (0.3)</text>
+  <text x="490" y="486" class="d-label">An effort the call already carries is kept</text>
+  <text x="490" y="508" class="d-label">Never max</text>
+  <g class="d-edge">
+    <path d="M160 550V576" marker-end="url(#a)"/>
+    <path d="M685 550C685 564 460 562 460 576" marker-end="url(#a)"/>
+    <path d="M600 616H616" marker-end="url(#a)"/>
+  </g>
+
+  <!-- row 4: where it is applied -->
+  <rect x="20" y="580" width="280" height="72" rx="12" class="d-node d-allow"/>
+  <circle cx="44" cy="604" r="12" class="d-fill"/><text x="44" y="609" class="d-num">6</text>
+  <text x="170" y="608" class="d-title">Model at agent.spawn</text>
+  <text x="170" y="630" class="d-note">against the parent’s model</text>
+  <rect x="320" y="580" width="280" height="72" rx="12" class="d-node d-allow"/>
+  <text x="460" y="604" class="d-title">Effort on every request</text>
+  <text x="460" y="625" class="d-note">at turn.step; the Agent</text>
+  <text x="460" y="642" class="d-note">call itself is untouched</text>
+  <rect x="620" y="580" width="280" height="72" rx="12" class="d-node d-accent"/>
+  <circle cx="644" cy="604" r="12" class="d-fill"/><text x="644" y="609" class="d-num">7</text>
+  <text x="770" y="608" class="d-title">Decision logged</text>
+  <text x="770" y="630" class="d-note">in events.jsonl</text>
+
+  <!-- row 5: safety -->
+  <rect x="20" y="676" width="430" height="96" rx="12" class="d-node d-block"/>
+  <text x="235" y="716" class="d-title">Error, timeout, unreadable answer</text>
+  <text x="235" y="740" class="d-note">the start is left unchanged: it fails open</text>
+  <rect x="470" y="676" width="430" height="96" rx="12" class="d-weak"/>
+  <text x="685" y="700" class="d-title">Every threshold is an option</text>
+  <text x="685" y="722" class="d-cap">minDowngradeConfidence</text>
+  <text x="685" y="740" class="d-cap">minUpgradeConfidence</text>
+  <text x="685" y="758" class="d-cap">riskThreshold · timeoutMs</text>
+</svg>

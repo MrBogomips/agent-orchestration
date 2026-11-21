@@ -1,0 +1,20 @@
+{
+  "name": "agent-orchestration",
+  "baseUrl": "https://mrbogomips.github.io/agent-orchestration",
+  "repo": "https://github.com/MrBogomips/agent-orchestration",
+  "languages": ["en", "it"],
+  "defaultLanguage": "en",
+  "pages": [
+    { "id": "home", "slug": "", "nav": false, "toc": false },
+    { "id": "concept", "slug": "concept", "nav": true, "toc": true },
+    { "id": "scenarios", "slug": "scenarios", "nav": true, "toc": true },
+    { "id": "quickstart", "slug": "quickstart", "nav": true, "toc": true },
+    { "id": "session-hub", "slug": "session-hub", "nav": true, "toc": true },
+    { "id": "model-router", "slug": "model-router", "nav": true, "toc": true },
+    { "id": "architecture", "slug": "architecture", "nav": true, "toc": true },
+    { "id": "changelog", "slug": "changelog", "nav": false, "toc": false, "source": "CHANGELOG.md" }
+  ],
+  "downloads": { "user-manual.pdf": "docs/manual/user-manual.pdf" },
+  "imageDirs": ["site/assets/img", "site/assets/shots", "docs/manual/images"],
+  "plugins": ["session-hub", "model-router"]
+}

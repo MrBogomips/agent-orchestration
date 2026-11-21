@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" role="img">
+  <title>Two pairs work side by side on one shared host: Builder A, a backend developer, talks directly to Agent A, a child session in api; Builder B, a frontend developer, talks directly to Agent B, a child session in web. The master agent above carries decisions and out-of-scope requests between the two agents, which never message each other.</title>
+  <defs>
+    <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-strong"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="d-ah-cyan"/></marker>
+  </defs>
+
+  <!-- master -->
+  <rect x="300" y="16" width="320" height="96" rx="14" class="d-node d-primary"/>
+  <text x="460" y="46" class="d-title">Master agent</text>
+  <text x="460" y="68" class="d-note">relays between the pairs and</text>
+  <text x="460" y="86" class="d-note">keeps the record and the panel</text>
+
+  <g class="d-edge strong">
+    <path d="M370 112C370 160 310 160 310 206" marker-start="url(#s)" marker-end="url(#s)"/>
+    <path d="M550 112C550 160 610 160 610 206" marker-start="url(#s)" marker-end="url(#s)"/>
+  </g>
+  <text x="340" y="140" class="d-elabel d-end">carries decisions and</text>
+  <text x="340" y="156" class="d-elabel d-end">out-of-scope requests</text>
+  <text x="580" y="140" class="d-elabel">relays them as</text>
+  <text x="580" y="156" class="d-elabel">[master] messages</text>
+
+  <!-- pair A -->
+  <rect x="20" y="172" width="410" height="214" rx="16" class="d-zone"/>
+  <text x="36" y="374" class="d-zone-label">pair A · pane 1 · write root api/</text>
+  <circle cx="80" cy="230" r="19" class="d-human"/>
+  <path d="M46 296Q46 262 80 262Q114 262 114 296Z" class="d-human"/>
+  <text x="80" y="320" class="d-title">Builder A</text>
+  <text x="80" y="338" class="d-note">backend</text>
+  <text x="80" y="355" class="d-note">developer</text>
+  <rect x="210" y="210" width="200" height="100" rx="14" class="d-node"/>
+  <text x="310" y="252" class="d-title">Agent A</text>
+  <text x="310" y="274" class="d-note">child session in api</text>
+  <g class="d-edge cyan"><path d="M118 280H206" marker-start="url(#c)" marker-end="url(#c)"/></g>
+  <text x="162" y="250" class="d-elabel ink d-mid">they talk</text>
+  <text x="162" y="266" class="d-elabel ink d-mid">directly</text>
+
+  <!-- pair B -->
+  <rect x="490" y="172" width="410" height="214" rx="16" class="d-zone"/>
+  <text x="506" y="374" class="d-zone-label">pair B · pane 2 · write root web/</text>
+  <rect x="510" y="210" width="200" height="100" rx="14" class="d-node"/>
+  <text x="610" y="252" class="d-title">Agent B</text>
+  <text x="610" y="274" class="d-note">child session in web</text>
+  <circle cx="840" cy="230" r="19" class="d-human"/>
+  <path d="M806 296Q806 262 840 262Q874 262 874 296Z" class="d-human"/>
+  <text x="840" y="320" class="d-title">Builder B</text>
+  <text x="840" y="338" class="d-note">frontend</text>
+  <text x="840" y="355" class="d-note">developer</text>
+  <g class="d-edge cyan"><path d="M714 280H802" marker-start="url(#c)" marker-end="url(#c)"/></g>
+  <text x="758" y="250" class="d-elabel ink d-mid">they talk</text>
+  <text x="758" y="266" class="d-elabel ink d-mid">directly</text>
+
+  <!-- no direct line between the agents -->
+  <path d="M414 260H506" class="d-life"/>
+  <text x="460" y="252" class="d-elabel d-mid">✕</text>
+
+  <path d="M20 408V416H900V408" class="d-rule"/>
+  <text x="460" y="440" class="d-label d-mid b">Each builder works with their own agent, in their own pane and scope.</text>
+  <text x="460" y="460" class="d-label d-mid">The agents never message each other: the master carries the work between the pairs.</text>
+  <text x="460" y="482" class="d-note">On one shared host: both colleagues attach over SSH to the same tmux or Herdr session.</text>
+</svg>
