@@ -710,7 +710,8 @@ the engine refuses a call a hook changed afterwards. The `agent.spawn` hook that
 the model against the parent's model and logs the decision, and keeps the routed effort for the subagent's
 `agentId`; a `turn.step` hook sets that effort on each of the subagent's model requests. An explicit model, a fork, a resume, routing turned off, a session-wide
 subagent model, and an agent whose definition fixes a model or that the mod cannot read (a plugin's agent, a
-built-in type other than `general-purpose` and `Explore`) are kept. The judge is one call to the fast tier (8 s
+built-in type other than `general-purpose` and `Explore`, a file under the type's name that declares another
+agent's `name`) are kept. The judge is one call to the fast tier (8 s
 limit) with a prompt generated from `grid.json`; the task is wrapped as data with closing tags escaped. A
 downgrade needs confidence 0.6, an upgrade 0.3; risk above 0.7 (or a `!` in the class tag) forces the deep tier
 and at least `high` effort. The judge's tiers stop at `opus`, so the router never picks `fable`, and up to 0.3 it does

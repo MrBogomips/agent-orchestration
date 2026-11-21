@@ -32,7 +32,7 @@ const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confiden
 
 type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string> }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
@@ -56,8 +56,8 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     return { value: undefined }
   })
   mock.env(on, { HOME: '/home/u' })
-  on('fs.read', () => ({ value: answers.grid ?? JSON.stringify(GRID) }))
-  on('fs.exists', () => ({ value: false }))
+  on('fs.read', ($, e: any) => ({ value: answers.files?.[e.path] ?? answers.grid ?? JSON.stringify(GRID) }))
+  on('fs.exists', ($, e: any) => ({ value: Boolean(answers.files && e.path in answers.files) }))
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.cwd', () => ({ value: '/repo' }))
   on('session.root', () => ({ value: '/repo' }))
@@ -237,6 +237,23 @@ describe('failing open with a trace', () => {
     expect(spawn.project).toBe(null)
     expect(spawn.class).toBe('read-search')
     expect(failures(w).some((l) => l.startsWith('[model-router] agent.spawn: '))).toBe(true)
+  })
+})
+
+describe('agent definitions', () => {
+  test('a project agent file that declares another name is not read as the type: the start is kept', async ($, on) => {
+    // bar.md declares baz and fixes no model; the agent type bar comes from another file that may fix one.
+    const w = world(on, undefined, { files: { '/repo/.claude/agents/bar.md': '---\nname: baz\ndescription: x\n---\nbody' } })
+    await start($, { subagent_type: 'bar' }, { subagentType: 'bar' })
+    expect(w.judgeCalls.length).toBe(0)
+    expect(w.spawns[0].model).toBe(undefined)
+    expect(w.appended.find((r) => r.type === 'spawn').route).toBe('fixed')
+  })
+
+  test('a project agent file whose name matches and fixes no model is routed', async ($, on) => {
+    const w = world(on, undefined, { files: { '/repo/.claude/agents/bar.md': '---\nname: bar\ndescription: x\n---\nbody' } })
+    await start($, { subagent_type: 'bar' }, { subagentType: 'bar' })
+    expect(w.judgeCalls.length).toBe(1)
   })
 })
 

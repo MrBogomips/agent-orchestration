@@ -93,7 +93,7 @@ effort on each model request of the started subagent, by its `agentId` (S14). St
 | Case | Action |
 |---|---|
 | The call carries a model | Keep it. Log `explicit`. |
-| The agent's definition fixes a model | Keep it. The event does not show a fixed model, and a hook's model would override it (S3), so the mod reads the definition: it routes the built-in types verified to inherit (`general-purpose`, `Explore`) and project or user agents (`<cwd>/.claude/agents/<type>.md`, `<config dir>/agents/<type>.md`) whose frontmatter names no model or `inherit`. Any other type (a plugin's agent, a definition it cannot read) is kept. The decision is logged as `keep`, the spawn record with route `fixed`. |
+| The agent's definition fixes a model | Keep it. The event does not show a fixed model, and a hook's model would override it (S3), so the mod reads the definition: it routes the built-in types verified to inherit (`general-purpose`, `Explore`) and project or user agents (`<cwd>/.claude/agents/<type>.md`, `<config dir>/agents/<type>.md`) whose frontmatter names no model or `inherit`, and whose `name`, when present, is the type: Claude Code names a type after that `name`, not the file (S17), so a file that declares another name is some other agent and the start is kept. Any other type (a plugin's agent, a definition it cannot read) is kept. The decision is logged as `keep`, the spawn record with route `fixed`. |
 | A fork or a resume | Keep it. The engine ignores a change anyway. A resume is logged as a `resume` signal of the same task. |
 | The router is off, or a session-wide forced subagent model is set (`CLAUDE_CODE_SUBAGENT_MODEL`) | Keep it. Log `keep`. |
 | No model given | Ask the judge; apply the thresholds below; log. |
