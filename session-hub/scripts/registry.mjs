@@ -221,12 +221,14 @@ export function upsertChild(file, entry, options = {}) {
   const now = options.now ?? (() => new Date().toISOString());
   return update(file, options, (record) => {
     const index = record.children.findIndex((child) => child.name === entry.name);
-    if (index >= 0) {
-      const merged = { ...record.children[index], ...withoutKept(entry) };
-      return { ...record, children: replaceAt(record.children, index, merged) };
-    }
-    const created = { status: 'running', started: now(), requests: [], ...entry };
-    return { ...record, children: [...record.children, created] };
+    const created = () => ({ status: 'running', started: now(), requests: [], ...entry });
+    if (index < 0) return { ...record, children: [...record.children, created()] };
+    const existing = record.children[index];
+    // A child started again under the name of one that ended is a new child: it gets a fresh entry, not the old
+    // one's start time, requests or other fields.
+    const restarted = !LIVE_STATUSES.includes(existing.status) && LIVE_STATUSES.includes(entry.status);
+    const next = restarted ? created() : { ...existing, ...withoutKept(entry) };
+    return { ...record, children: replaceAt(record.children, index, next) };
   });
 }
 

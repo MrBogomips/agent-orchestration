@@ -160,6 +160,30 @@ describe('record', () => {
     assert.equal(child.model, 'opus');
   });
 
+  test('a new running child with the name of a finished one starts a fresh entry, without the old history', () => {
+    for (const ended of ['done', 'abandoned', 'lost']) {
+      const name = `a-${ended}`;
+      upsertChild(file, entry(name, { repo: '/x', task: 'T-1', lastMessage: { type: 'pr', text: 'old' }, model: 'opus' }), { now });
+      addRequest(file, name, { text: 'old req' }, { now });
+      setStatus(file, name, ended, { reason: ended === 'abandoned' ? 'wrong turn' : undefined });
+      const later = () => '2026-11-21T09:00:00.000Z';
+      const record = upsertChild(file, entry(name, { repo: '/y', task: 'T-2', status: 'running' }), { now: later });
+      const child = record.children.find((c) => c.name === name);
+      assert.deepEqual(child, { status: 'running', started: '2026-11-21T09:00:00.000Z', requests: [], ...entry(name, { repo: '/y', task: 'T-2' }) }, ended);
+    }
+  });
+
+  test('an update of a live child, or one that does not restart it, still merges', () => {
+    upsertChild(file, entry('a'), { now });
+    addRequest(file, 'a', { text: 'r' }, { now });
+    let child = upsertChild(file, { name: 'a', lastMessage: { type: 'done' } }).children[0];
+    assert.equal(child.requests.length, 1);
+    setStatus(file, 'a', 'done');
+    child = upsertChild(file, { name: 'a', lastMessage: { type: 'pr' } }).children[0];
+    assert.equal(child.status, 'done');
+    assert.equal(child.requests.length, 1);
+  });
+
   test('reconcile refuses an empty live list unless told there is no live session', () => {
     upsertChild(file, entry('a'), { now });
     assert.throws(() => reconcile(file, []), /--live-none/);

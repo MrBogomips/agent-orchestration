@@ -104,8 +104,8 @@ whether to save it as this hub's default. On "save", set `- Layout: <tabs or pan
 ## Names
 
 Build each child's name from the *Session name* pattern, then normalize it: lowercase, characters outside
-`a-z0-9_-` replaced by `-`, starting with a letter, at most 24 characters. Add `-2`, `-3`… if a live session or a
-`running` entry in the children record already has the name.
+`a-z0-9_-` replaced by `-`, starting with a letter, at most 24 characters. Add `-2`, `-3`… if a live session or any entry
+of the children record, whatever its status, already has the name: a finished child's name is not reused.
 
 ## Worktrees and the write root
 

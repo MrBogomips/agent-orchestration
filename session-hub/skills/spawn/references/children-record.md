@@ -42,7 +42,9 @@ node "$R" request --hub /abs/hub --name <child> --text "<request>" --outcome "<w
 
 - `reconcile` refuses an empty `--live`. Pass `--live-none` only when the session list was read and shows no
   live session; if the list could not be read, skip the reconcile and say so.
-- `upsert` merges fields by name but never changes `started` or `requests`; add a request with `request`.
+- `upsert` merges fields by name but never changes `started` or `requests`; add a request with `request`. An
+  `upsert` with status `running` or `waiting-user` onto a `done`, `abandoned` or `lost` entry is a new child under
+  the old name: it gets a fresh entry, with nothing of the old one.
 - Writes take a lock next to the file. The script waits up to 5 seconds for it, then fails without writing;
   a lock older than 30 seconds is stale and removed. Retry once, then treat it as an error.
 - An entry: `name`, `repo`, `task`, `scope` (`writeRoot`, `external`), `model`, `effort`, `status`, `reason` (set
