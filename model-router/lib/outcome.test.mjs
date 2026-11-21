@@ -133,6 +133,16 @@ test('a similar start that names a file the task wrote is still a redo', () => {
   assert.match(a1.why, /similar edit-mechanical start/);
 });
 
+test('a redo of a task that wrote nothing is still a redo when it names the file differently or adds one', () => {
+  const pair = (first, second) => {
+    const events = [spawn('a1', 0, { class: 'review-debug', description: first }), report('a1', 2), spawn('a2', 3, { class: 'review-debug', description: second })];
+    return computeOutcomes(events, { ...OPTS, now: now(60) }).outcomes.find((o) => o.agentId === 'a1').outcome;
+  };
+  assert.equal(pair('Review the parser in /Users/x/repo/src/csv.ts', 'Review the parser in src/csv.ts'), 'rework');
+  assert.equal(pair('Fix the quoting bug in the CSV parser', 'Fix the quoting bug in the CSV parser again (csv.ts)'), 'rework');
+  assert.equal(pair('Review the parser in src/a.ts', 'Review the parser in src/b.ts'), 'success', 'two files, two tasks');
+});
+
 test('a correction sent to the same subagent after its report is rework', () => {
   const resume = (min) => ({ type: 'signal', kind: 'resume', ts: at(min), session: 's1', agentId: 'a1' });
   const events = [spawn('a1', 0), write('a1', 1, '/repo/src/csv.ts'), report('a1', 2), resume(5), write('a1', 6, '/repo/src/csv.ts'), report('a1', 8)];

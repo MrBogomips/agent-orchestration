@@ -20,24 +20,26 @@ function bySession(events) {
   return sessions;
 }
 
-/** The file-like tokens of a description (a word with a `.` or `/` inside), lowercased. */
-function fileTokens(text) {
+/** The base names of the file-like tokens of a description (a word with a `.` or `/` inside), lowercased. */
+function fileNames(text) {
   if (typeof text !== 'string') return new Set();
   return new Set(text.toLowerCase().split(/[\s,;:()'"`[\]]+/).map((w) => w.replace(/^[.]+|[.!?]+$/g, ''))
-    .filter((w) => /[a-z0-9_-][./][a-z0-9_]/.test(w)));
+    .filter((w) => /[a-z0-9_-][./][a-z0-9_]/.test(w)).map((w) => w.split('/').filter(Boolean).pop()).filter(Boolean));
 }
 
 /**
- * Whether a later start redoes the task: same class, similar description, and either it names a file the task
- * wrote or the two name the same files. A batch of similar starts on different files (rename in a.ts, then in
- * b.ts) is not a redo.
+ * Whether a later start redoes the task: same class and similar description, unless it is the next item of a
+ * batch. A batch item names files, the task names files too, the two share no base name and the later start names
+ * no file the task wrote (rename in a.ts, then in b.ts). A start that names no file, or the same file in another
+ * form (src/csv.ts and /repo/src/csv.ts), is still a redo.
  */
 function isRedo(task, r, threshold) {
   if (r.type !== 'spawn' || r.agentId === task.spawn.agentId || !task.spawn.class || r.class !== task.spawn.class) return false;
   if (!isSimilar(r.description, task.spawn.description, threshold)) return false;
   if (mentionsFile(r.description, task.files)) return true;
-  const [a, b] = [fileTokens(task.spawn.description), fileTokens(r.description)];
-  return a.size === b.size && [...a].every((w) => b.has(w));
+  const [a, b] = [fileNames(task.spawn.description), fileNames(r.description)];
+  const batch = a.size > 0 && b.size > 0 && [...a].every((w) => !b.has(w));
+  return !batch;
 }
 
 /** Whether the parent sent the same subagent more work inside the rework window of one of its reports. */

@@ -53,14 +53,15 @@ All come from mod events and `$` calls; none calls a model.
 | How the run ended | `agent.report`: `status` = `completed` / `failed` / `stopped` | strong |
 | Tool error rate | tool results with `isError`, keyed by `agentId` | medium |
 | Files the subagent wrote | `tool.call` on `Edit`, `Write`, `NotebookEdit` with `agentId` and `file_path` (verified, S12) | needed for rework |
-| Rework | inside the rework window after the report: the main session or any other agent (siblings included) writes one of the same files; a spawn of the same class whose description is similar (redo or escalation) and names a file the task wrote or the same files as the task; the parent sends the same subagent more work (`resume`, a correction); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
+| Rework | inside the rework window after the report: the main session or any other agent (siblings included) writes one of the same files; a spawn of the same class whose description is similar (redo or escalation), unless it is the next item of a batch on other files; the parent sends the same subagent more work (`resume`, a correction); a prompt typed by the person (`prompt.submit`, origin) that follows the report | strong for writers |
 | Re-search | inside the window, for a read-only subagent: the parent starts another read-only subagent of the same class on a similar description, or reads the files the subagent named | weak; shown as such in the report |
 
 *Similar description*: same class and a token-set overlap (Jaccard) of at least 0.5 on the lowercased words of
-the description, stop words removed. Builder may tune; the threshold is an option. A similar start counts as a redo
-only when it names a file the task wrote, or when the two descriptions name the same file-like tokens (words with a
-`.` or `/` inside): a batch such as "rename foo in a.ts", then "in b.ts", then "in c.ts" is three tasks, not two
-redos.
+the description, stop words removed. Builder may tune; the threshold is an option. A similar start is not a redo when it
+is the next item of a batch: both descriptions name files (words with a `.` or `/` inside), they share no base
+name, and the later start names no file the task wrote. So "rename foo in a.ts", then "in b.ts", then "in c.ts" is
+three tasks, while a retry that names no file, or the same file in another form (`src/csv.ts` and
+`/repo/src/csv.ts`), is still a redo.
 
 ## Outcome of one task
 
