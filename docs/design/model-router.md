@@ -265,7 +265,7 @@ failure) of the window; at the project level they count the project's tasks and 
 | ↓, ↑ | Next or previous window (24h, 7d, 30d, all), cycling |
 | `d` `w` `m` `a` | Window: last 24 hours, 7 days, 30 days, all |
 | `p` | Level: the user's data or this project's |
-| `o` | Write and open the HTML report (`scripts/report.mjs`); a toast gives its path |
+| `o` | Write and open the HTML report (`scripts/report.mjs`); its path is written as a line in the session |
 | `r` | Refresh: run compaction and read again |
 | Page Up, Page Down, wheel | Scroll the content |
 | Esc | Close |

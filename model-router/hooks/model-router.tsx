@@ -488,9 +488,9 @@ export const register: Register = (on, options) => {
           <Button key="report" label="report" hotkey="o" plain dimColor
             onPress={async () => {
               try {
-                $.ui.toast(`${ROUTE_ICON} model-router: report written to ${await writeReport($, ctx)}`)
+                $.ui.log(`${ROUTE_ICON} model-router: report written to ${await writeReport($, ctx)}`)
               } catch (err) {
-                $.ui.toast(`${ROUTE_ICON} model-router: could not write the report: ${errorText(err)}`)
+                $.ui.log(`${ROUTE_ICON} model-router: could not write the report: ${errorText(err)}`)
               }
             }} />
           <Text {...HINT}>·</Text>

@@ -127,7 +127,7 @@ The keys work as soon as the view opens, with no click:
 | ↓, ↑ | Next or previous window: last 24 hours, 7 days, 30 days, all time |
 | `d`, `w`, `m`, `a` | That window directly |
 | `p` | Switches between your data across projects (user) and this project's |
-| `o` | Writes and opens the report page; a toast gives its path |
+| `o` | Writes and opens the report page; its path is written as a line in the session |
 | `r` | Refreshes: runs compaction and reads again |
 | Page Up, Page Down | Scroll a long tab |
 | Esc | Closes the view |
