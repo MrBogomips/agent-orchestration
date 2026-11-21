@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>session-hub and model-router: user manual</title>
-<meta name="description" content="User manual for the session-hub 0.2.4 and model-router 0.3.5 Claude Code plugins.">
+<meta name="description" content="User manual for the session-hub 0.2.5 and model-router 0.3.5 Claude Code plugins.">
 <style>
 :root {
   --fg: #1d1d1b; --muted: #5f5f5a; --line: #d9d8d2; --accent: #2f5f9e; --code-bg: #f4f3ef; --note-bg: #eef3fa;
@@ -70,7 +70,7 @@ dl.faq dd { margin: 2pt 0 0 0; }
   choosing the model and the effort level of every agent.</p>
   <table>
     <tr><th>Plugin</th><th>Version</th><th>Marketplace</th></tr>
-    <tr><td><code>session-hub</code></td><td>0.2.4</td><td><code>mrbogomips</code></td></tr>
+    <tr><td><code>session-hub</code></td><td>0.2.5</td><td><code>mrbogomips</code></td></tr>
     <tr><td><code>model-router</code></td><td>0.3.5</td><td><code>mrbogomips</code></td></tr>
   </table>
   <p class="small">Claude Code 2.1.329 or later for the mods; tested on 2.1.329 and 2.1.330. Source:
@@ -131,7 +131,7 @@ subagent records. Paths in them are shortened the same way.</p>
 <h2 id="what">1.1 What they are and when to use them</h2>
 <table>
   <thead><tr><th style="width:22%">Plugin</th><th>What it does</th><th style="width:30%">Use it when</th></tr></thead>
-  <tr><td><code>session-hub</code> 0.2.4</td>
+  <tr><td><code>session-hub</code> 0.2.5</td>
       <td>A <em>master</em> session opened in a hub of repositories starts one <em>child</em> session per repository.
       Each child gets a written scope, a model and an effort level, talks only to the master and sends requests
       outside its scope to the master. A hook blocks a child's file writes outside its scope, and the master keeps a
@@ -514,6 +514,9 @@ is blocked and the child sends the request to the master instead.</p>
 <p>The guard also blocks when it cannot decide: an unknown role value, a missing or relative write root, a write root
 of <code>/</code> or the home folder, a relative target or one starting with <code>~</code>, unreadable input, or
 <code>node</code> missing. It blocks on its own after 7 seconds, ahead of the hook's 10-second timeout.</p>
+<p>It also blocks a write to a file that has more than one hard link. A hard link has no path that leads elsewhere,
+so the guard cannot tell whether another name of the file is outside the write root, and a write would change the
+file under every name.</p>
 
 <h3>The shell check (mod)</h3>
 <p>Best effort, mods on only. Before a <code>Bash</code> (or <code>Monitor</code>) command runs in a child, the mod reads its redirections and
@@ -521,12 +524,20 @@ the targets of <code>tee</code>, <code>touch</code>, <code>mkdir</code>, <code>r
 <code>truncate</code>, <code>unlink</code>, <code>cp</code>, <code>mv</code>, <code>ln</code>,
 <code>install</code> and <code>sed -i</code>, resolves them (relative ones against the session's folder, or the
 folder of an earlier literal <code>cd</code> in the same command) and denies a target outside the write root.
-<code>/dev</code> and the system temporary folders are allowed. For <code>echo x &gt; ../design/notes.md</code> in
+<code>/dev</code> and the system temporary folders are allowed. The command is read as bash or zsh would read it
+(the <code>Bash</code> tool runs zsh on macOS), zsh's <code>&gt;!</code>, <code>noglob</code>, <code>repeat</code>
+and <code>=command</code> included. The commands inside substitutions (<code>$(…)</code>, backticks,
+<code>&lt;(…)</code>, also in double quotes and in here-documents whose delimiter is not quoted) and the literal line
+given to <code>eval</code> or <code>sh -c</code> are judged too. A hard link to a file outside the write root is
+denied, and so is a write through a symbolic link that the same command makes. A command the check cannot read, such
+as a here-document whose delimiter never comes, is denied with the reason; so is any write when the write root is
+<code>/</code>, the home folder, or not an existing folder. For <code>echo x &gt; ../design/notes.md</code> in
 <code>/work/hub/product</code> the model is told:</p>
 <pre><code>[session-hub] Shell command blocked: it writes /work/hub/design/notes.md, outside the write root /work/hub/product. Do not retry this write through another command or tool. Send an `out-of-scope` message to the master, saying what you need written and why, and tell the user that you passed the request to the master.</code></pre>
 <p>When a link moves the target, the message adds where it lands: <code>(resolves to …)</code>. Targets held in
-variables, command substitutions or globs are not judged, nor what another program (a script, <code>git</code>, a
-build tool) writes.</p>
+variables, in the output of command substitutions or in globs are not judged, nor a line given to <code>eval</code>
+or <code>sh -c</code> that is not literal, nor what another program (a script, <code>git</code>, a build tool)
+writes.</p>
 
 <h3>The send guard (mod)</h3>
 <p>Mods on only. A child's message goes to its master, by name (with or without <code>[&lt;ref&gt;]</code>; it is

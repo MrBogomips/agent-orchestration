@@ -9,13 +9,21 @@ on:
 permissions:
   contents: read
 
+env:
+  # The Claude Code CLI runs only `plugin validate` and `plugin test`: no login, no model call, no update.
+  CLAUDE_CODE_VERSION: 2.1.330
+  DISABLE_AUTOUPDATER: 1
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
@@ -24,8 +32,29 @@ jobs:
 
       - name: Unit tests
         run: |
-          files=$(find . -path ./node_modules -prune -o -name '*.test.mjs' -print)
+          files=$(find . -path ./node_modules -prune -o -path ./.claude -prune -o -path ./site/dist -prune -o -name '*.test.mjs' -print)
           if [ -n "$files" ]; then node --test $files; else echo "no unit tests yet"; fi
+
+      - name: Version bumps and attribution
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node tests/pr-checks.mjs "origin/$BASE_REF"
 
       - name: Documentation site
         run: node site/check.mjs
+
+      - name: Claude Code CLI
+        run: npm install --global "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+
+      - name: Plugin manifests (strict)
+        run: |
+          claude plugin validate ./session-hub --strict
+          claude plugin validate ./model-router --strict
+
+      - name: Mod tests
+        run: |
+          claude plugin test ./session-hub
+          claude plugin test ./model-router
