@@ -92,7 +92,7 @@ Check in this order and take the first that applies.
 |---|---|---|---|
 | A session-starting tool such as the desktop app's `start_session` is available (it may be deferred: search for it) | Claude desktop app | the tool, `cwd` set to the repository | inactive |
 | `HERDR_ENV` is `1` and `herdr` is on `PATH` | Herdr | a tab or a pane with `--env`, then `herdr agent start` | active |
-| `TMUX` is set and `tmux` is on `PATH` | tmux | a window or a pane, then the command typed into it | active |
+| `TMUX` is set and `tmux` is on `PATH` | tmux | a window or a pane running the command, given as arguments | active |
 | `claude --help` lists `--bg` | Terminal | `claude --bg` from the repository | active |
 | None of the above | Manual | commands and a handoff file handed to the user | active if the user runs the command as given |
 

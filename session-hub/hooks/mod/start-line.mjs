@@ -1,12 +1,15 @@
 // The start line: under the row of a Bash call that starts child sessions, one line per child,
 // `⎿  🔀 opus   ▰▰▰▱ high   -> <child name>`, drawn like model-router's choose-model line.
-// Pure: reads the launch commands of skills/spawn/references/environments/ with the shell lexer.
+// Pure: reads the launch commands of skills/spawn/references/environments/ with the shell lexer: `claude` after
+// SESSION_HUB_ROLE=child, tmux's new-window or split-window with the command as arguments (or, as before, typed with
+// send-keys -l), and herdr agent start.
 
 import { ARROW, ROUTE_ICON, modelEffortSegments } from './look.mjs';
 import { commandName, stripPrefix } from './shell-commands.mjs';
 import { tokenize } from './shell-words.mjs';
 
 const ROLE_CHILD = /^SESSION_HUB_ROLE=child$/i;
+const TMUX_CREATE = Object.freeze(['new-window', 'neww', 'split-window', 'splitw']);
 const NO_EFFORT = 'default';
 const FALLBACK_NAME = 'child';
 
@@ -49,6 +52,13 @@ function simpleCommands(line) {
 function startsIn(words) {
   const first = words[0] ? commandName(words[0]) : '';
   if (first === 'tmux') {
+    // `tmux new-window|split-window … -e SESSION_HUB_ROLE=child … -- claude <flags>`: the command as arguments.
+    if (words.some((word) => TMUX_CREATE.includes(word.value))) {
+      const claude = words.findIndex((word, i) => i > 0 && !word.dynamic && commandName(word) === 'claude');
+      if (claude < 0) return [];
+      const variables = words.slice(0, claude).filter((word, i, list) => list[i - 1]?.value === '-e');
+      return variables.some((word) => ROLE_CHILD.test(word.value)) ? start(words.slice(claude + 1)) : [];
+    }
     if (!words.some((word) => word.value === 'send-keys')) return [];
     const literal = words.findIndex((word) => word.value === '-l');
     const line = literal >= 0 ? words[literal + 1] : undefined;
