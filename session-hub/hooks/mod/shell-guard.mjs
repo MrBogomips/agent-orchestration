@@ -121,22 +121,27 @@ function walk(tokens, start, env) {
     return token;
   };
   // One simple command: what it writes, the line it hands to a shell, the folder it moves to.
-  const simple = (prefixed) => {
+  // `run`, for a command another command runs (`find -exec`): the folders it runs in, and those of the command that
+  // runs it, where a word that stands for `find`'s starting points (`fromStart`) is judged. Such a command changes
+  // nothing in this shell.
+  const simple = (prefixed, run) => {
     const { words, changesDirectory } = stripPrefix(prefixed);
-    const dirs = changesDirectory ? [UNKNOWN] : state.dirs;
+    const dirs = changesDirectory ? [UNKNOWN] : (run?.dirs ?? state.dirs);
+    const startDirs = run?.startDirs ?? dirs;
     const effects = commandEffects(words);
-    const add = (kind, list) => env.out[kind].push(...list.map((word) => ({ word, dirs })));
+    const add = (kind, list) => env.out[kind].push(...list.map((word) => ({ word, dirs: word.fromStart ? startDirs : dirs })));
     add('targets', effects.targets);
     add('ownLinks', effects.ownLinks);
     add('hard', effects.hard);
     env.out.symbolic.push(...effects.symbolic.map((link) => ({ ...link, dirs })));
+    for (const runs of effects.runs) simple(runs.words, { dirs: runs.ownFolder ? [UNKNOWN] : dirs, startDirs: dirs });
     const handed = shellLine(words);
     if (handed?.line !== undefined) {
       const lexed = tokenize(handed.line, env.depth + 1);
-      if (handed.sameShell) state = inner(lexed, state);
+      if (handed.sameShell && !run) state = inner(lexed, state);
       else inner(lexed, { dirs, fallback: [] });
     }
-    if (words[0] && DIRECTORY_CHANGES.includes(commandName(words[0]))) {
+    if (!run && words[0] && DIRECTORY_CHANGES.includes(commandName(words[0]))) {
       state = { dirs: folders(changeFolder(words, state.dirs, env.home)), fallback: folders([...state.fallback, ...state.dirs]) };
     }
   };
