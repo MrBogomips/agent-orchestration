@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.2.4, `model-router` 0.3):
+This document describes the two plugins in this repository as built (`session-hub` 0.2.5, `model-router` 0.3):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.2.4 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `session-hub` | 0.2.5 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
 | `model-router` | 0.3.5 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
@@ -419,7 +419,9 @@ flowchart TD
   path -->|yes| res{"Real path resolved?<br/>(dangling link fails)"}
   res -->|no| b5["Block"]
   res -->|yes| under{"Real path under the<br/>real scope root?"}
-  under -->|yes| allow3["Allow"]
+  under -->|yes| hard{"An existing file with<br/>more than one hard link?"}
+  hard -->|no| allow3["Allow"]
+  hard -->|yes| b7["Block: another name may be outside.<br/>Send an out-of-scope message to the master"]
   under -->|no| out["Block: outside the write root.<br/>Send an out-of-scope message to the master"]
   dog -.->|"7 s elapsed"| b6["Block: did not finish in time"]
 ```
@@ -432,7 +434,10 @@ How it decides:
   is allowed. Parts that do not exist yet are kept as written. A path is inside when it equals the root or starts
   with the root followed by a separator, so a sibling folder whose name starts with the root's name is outside.
 - **Absolute paths only.** A relative target or a path starting with `~` is blocked.
-- **Too-wide roots refused.** A scope root of `/` or the home folder is a configuration error and blocks.
+- **Too-wide roots refused.** A scope root of `/` or the home folder is a configuration error and blocks. The
+  rules for the root live in `hooks/mod/write-root.mjs`, which the mod's shell check uses too.
+- **Hard links blocked.** A write to an existing file with more than one hard link blocks: a hard link has no real
+  path that leads elsewhere, so another name of the file may be outside the root, and the write would change it.
 - **Block message.** Every message starts with `[session-hub] Write blocked:`. For a write outside the root, it
   tells the model not to retry through the shell or another tool, to send an `out-of-scope` message to the
   master, and to tell the user.
@@ -481,7 +486,7 @@ flowchart LR
 | Function | Where | Event | Behaviour |
 |---|---|---|---|
 | Send guard | child | `session.send` | Delivers only to the master, by name with or without ` [<ref>]` (sent on to the bare name), and to the session's own subagents and teammates (a subagent's `main` too). Any other recipient, a `uds:` or `bridge:` address included, is refused; the reason names the master and the `out-of-scope` route. |
-| Shell check | child | `tool.call` on `Bash` | Best effort. Reads redirections and the targets of `tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install` and `sed -i`, resolves them (relative ones against the session's folder, symbolic links through the file system) and denies a target outside the write root. `/dev` and the system temporary folders are allowed. It follows `cd` and `pushd` to a literal folder through the rest of the list (not out of a subshell, a pipeline or a background job), so `cd <root> && echo x >> link/f` is judged where `link` lands; a `cd` that may fail leaves both folders possible. A denial names the path as written and, when a link moves it, where it lands. Targets in variables, substitutions or globs, and relative targets after a `cd` whose target is one of those (or `cd -`, `popd`), are not judged. |
+| Shell check | child | `tool.call` on `Bash` | Best effort. Reads the command as bash or zsh would (`shell-words.mjs`, the lexer; `shell-commands.mjs`, what each command writes), zsh's `>!`, `noglob`, `repeat` and `=command` included. Reads redirections and the targets of `tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install` and `sed -i`, resolves them (relative ones against the session's folder, symbolic links through the file system) and denies a target outside the write root. The commands inside substitutions (`$(…)`, backticks, `<(…)`, in double quotes, `${…}`, arithmetic and here-documents with an unquoted delimiter) are judged as subshells, the literal line of `eval` as part of the command and that of `sh -c` as a new shell. A hard link (`ln`, `cp -l`) to a file outside the root is denied, and a write through a symbolic link made in the same command is judged where the link points. A command the lexer cannot read is denied with the reason; the write root follows `write-root.mjs`. `/dev` and the system temporary folders are allowed. It follows `cd` and `pushd` to a literal folder through the rest of the list (not out of a subshell, a pipeline or a background job), so `cd <root> && echo x >> link/f` is judged where `link` lands; a `cd` that may fail leaves both folders possible. A denial names the path as written and, when a link moves it, where it lands. Targets in variables, the output of substitutions or globs, relative targets after a `cd` whose target is one of those (or `cd -`, `popd`), and a line given to `eval` or `sh -c` that is not literal, are not judged. |
 | Origin marking | child | `session.receive`, `prompt.submit` | A delivery from another session gets a line in front of its text, information and not authorization; a prompt from another session gets the line as context if its text lacks it. The person's prompts and the session's own (`composer`, `bridge`, `sdk`, `auto-continuation`, `plugin`, `task-notification`, `scheduled-trigger`) are not marked; any other kind is. |
 | Scope line | child, master | `prompt.compose`, `prompt.submit` | A `session`-scoped section `session-hub:scope` with the role and the scope (child) or the record (master). The same text rides the first prompt after the start, after a compaction and after `/clear` as context. |
 | Children panel | master | `ui.render` (`Pane`), `command.run` | One row per child of the record with the live status from `ListAgents`, model and effort, last message; refreshed on `/session-hub` and every 30 seconds. |

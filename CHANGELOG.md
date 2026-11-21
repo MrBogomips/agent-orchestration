@@ -3,6 +3,32 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.2.5
+
+2026-11-21 · pull request #61
+
+### Fixed
+
+- The shell check reads a command as bash and zsh do where it used to let a write outside the write root through:
+  `<>`; `<<` inside arithmetic, which hid the rest of the command as a here-document; `$'…'` quoting; zsh's `>!`,
+  `>>!`, `&>!` and `&>>!`, `noglob`, `nocorrect`, `-`, `repeat N` and `=command`; `coproc`. Also, found in review:
+  `<<` in `((…))` after a reserved word, in `$[…]` and in an array subscript; zsh's `>&|` and `>&!`; brace
+  expansion; a `cd` at the end of a zsh pipeline; `chdir`; zsh's `always`; `env -S` and `env -P`; `sed -l`, `cp -S`
+  and `install -S`, which take no value on macOS.
+- Inputs built to make the check run for seconds or out of memory (nested failed arithmetic, links that share a
+  name, a long run of relative `cd`s) end quickly; past a bound the command is denied.
+- The commands inside backticks, inside `$(…)` in double quotes, `${…}` and arithmetic, inside `<(…)` and `>(…)`,
+  and in the body of a here-document whose delimiter is not quoted are judged. So is the literal line given to
+  `eval` or to `sh`, `bash`, `zsh`, `dash` or `ksh -c`.
+- A here-document whose delimiter never comes, and any command the check cannot read, is denied with the reason.
+- A target whose name starts with `&` is judged; only descriptor words such as the `&2` of `>&2` are dropped.
+- The shell check refuses the write roots the scope guard refuses: `/`, the home folder, and a root that is not an
+  existing folder. Both use the same rules.
+- A hard link (`ln`, `cp -l`) to a file outside the write root is denied, and a write through a symbolic link made
+  in the same command is judged where the link points.
+- The scope guard blocks a write to a file with more than one hard link, since another name of the file may be
+  outside the write root. A file inside the root with a second hard link can no longer be edited in a child.
+
 ## model-router 0.3.8
 
 2026-11-21 · pull request #59

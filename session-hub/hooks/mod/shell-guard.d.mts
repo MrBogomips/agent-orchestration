@@ -10,4 +10,5 @@ export function judgeShell(input: {
   cwd?: string
   home?: string
   realpath: (path: string) => Promise<string>
+  fileKind: (path: string) => Promise<'dir' | 'other' | 'missing'>
 }): Promise<{ allow: true; reason?: undefined } | { allow: false; reason: string }>

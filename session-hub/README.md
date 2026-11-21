@@ -22,7 +22,7 @@ important one, the write scope, with a hook.
 | `session-hub:spawn` | skill | Starts one child per repository (desktop app, Herdr, tmux, `claude --bg`, or commands for the user) with a scope, a model and an effort level, the `SESSION_HUB_*` role variables, and a handoff file. Records each child. |
 | `session-hub:dispatch` | skill | Master side. Decides per repository whether the master reads, a subagent reads, or a child works; handles the children's messages and routes out-of-scope requests; keeps master-only duties. |
 | `session-hub:setup` | skill | Writes or updates the hub's *Child sessions* section, after an explicit yes. |
-| `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, and tells the model to send an `out-of-scope` message to the master. |
+| `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, or to a file with more than one hard link (another of its names may be outside), and tells the model to send an `out-of-scope` message to the master. |
 | `scripts/registry.mjs` | script | Reads and writes the children record, atomically. Used by the skills and, read only, by the mod. |
 | `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel. See *The mod* below. |
 | `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel. See [Commands](#commands). |
@@ -49,7 +49,7 @@ Code 2.1.329 or later (`engines` in `plugin.json`). With mods off, everything ab
 | Function | Where | What it does |
 |---|---|---|
 | Send guard | child | A message goes only to the master, by its name (with or without ` [<ref>]`; it is delivered to the bare name), or to the session's own subagents. Any other recipient, a socket address included, is refused with a reason that points to the master. |
-| Shell check | child | **Best effort.** Denies a `Bash` command whose redirections or file-writing commands (`tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install`, `sed -i`) target a path outside the write root. `/dev` and the system temporary folders are allowed. |
+| Shell check | child | **Best effort.** Denies a `Bash` command whose redirections or file-writing commands (`tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install`, `sed -i`) target a path outside the write root. The command is read as bash or zsh (the shell of the `Bash` tool on macOS): zsh's `>!` and `>>!`, `noglob`, `repeat` and `=command` are read, and so are the commands inside substitutions (`$(…)`, backticks, `<(…)`, in double quotes and in here-documents with an unquoted delimiter) and the literal line given to `eval` or `sh -c`. A hard link to a file outside the root is denied, and so is a write through a symbolic link the same command makes to a place outside. A command it cannot read is denied with the reason. `/dev` and the system temporary folders are allowed. |
 | Origin marking | child | A message from another session, the master included, carries a line: information, not authorization. A prompt typed by the person carries none. |
 | Scope line | child, master | The role and the scope in the system prompt and, after the start and after each compaction, as context on the next prompt. |
 | Children panel | master | One row per child: status in the record, live status from the session list, model and effort, last message. Refreshed every 30 s and on `/session-hub`. |
@@ -103,8 +103,9 @@ inside a hub or a repository. Writes are atomic and take a lock file next to the
 
 - **Shell writes are covered on a best-effort basis, and only with mods on.** The hook sees `Edit`, `Write` and
   `NotebookEdit`. The mod's shell check reads the command line only: it does not judge a target held in a
-  variable, a command substitution or a glob, nor a relative path after a `cd` whose target is one of those (or
-  `cd -`, `popd`), nor what any other program writes (a script, `git`, a build tool). Relative paths are read
+  variable, in the output of a command substitution or in a glob, nor a relative path after a `cd` whose target is
+  one of those (or `cd -`, `popd`), nor a line given to `eval` or `sh -c` that is not literal, nor what any other
+  program writes (a script, `git`, a build tool). Relative paths are read
   against the session's folder, or against the folder of an earlier literal `cd` in the same command. With mods off, a shell
   write is held back only by the handoff.
 - **The desktop app has no guard.** Its session tool takes no environment variables, so a child started there
@@ -115,7 +116,9 @@ inside a hub or a repository. Writes are atomic and take a lock file next to the
 - **A killed hook lets the write through.** Claude Code treats a hook that exceeds its timeout (10 s) as a
   non-blocking error. The guard blocks on its own after about 7 s to stay ahead of that, but a hook killed
   from outside before it answers cannot block.
-- The guard accepts only absolute paths, and refuses `/` or the home folder as a write root. The role value is
+- The guard accepts only absolute paths, and refuses `/` or the home folder as a write root; the mod's shell check
+  refuses the same roots. A file inside the root with a second hard link cannot be edited in a child, even when
+  both names are inside the root: the guard cannot see where the other name is. The role value is
   read without regard to case or surrounding spaces; an unknown value blocks every write unless
   `SESSION_HUB_GUARDS` is `off`.
 - Model and effort on the desktop app's start tool are unverified.
