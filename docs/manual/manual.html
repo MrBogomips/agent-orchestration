@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>session-hub and model-router: user manual</title>
-<meta name="description" content="User manual for the session-hub 0.3.1 and model-router 0.3.10 Claude Code plugins.">
+<meta name="description" content="User manual for the session-hub 0.3.2 and model-router 0.3.10 Claude Code plugins.">
 <style>
 :root {
   --fg: #1d1d1b; --muted: #5f5f5a; --line: #d9d8d2; --accent: #2f5f9e; --code-bg: #f4f3ef; --note-bg: #eef3fa;
@@ -70,7 +70,7 @@ dl.faq dd { margin: 2pt 0 0 0; }
   choosing the model and the effort level of every agent.</p>
   <table>
     <tr><th>Plugin</th><th>Version</th><th>Marketplace</th></tr>
-    <tr><td><code>session-hub</code></td><td>0.3.1</td><td><code>mrbogomips</code></td></tr>
+    <tr><td><code>session-hub</code></td><td>0.3.2</td><td><code>mrbogomips</code></td></tr>
     <tr><td><code>model-router</code></td><td>0.3.10</td><td><code>mrbogomips</code></td></tr>
   </table>
   <p class="small">Claude Code 2.1.329 or later for the mods; tested on 2.1.329 and 2.1.330. Source:
@@ -131,7 +131,7 @@ subagent records. Paths in them are shortened the same way.</p>
 <h2 id="what">1.1 What they are and when to use them</h2>
 <table>
   <thead><tr><th style="width:22%">Plugin</th><th>What it does</th><th style="width:30%">Use it when</th></tr></thead>
-  <tr><td><code>session-hub</code> 0.3.1</td>
+  <tr><td><code>session-hub</code> 0.3.2</td>
       <td>A <em>master</em> session opened in a hub of repositories starts one <em>child</em> session per repository.
       Each child gets a written scope, a model and an effort level, talks only to the master and sends requests
       outside its scope to the master. A hook blocks a child's file writes outside its scope, and the master keeps a
@@ -262,7 +262,7 @@ section, shows it, and writes it only when you choose <em>write it</em>. It does
   <tr><td>Effort</td><td>default effort per repository or kind of work (<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>)</td><td>none: <code>choose-model</code>, else inherited</td></tr>
   <tr><td>Scope</td><td>per repository, what a child may read outside its write root</td><td>nothing</td></tr>
   <tr><td>Registry</td><td>path of the children record, outside the hub</td><td><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></td></tr>
-  <tr><td>Guards</td><td><code>on</code> or <code>off</code></td><td><code>on</code></td></tr>
+  <tr><td>Guards</td><td><code>on</code> or <code>off</code> for all three guards</td><td><code>on</code></td></tr>
   <tr><td>Environment</td><td><code>auto</code>, <code>desktop</code>, <code>herdr</code>, <code>tmux</code>, <code>cli</code> or <code>manual</code></td><td><code>auto</code></td></tr>
   <tr><td>Layout</td><td><code>tabs</code>, <code>panes</code> or <code>ask</code></td><td><code>ask</code></td></tr>
   <tr><td>Worktrees</td><td><code>repo</code>, <code>always</code> or <code>never</code>, for children that edit</td><td><code>repo</code></td></tr>
@@ -329,7 +329,7 @@ starts all the children in one <code>spawn</code> call, so that their handoffs n
   <thead><tr><th style="width:16%">Environment</th><th style="width:30%">Detected when</th><th>Starts the child with</th><th style="width:14%">Scope guard</th></tr></thead>
   <tr><td>Desktop app</td><td>a session-starting tool such as <code>start_session</code> is available</td><td>the tool, with the repository as working folder</td><td><strong>inactive</strong></td></tr>
   <tr><td>Herdr</td><td><code>HERDR_ENV</code> is <code>1</code> and <code>herdr</code> is on <code>PATH</code></td><td>a tab or pane with <code>--env</code>, then <code>herdr agent start</code></td><td>active</td></tr>
-  <tr><td>tmux</td><td><code>TMUX</code> is set and <code>tmux</code> is on <code>PATH</code></td><td>a window or pane, then the command typed into it</td><td>active</td></tr>
+  <tr><td>tmux</td><td><code>TMUX</code> is set and <code>tmux</code> is on <code>PATH</code></td><td>a window or pane running the command, given as arguments</td><td>active</td></tr>
   <tr><td>Terminal</td><td><code>claude --help</code> lists <code>--bg</code></td><td><code>claude --bg</code> from the repository</td><td>active</td></tr>
   <tr><td>Manual</td><td>none of the above</td><td>commands and a handoff handed to you</td><td>active if run as given</td></tr>
 </table>
@@ -388,14 +388,17 @@ size limit in <code>design</code>. The master runs in tmux, in a session named <
 <code>sonnet</code> at <code>medium</code> and <code>t42-design</code> on <code>opus</code> (no <em>Effort</em> key
 for design, so <code>choose-model</code> chooses it when installed, or the master's is inherited). With
 <code>Layout: panes</code>, the first child opens to the right of the master and the next one below it:</p>
-<pre><code>tmux split-window -h -d -t "$TMUX_PANE" -c /work/hub/product -P -F '#{pane_id}'      # prints %12
-tmux select-pane -t %12 -T t42-product
-tmux send-keys -t %12 -l "env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub \
-  SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
-  SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json SESSION_HUB_GUARDS=on \
-  claude -n t42-product --model sonnet --effort medium --permission-mode default \
-  --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'"
-tmux send-keys -t %12 Enter</code></pre>
+<pre><code>tmux split-window -h -d -t "$TMUX_PANE" -c /work/hub/product -P -F '#{pane_id}' \
+  -e SESSION_HUB_ROLE=child -e SESSION_HUB_MASTER=hub -e SESSION_HUB_SCOPE_ROOT=/work/hub/product \
+  -e SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
+  -e SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json -e SESSION_HUB_GUARDS=on \
+  -- claude -n t42-product --model sonnet --effort medium --permission-mode default \
+  --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'      # prints %12
+tmux set -p -t %12 @session_hub_child t42-product
+tmux set -p -t %12 remain-on-exit on</code></pre>
+<p>tmux runs the command after <code>--</code> as it is, with no shell in between, so a carried value such as a JSON
+<code>--settings</code> reaches the child as written. The pane option <code>@session_hub_child</code> names the child
+for the master's later checks; the pane title is not used, because Claude Code replaces it with its own.</p>
 <p>The same child in the other environments:</p>
 <pre><code># Herdr: the variables go on the pane, then the agent starts in it
 herdr pane split --current --direction right --cwd /work/hub/product --no-focus \
@@ -441,9 +444,11 @@ a trusted hub. A child may stop at the trust prompt in its own window, and <code
 <h2 id="record">2.6 The children record</h2>
 <p>The master keeps one JSON file per hub, outside the hub:</p>
 <pre><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></pre>
-<p><code>&lt;config dir&gt;</code> is <code>CLAUDE_CONFIG_DIR</code> when set, else <code>~/.claude</code>;
+<p><code>&lt;config dir&gt;</code> is <code>CLAUDE_CONFIG_DIR</code> when set (absolute, or starting with
+<code>~</code>; a relative one is refused), else <code>~/.claude</code>;
 <code>&lt;hub id&gt;</code> is the first 16 hexadecimal digits of the SHA-256 of the hub's real path (NFC). The hub's
-<em>Registry</em> key can name another path outside the hub. The folder is created with mode <code>0700</code>, the
+<em>Registry</em> key can name another path outside the hub; a path that lands inside the hub, even through a link or
+a folder not made yet, is refused. The folder is created with mode <code>0700</code>, the
 file with <code>0600</code>. One entry per child:</p>
 <pre><code>{
   "name": "t42-product",
@@ -470,10 +475,12 @@ yourself:</p>
 node "$R" path --hub /work/hub          # the default path
 node "$R" read --hub /work/hub          # the record as JSON</code></pre>
 <p>The other commands are <code>upsert --entry '&lt;json&gt;'</code>, <code>status --name &lt;child&gt; --status
-&lt;status&gt;</code>, <code>request --name &lt;child&gt; --text &lt;t&gt; [--outcome &lt;o&gt;]</code> and
-<code>reconcile (--live &lt;name,…&gt; | --live-none)</code>; each takes <code>--hub &lt;dir&gt;</code> or
-<code>--file &lt;path&gt;</code>. Writes are atomic under a lock file next to the record (waits up to 5 s; a lock
-older than 30 s is stale). A record that is not valid JSON, or from a newer format, is reported and never
+&lt;status&gt; [--reason &lt;why&gt;]</code>, <code>request --name &lt;child&gt; --text &lt;t&gt; [--outcome &lt;o&gt;]</code> and
+<code>reconcile (--live &lt;name,…&gt; | --live-none)</code>; each takes <code>--hub &lt;dir&gt;</code>, and
+<code>--file &lt;path&gt;</code> for a record at another path (a write with <code>--file</code> needs
+<code>--hub</code> too). An option a command does not take exits 1 and writes nothing. A child started again under
+the name of one that ended gets a fresh entry. Writes are atomic under a lock file next to the record (waits up to
+5 s; a lock older than 30 s, or whose writer has ended, is stale and taken over). A record that is not valid JSON, or from a newer format, is reported and never
 overwritten. A failing record never stops a start: <code>spawn</code> tells you and carries on.</p>
 
 <h2 id="messages">2.7 Messages and their five types</h2>
@@ -517,6 +524,10 @@ of <code>/</code> or the home folder, a relative target or one starting with <co
 <p>It also blocks a write to a file that has more than one hard link. A hard link has no path that leads elsewhere,
 so the guard cannot tell whether another name of the file is outside the write root, and a write would change the
 file under every name.</p>
+<p>It blocks a write to the repository's Claude Code settings, <code>.claude/settings.json</code> and
+<code>.claude/settings.local.json</code> under the write root, and so does the shell check. Their <code>env</code> and
+hook settings would turn the child's guards off at its next start. The settings of a repository are the master's:
+the child sends the change to the master as an <code>out-of-scope</code> request.</p>
 
 <h3>The shell check (mod)</h3>
 <p>Best effort, mods on only. Before a <code>Bash</code> (or <code>Monitor</code>) command runs in a child, the mod reads its redirections and

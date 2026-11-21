@@ -1,13 +1,13 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.3.1, `model-router` 0.3):
+This document describes the two plugins in this repository as built (`session-hub` 0.3.2, `model-router` 0.3):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.3.1 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `session-hub` | 0.3.2 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
 | `model-router` | 0.3.5 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
@@ -130,7 +130,7 @@ flowchart LR
 | `session-hub:spawn` | skill | Starts one child per repository in the detected environment, with a scope, a model, an effort level, the `SESSION_HUB_*` variables and a handoff file. Records each child. |
 | `session-hub:setup` | skill | Writes or updates the `## Child sessions` section of the hub's instruction file (`AGENTS.md`, else `CLAUDE.md`), only after the user's explicit yes. |
 | `session-hub-scope-guard` | hook | `PreToolUse` hook on `Edit`, `Write` and `NotebookEdit`, defined in `hooks/hooks.json` and implemented in `hooks/scope-guard.mjs`. In a child, blocks a write outside the write root. |
-| `scripts/registry.mjs` | script | The only writer of the children record: reads, merges and writes it atomically under a lock. |
+| `scripts/registry.mjs` | script | The only writer of the children record: reads, merges and writes it atomically under a lock taken over atomically when stale. Refuses options a command does not take, and any path that lands inside the hub. |
 | `session-hub` | mod | Loaded from the same `hooks/hooks.json` (`modules`), glue in `hooks/session-hub-mod.tsx`, pure logic in `hooks/mod/*.mjs`. In a child: send guard, shell check, origin marking, scope line. In the master: the children panel. Needs mods on. |
 | `/session-hub` | command (mod) | The session's role and scope; in the master, the children table and panel. `help` lists what it does. See [Commands](#commands). |
 
@@ -219,7 +219,7 @@ which mode the children get.
 |---|---|---|---|
 | Claude desktop app | a session-starting tool such as `start_session` is available | they cannot: the tool takes no environment | **inactive**; the scope holds by the handoff alone |
 | Herdr | `HERDR_ENV` is `1` and `herdr` is on `PATH` | `--env KEY=VALUE` on `herdr tab create` or `herdr pane split`, then `herdr agent start` | active |
-| tmux | `TMUX` is set and `tmux` is on `PATH` | an `env …` prefix on the command typed into the new pane | active |
+| tmux | `TMUX` is set and `tmux` is on `PATH` | `-e` variables on the new pane, which runs the command given as arguments | active |
 | Terminal | `claude --help` lists `--bg` | an `env …` prefix on `claude --bg`, run from the repository | active |
 | Manual | none of the above, or a start failed | an `env …` prefix in the command block handed to the user | active only if the user runs the command as given |
 

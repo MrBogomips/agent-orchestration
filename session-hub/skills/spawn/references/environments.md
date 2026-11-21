@@ -83,7 +83,7 @@ them, by keys or otherwise.
   child's own window.
 - **Herdr, tmux, manual:** the trust prompt shows in the child's window. Tell the user which window to answer it
   in. In Herdr, `agent start` returns `agent_not_ready`: send the handoff prompt once the agent is ready. In tmux
-  and the manual case the prompt is already on the command line and runs after the user's answer.
+  and the manual case the handoff prompt is already in the command and runs after the user's answer.
 
 ## Messaging caveats
 

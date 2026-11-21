@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync, utimesSync, symlinkSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -17,6 +17,7 @@ import {
   addRequest,
   reconcile,
   RegistryError,
+  removeIfStale,
 } from './registry.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'registry.mjs');
@@ -43,6 +44,10 @@ describe('paths', () => {
   test('config dir comes from CLAUDE_CONFIG_DIR, else ~/.claude', () => {
     assert.equal(configDir({ CLAUDE_CONFIG_DIR: '/x/cfg' }, '/home/u'), '/x/cfg');
     assert.equal(configDir({}, '/home/u'), '/home/u/.claude');
+    assert.equal(configDir({ CLAUDE_CONFIG_DIR: '~/.claude-x' }, '/home/u'), '/home/u/.claude-x');
+    assert.equal(configDir({ CLAUDE_CONFIG_DIR: '~' }, '/home/u'), '/home/u');
+    assert.throws(() => configDir({ CLAUDE_CONFIG_DIR: 'relative/cfg' }, '/home/u'), /CLAUDE_CONFIG_DIR is not an absolute path/);
+    assert.throws(() => configDir({ CLAUDE_CONFIG_DIR: '~other/cfg' }, '/home/u'), /CLAUDE_CONFIG_DIR is not an absolute path/);
   });
 
   test('hub id is the first 16 hex of the sha256 of the real path', () => {
@@ -156,6 +161,30 @@ describe('record', () => {
     assert.equal(child.model, 'opus');
   });
 
+  test('a new running child with the name of a finished one starts a fresh entry, without the old history', () => {
+    for (const ended of ['done', 'abandoned', 'lost']) {
+      const name = `a-${ended}`;
+      upsertChild(file, entry(name, { repo: '/x', task: 'T-1', lastMessage: { type: 'pr', text: 'old' }, model: 'opus' }), { now });
+      addRequest(file, name, { text: 'old req' }, { now });
+      setStatus(file, name, ended, { reason: ended === 'abandoned' ? 'wrong turn' : undefined });
+      const later = () => '2026-11-21T09:00:00.000Z';
+      const record = upsertChild(file, entry(name, { repo: '/y', task: 'T-2', status: 'running' }), { now: later });
+      const child = record.children.find((c) => c.name === name);
+      assert.deepEqual(child, { status: 'running', started: '2026-11-21T09:00:00.000Z', requests: [], ...entry(name, { repo: '/y', task: 'T-2' }) }, ended);
+    }
+  });
+
+  test('an update of a live child, or one that does not restart it, still merges', () => {
+    upsertChild(file, entry('a'), { now });
+    addRequest(file, 'a', { text: 'r' }, { now });
+    let child = upsertChild(file, { name: 'a', lastMessage: { type: 'done' } }).children[0];
+    assert.equal(child.requests.length, 1);
+    setStatus(file, 'a', 'done');
+    child = upsertChild(file, { name: 'a', lastMessage: { type: 'pr' } }).children[0];
+    assert.equal(child.status, 'done');
+    assert.equal(child.requests.length, 1);
+  });
+
   test('reconcile refuses an empty live list unless told there is no live session', () => {
     upsertChild(file, entry('a'), { now });
     assert.throws(() => reconcile(file, []), /--live-none/);
@@ -189,6 +218,29 @@ describe('record', () => {
     upsertChild(file, entry('b'), { now, lockTimeoutMs: 200 });
     assert.equal(readRecord(file).children.length, 2);
     assert.equal(existsSync(`${file}.lock`), false);
+  });
+
+  test('a stale lock is taken over only if it is still the one examined', () => {
+    const lock = `${file}.lock`;
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(lock, 'stale');
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(lock, old, old);
+    const examined = statSync(lock);
+    // Between the look and the takeover, another writer removed the stale lock and took its own.
+    rmSync(lock);
+    writeFileSync(lock, `${process.pid}\n`);
+    removeIfStale(lock, examined);
+    assert.equal(readFileSync(lock, 'utf8'), `${process.pid}\n`, 'the fresh lock is left in place');
+    assert.deepEqual(readdirSync(dirname(file)).filter((f) => f.includes('.stale')), []);
+  });
+
+  test('a lock whose holder is no longer running is cleared without waiting for it to go stale', () => {
+    upsertChild(file, entry('a'), { now });
+    const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
+    writeFileSync(`${file}.lock`, `${gone.stdout}\n`);
+    upsertChild(file, entry('b'), { now, lockTimeoutMs: 1000 });
+    assert.equal(readRecord(file).children.length, 2);
   });
 
   test('the lock is released after a failed write', () => {
@@ -271,9 +323,32 @@ describe('command line', () => {
     assert.equal(names.length, 10);
   });
 
+  test('writers racing for a stale lock lose no update', async () => {
+    const { spawn } = await import('node:child_process');
+    const cfg = { CLAUDE_CONFIG_DIR: join(base, 'cfg') };
+    const record = defaultRegistryPath(hub, cfg);
+    mkdirSync(dirname(record), { recursive: true });
+    for (let round = 0; round < 3; round += 1) {
+      writeFileSync(`${record}.lock`, 'stale');
+      const old = new Date(Date.now() - 60_000);
+      utimesSync(`${record}.lock`, old, old);
+      const runOne = (i) =>
+        new Promise((resolve) => {
+          const child = spawn(process.execPath, [SCRIPT, 'upsert', '--hub', hub, '--entry', JSON.stringify(entry(`r${round}-${i}`))],
+            { env: { ...process.env, ...cfg }, stdio: ['ignore', 'ignore', 'pipe'] });
+          let stderr = '';
+          child.stderr.on('data', (chunk) => (stderr += chunk));
+          child.on('exit', (code) => resolve({ code, stderr }));
+        });
+      const results = await Promise.all(Array.from({ length: 12 }, (_, i) => runOne(i)));
+      for (const r of results) assert.equal(r.code, 0, r.stderr);
+    }
+    assert.equal(readRecord(record).children.length, 36);
+  });
+
   test('--file overrides the default path, and a file inside the hub is refused', () => {
     const custom = join(base, 'elsewhere', 'kids.json');
-    let r = cli(['upsert', '--file', custom, '--entry', JSON.stringify(entry('a'))]);
+    let r = cli(['upsert', '--hub', hub, '--file', custom, '--entry', JSON.stringify(entry('a'))]);
     assert.equal(r.status, 0, r.stderr);
     assert.ok(existsSync(custom));
 
@@ -281,6 +356,100 @@ describe('command line', () => {
     assert.equal(r.status, 1);
     assert.match(r.stderr, /\[session-hub\].*inside the hub/);
     assert.equal(existsSync(join(hub, 'kids.json')), false);
+  });
+
+  // Issue #27: each command takes only its own options
+  const recordText = () => readFileSync(defaultRegistryPath(hub, { CLAUDE_CONFIG_DIR: join(base, 'cfg') }), 'utf8');
+
+  test('an option a command does not take, or a typo, exits 1 and writes nothing', () => {
+    const typo = cli(['upsert', '--hubb', hub, '--file', join(base, 'x', 'kids.json'), '--entry', JSON.stringify(entry('z'))]);
+    assert.equal(typo.status, 1);
+    assert.match(typo.stderr, /^\[session-hub\] registry: unknown option --hubb for upsert/);
+    assert.equal(existsSync(join(base, 'x', 'kids.json')), false);
+    assert.equal(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    const before = recordText();
+    for (const args of [['read', '--hub', hub, '--name', 'a'], ['request', '--hub', hub, '--name', 'a', '--text', 't', '--reason', 'r'],
+      ['status', '--hub', hub, '--name', 'a', '--status', 'done', '--live', 'a'], ['path', '--hub', hub, '--file', '/x/y.json'],
+      ['status', '--hub', hub, '--name', 'a', '--name', 'b', '--status', 'done']]) {
+      const r = cli(args);
+      assert.equal(r.status, 1, args.join(' '));
+      assert.match(r.stderr, /^\[session-hub\] registry: /, args.join(' '));
+    }
+    assert.equal(recordText(), before);
+  });
+
+  test('--live with --live-none exits 1 and leaves the record unchanged', () => {
+    assert.equal(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    const before = recordText();
+    const r = cli(['reconcile', '--hub', hub, '--live', 'a', '--live-none']);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /--live.*--live-none|--live-none.*--live/);
+    assert.equal(recordText(), before);
+  });
+
+  test('status takes a reason, stored on the entry and dropped by a later status without one', () => {
+    assert.equal(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    let r = cli(['status', '--hub', hub, '--name', 'a', '--status', 'abandoned', '--reason', 'wrong turn']);
+    assert.equal(r.status, 0, r.stderr);
+    let child = JSON.parse(cli(['read', '--hub', hub]).stdout).children[0];
+    assert.equal(child.status, 'abandoned');
+    assert.equal(child.reason, 'wrong turn');
+    r = cli(['status', '--hub', hub, '--name', 'a', '--status', 'running']);
+    child = JSON.parse(cli(['read', '--hub', hub]).stdout).children[0];
+    assert.equal(child.status, 'running');
+    assert.equal('reason' in child, false);
+    assert.equal(cli(['status', '--hub', hub, '--name', 'a', '--status', 'done', '--reason', '']).status, 1);
+  });
+
+  // Issue #28: the record may never land inside the hub
+  const refusedInside = (r, path) => {
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stderr, /^\[session-hub\] registry: /);
+    assert.equal(existsSync(path), false, path);
+  };
+
+  test('a write with --file needs --hub, so that the file can be checked; a read does not', () => {
+    const inside = join(hub, 'kids.json');
+    const r = cli(['upsert', '--file', inside, '--entry', JSON.stringify(entry('a'))]);
+    refusedInside(r, inside);
+    assert.match(r.stderr, /--hub/);
+    const elsewhere = join(base, 'elsewhere', 'kids.json');
+    assert.equal(cli(['upsert', '--hub', hub, '--file', elsewhere, '--entry', JSON.stringify(entry('a'))]).status, 0);
+    assert.equal(cli(['read', '--file', elsewhere]).status, 0);
+  });
+
+  test('a file under a folder not made yet is judged where it lands: an alias of the hub is refused', () => {
+    const alias = join(base, 'alias');
+    symlinkSync(base, alias);
+    const target = join(alias, 'hub', 'state', 'kids.json');
+    refusedInside(cli(['upsert', '--hub', hub, '--file', target, '--entry', JSON.stringify(entry('a'))]), join(hub, 'state'));
+  });
+
+  test('a link to the hub followed by a new folder is refused', () => {
+    const link = join(base, 'hublink');
+    symlinkSync(hub, link);
+    const target = join(link, 'st2', 'kids.json');
+    refusedInside(cli(['upsert', '--hub', hub, '--file', target, '--entry', JSON.stringify(entry('a'))]), join(hub, 'st2'));
+  });
+
+  test('CLAUDE_CONFIG_DIR: ~ is expanded, a relative one is refused, one inside the hub is refused', () => {
+    const repo = join(hub, 'repo');
+    mkdirSync(repo);
+    const home = join(base, 'home');
+    mkdirSync(home);
+    const inHome = spawnSync(process.execPath, [SCRIPT, 'upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))], {
+      cwd: repo, encoding: 'utf8', env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '~/.claude-x' },
+    });
+    assert.equal(inHome.status, 0, inHome.stderr);
+    assert.ok(existsSync(join(home, '.claude-x', 'session-hub', `children-${hubId(hub)}.json`)));
+    assert.equal(existsSync(join(repo, '~')), false);
+    const relative = spawnSync(process.execPath, [SCRIPT, 'upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))], {
+      cwd: repo, encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: 'cfg-relative' },
+    });
+    refusedInside(relative, join(repo, 'cfg-relative'));
+    assert.match(relative.stderr, /CLAUDE_CONFIG_DIR/);
+    refusedInside(cli(['upsert', '--hub', hub, '--entry', JSON.stringify(entry('a'))], { CLAUDE_CONFIG_DIR: join(hub, '.cfg') }), join(hub, '.cfg'));
+    assert.equal(cli(['path', '--hub', hub], { CLAUDE_CONFIG_DIR: join(hub, '.cfg') }).status, 1);
   });
 
   test('errors exit 1 with a prefixed message', () => {

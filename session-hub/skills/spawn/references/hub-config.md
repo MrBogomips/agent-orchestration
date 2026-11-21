@@ -23,7 +23,7 @@ conversation beats these keys, and these keys beat the defaults.
 | Effort | default effort per repository or kind of work (`low`, `medium`, `high`, `xhigh`, `max`) | none: step 9 of the skill decides |
 | Scope | per repository, what a child may read outside its write root by default, as absolute or hub-relative paths | nothing |
 | Registry | path of the children record, outside the hub | `<config dir>/session-hub/children-<hub id>.json` |
-| Guards | `on` or `off` for the scope guard | `on` |
+| Guards | `on` or `off` for all three guards: the scope guard, and the mod's send guard and shell check | `on` |
 
 The `Agent` key of the old `spawn-session` skill is gone: children are Claude Code sessions. If a hub still has
 it, ignore it and mention it once in the report.
@@ -95,17 +95,19 @@ Children inherit the master's permission mode, never saved in the configuration.
 **Asking.** With `ask`, or no *Layout* key, and no layout in the user's request, ask before starting the
 children, in one ask with two questions (and the permission mode when that is asked too): the layout, and
 whether to save it as this hub's default. On "save", set `- Layout: <tabs or panes>` in the hub's
-`## Child sessions` section (replace an existing line, or add it after the last key; create the section with
-`session-hub:setup`'s template if it is missing). That answer is the explicit yes. Don't commit the change. Without
-"save", use the layout for this conversation only, and don't ask it again in it.
+`## Child sessions` section (replace an existing line, or add it after the last key). That answer is the explicit
+yes. Don't commit the change. Without "save", use the layout for this conversation only, and don't ask it again in
+it. **When the section is missing, don't offer "save"**: ask the layout alone, use it for this conversation, and
+offer `session-hub:setup` in the report, which creates the section with the user's yes (spawn writes nothing to a
+hub without the section).
 
 **Many children.** With more than four children in a stack of panes, open the rest as tabs and say so.
 
 ## Names
 
 Build each child's name from the *Session name* pattern, then normalize it: lowercase, characters outside
-`a-z0-9_-` replaced by `-`, starting with a letter, at most 24 characters. Add `-2`, `-3`… if a live session or a
-`running` entry in the children record already has the name.
+`a-z0-9_-` replaced by `-`, starting with a letter, at most 24 characters. Add `-2`, `-3`… if a live session or any entry
+of the children record, whatever its status, already has the name: a finished child's name is not reused.
 
 ## Worktrees and the write root
 

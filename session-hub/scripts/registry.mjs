@@ -2,16 +2,17 @@
 // The children record of a session-hub master: one JSON file, written whole and atomically on every change,
 // under an exclusive lock so that concurrent writers lose no entry.
 //
-// Default location: <config dir>/session-hub/children-<hub id>.json, where <config dir> is CLAUDE_CONFIG_DIR or
-// ~/.claude and <hub id> is the first 16 hex digits of the sha256 of the hub's real path (NFC). Never inside a hub.
+// Default location: <config dir>/session-hub/children-<hub id>.json, where <config dir> is CLAUDE_CONFIG_DIR (absolute,
+// or starting with ~) or ~/.claude and <hub id> is the first 16 hex digits of the sha256 of the hub's real path (NFC).
+// Never inside a hub: every path is judged where it really lands before anything is written.
 //
-// Usage:
+// Usage (a write with --file needs --hub too, so that the file can be checked against the hub):
 //   registry.mjs path      --hub <dir>
 //   registry.mjs read      (--hub <dir> | --file <path>)
-//   registry.mjs upsert    (--hub <dir> | --file <path>) --entry '<json>'
-//   registry.mjs status    (--hub <dir> | --file <path>) --name <child> --status <status>
-//   registry.mjs request   (--hub <dir> | --file <path>) --name <child> --text <text> [--outcome <text>]
-//   registry.mjs reconcile (--hub <dir> | --file <path>) (--live <name,name,...> | --live-none)
+//   registry.mjs upsert    --hub <dir> [--file <path>] --entry '<json>'
+//   registry.mjs status    --hub <dir> [--file <path>] --name <child> --status <status> [--reason <text>]
+//   registry.mjs request   --hub <dir> [--file <path>] --name <child> --text <text> [--outcome <text>]
+//   registry.mjs reconcile --hub <dir> [--file <path>] (--live <name,name,...> | --live-none)
 //
 // Exit 0 on success, with JSON on stdout (the path for `path`); exit 1 with a `[session-hub]` message on stderr.
 // A file that cannot be read as a record, or was written by a newer format, is reported and never overwritten.
@@ -21,6 +22,7 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
+  linkSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -31,7 +33,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const STATUSES = Object.freeze(['running', 'waiting-user', 'done', 'abandoned', 'lost']);
@@ -45,8 +47,16 @@ const LOCK_BACKOFF_MAX_MS = 200;
 
 export class RegistryError extends Error {}
 
+// The config folder: CLAUDE_CONFIG_DIR, with a leading `~` or `~/` expanded, else ~/.claude. A relative one would
+// depend on the current folder (and could land inside a repository), so it is refused.
 export function configDir(env = process.env, home = homedir()) {
-  return env.CLAUDE_CONFIG_DIR ? env.CLAUDE_CONFIG_DIR : join(home, '.claude');
+  const configured = env.CLAUDE_CONFIG_DIR;
+  if (!configured) return join(home, '.claude');
+  const expanded = configured === '~' || configured.startsWith('~/') ? join(home, configured.slice(1)) : configured;
+  if (!isAbsolute(expanded)) {
+    throw new RegistryError(`CLAUDE_CONFIG_DIR is not an absolute path (${configured}); the record would depend on the current folder`);
+  }
+  return expanded;
 }
 
 function realHub(hub) {
@@ -99,12 +109,58 @@ export function readRecord(file) {
 // Synchronous sleep, so the helper stays a plain synchronous command.
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-function removeIfStale(lock) {
+const statOrNull = (path) => {
   try {
-    if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmSync(lock, { force: true });
+    return statSync(path);
   } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
+};
+
+// Whether the process that wrote its pid in the lock has ended. A lock still empty, or a pid of another user's
+// process (EPERM), counts as held.
+function holderIsGone(lock) {
+  let pid;
+  try {
+    pid = Number(readFileSync(lock, 'utf8').trim());
+  } catch {
+    return false;
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+}
+
+/**
+ * Removes the lock when it is stale (older than LOCK_STALE_MS, or its holder has ended), and only if it is still the
+ * lock that was examined (`examined`, its stat): the lock is first moved aside atomically, and if what was moved is
+ * another writer's fresh lock, it is put back. Two writers that both saw the stale lock can no longer remove each
+ * other's fresh one (issue #33).
+ */
+export function removeIfStale(lock, examined = statOrNull(lock)) {
+  if (!examined) return;
+  if (Date.now() - examined.mtimeMs <= LOCK_STALE_MS && !holderIsGone(lock)) return;
+  const aside = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
+  try {
+    renameSync(lock, aside);
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+  const moved = statSync(aside);
+  if (moved.ino !== examined.ino || moved.mtimeMs !== examined.mtimeMs) {
+    try {
+      linkSync(aside, lock);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+  rmSync(aside, { force: true });
 }
 
 function acquireLock(file, timeoutMs) {
@@ -212,20 +268,29 @@ export function upsertChild(file, entry, options = {}) {
   const now = options.now ?? (() => new Date().toISOString());
   return update(file, options, (record) => {
     const index = record.children.findIndex((child) => child.name === entry.name);
-    if (index >= 0) {
-      const merged = { ...record.children[index], ...withoutKept(entry) };
-      return { ...record, children: replaceAt(record.children, index, merged) };
-    }
-    const created = { status: 'running', started: now(), requests: [], ...entry };
-    return { ...record, children: [...record.children, created] };
+    const created = () => ({ status: 'running', started: now(), requests: [], ...entry });
+    if (index < 0) return { ...record, children: [...record.children, created()] };
+    const existing = record.children[index];
+    // A child started again under the name of one that ended is a new child: it gets a fresh entry, not the old
+    // one's start time, requests or other fields.
+    const restarted = !LIVE_STATUSES.includes(existing.status) && LIVE_STATUSES.includes(entry.status);
+    const next = restarted ? created() : { ...existing, ...withoutKept(entry) };
+    return { ...record, children: replaceAt(record.children, index, next) };
   });
 }
 
+// Sets a child's status, with the reason when one is given (why it was abandoned, say). The reason belongs to that
+// status: a later status without one drops it.
 export function setStatus(file, name, status, options = {}) {
   checkStatus(status);
+  if (options.reason !== undefined && (typeof options.reason !== 'string' || options.reason.trim() === '')) {
+    throw new RegistryError('--reason is empty');
+  }
   return update(file, options, (record) => {
     const index = findIndex(record, name);
-    return { ...record, children: replaceAt(record.children, index, { ...record.children[index], status }) };
+    const { reason: _previous, ...child } = record.children[index];
+    const next = options.reason === undefined ? { ...child, status } : { ...child, status, reason: options.reason };
+    return { ...record, children: replaceAt(record.children, index, next) };
   });
 }
 
@@ -263,16 +328,31 @@ export function reconcile(file, liveNames, options = {}) {
 
 // Command line
 
-const COMMANDS = Object.freeze(['path', 'read', 'upsert', 'status', 'request', 'reconcile']);
+// The options each command takes. Anything else is refused, so that a typo cannot change what a call does.
+const COMMAND_OPTIONS = Object.freeze({
+  path: ['hub'],
+  read: ['hub', 'file'],
+  upsert: ['hub', 'file', 'entry'],
+  status: ['hub', 'file', 'name', 'status', 'reason'],
+  request: ['hub', 'file', 'name', 'text', 'outcome'],
+  reconcile: ['hub', 'file', 'live', 'live-none'],
+});
+const COMMANDS = Object.freeze(Object.keys(COMMAND_OPTIONS));
 const FLAGS = Object.freeze(['live-none']);
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
+  if (!COMMANDS.includes(command)) throw new RegistryError(`unknown command "${command}"; use ${COMMANDS.join(', ')}`);
+  const accepted = COMMAND_OPTIONS[command];
   const options = {};
   for (let i = 0; i < rest.length; i += 1) {
     const key = rest[i];
     if (!key?.startsWith('--')) throw new RegistryError(`bad argument "${key}"`);
     const name = key.slice(2);
+    if (!accepted.includes(name)) {
+      throw new RegistryError(`unknown option --${name} for ${command}; it takes ${accepted.map((o) => `--${o}`).join(', ')}`);
+    }
+    if (Object.hasOwn(options, name)) throw new RegistryError(`--${name} is given twice`);
     if (FLAGS.includes(name)) {
       options[name] = true;
       continue;
@@ -280,6 +360,9 @@ function parseArgs(argv) {
     if (i + 1 >= rest.length) throw new RegistryError(`--${name} needs a value`);
     options[name] = rest[i + 1];
     i += 1;
+  }
+  if (options.live !== undefined && options['live-none']) {
+    throw new RegistryError('--live and --live-none say opposite things; give one of them');
   }
   return { command, options };
 }
@@ -293,23 +376,44 @@ function isInside(path, dir) {
   return path === dir || path.startsWith(`${dir}${sep}`);
 }
 
-function resolveFile(options) {
+// Where a path really lands: the deepest part of it that exists, with its links resolved, and the rest as written.
+function landing(path) {
+  const missing = [];
+  let current = resolve(path);
+  for (;;) {
+    try {
+      return join(realpathSync.native(current), ...missing).normalize('NFC');
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw new RegistryError(`cannot resolve ${path}: ${error.message}`);
+      const parent = dirname(current);
+      if (parent === current) return resolve(path).normalize('NFC');
+      missing.unshift(basename(current));
+      current = parent;
+    }
+  }
+}
+
+// The record may never live inside the hub (AGENTS.md: no state files inside a hub or a repository). Judged where the
+// file would land, before any folder is made, so neither an alias nor a link to the hub nor a folder not made yet
+// gets past it.
+function checkOutsideHub(file, hubDir) {
+  if (isInside(landing(file), realHub(hubDir))) throw new RegistryError(`the record may not live inside the hub: ${file}`);
+  return file;
+}
+
+const WRITES = Object.freeze(['upsert', 'status', 'request', 'reconcile']);
+
+function resolveFile(command, options) {
   if (options.file) {
     if (!isAbsolute(options.file)) throw new RegistryError(`--file must be an absolute path: ${options.file}`);
     const file = resolve(options.file);
-    if (options.hub) {
-      const hub = realHub(options.hub);
-      let fileDir;
-      try {
-        fileDir = realpathSync.native(dirname(file)).normalize('NFC');
-      } catch {
-        fileDir = dirname(file).normalize('NFC');
-      }
-      if (isInside(fileDir, hub)) throw new RegistryError(`the record may not live inside the hub: ${file}`);
+    if (options.hub) return checkOutsideHub(file, options.hub);
+    if (WRITES.includes(command)) {
+      throw new RegistryError(`a write with --file needs --hub <dir> too, so that the file can be checked against the hub`);
     }
     return file;
   }
-  if (options.hub) return defaultRegistryPath(options.hub);
+  if (options.hub) return checkOutsideHub(defaultRegistryPath(options.hub), options.hub);
   throw new RegistryError('give --hub <dir> or --file <path>');
 }
 
@@ -331,9 +435,11 @@ function liveNames(options) {
 // Returns { out, note }: `out` goes to stdout, `note` (if any) to stderr.
 export function runCli(argv) {
   const { command, options } = parseArgs(argv);
-  if (!COMMANDS.includes(command)) throw new RegistryError(`unknown command "${command}"; use ${COMMANDS.join(', ')}`);
-  if (command === 'path') return { out: defaultRegistryPath(required(options, 'hub')) };
-  const file = resolveFile(options);
+  if (command === 'path') {
+    const hub = required(options, 'hub');
+    return { out: checkOutsideHub(defaultRegistryPath(hub), hub) };
+  }
+  const file = resolveFile(command, options);
   const hub = options.hub ? { hub: options.hub } : {};
   const json = (value) => ({ out: JSON.stringify(value, null, 2) });
   switch (command) {
@@ -344,7 +450,7 @@ export function runCli(argv) {
     case 'upsert':
       return json(upsertChild(file, parseEntry(required(options, 'entry')), hub));
     case 'status':
-      return json(setStatus(file, required(options, 'name'), required(options, 'status'), hub));
+      return json(setStatus(file, required(options, 'name'), required(options, 'status'), { ...hub, reason: options.reason }));
     case 'request': {
       const request = { text: required(options, 'text'), ...(options.outcome ? { outcome: options.outcome } : {}) };
       return json(addRequest(file, required(options, 'name'), request, hub));

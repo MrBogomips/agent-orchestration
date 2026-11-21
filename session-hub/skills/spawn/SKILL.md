@@ -41,7 +41,8 @@ repositories need a child at all.
    one in a line.
 4. **Duplicates.** For each piece, look for a live child that already follows it (same repository, and same task
    or name), in the record and in what the environment lists: `ListAgents`, the desktop app's linked sessions,
-   `herdr agent list`, `tmux list-panes -a`, `claude agents --json`. If one exists, send it the new request with
+   `herdr agent list`, tmux's tagged panes (`list-panes` in [tmux.md](references/environments/tmux.md)),
+   `claude agents --json`. If one exists, send it the new request with
    the `[master]` prefix instead of starting another, and say so.
 5. **Environment.** Pick it with the table in *Environments*, unless the configuration names one.
 6. **Master identity.** In Claude Code, `ListAgents` starts with `This session is <name> [<ref>]`: the name is
@@ -92,7 +93,7 @@ Check in this order and take the first that applies.
 |---|---|---|---|
 | A session-starting tool such as the desktop app's `start_session` is available (it may be deferred: search for it) | Claude desktop app | the tool, `cwd` set to the repository | inactive |
 | `HERDR_ENV` is `1` and `herdr` is on `PATH` | Herdr | a tab or a pane with `--env`, then `herdr agent start` | active |
-| `TMUX` is set and `tmux` is on `PATH` | tmux | a window or a pane, then the command typed into it | active |
+| `TMUX` is set and `tmux` is on `PATH` | tmux | a window or a pane running the command, given as arguments | active |
 | `claude --help` lists `--bg` | Terminal | `claude --bg` from the repository | active |
 | None of the above | Manual | commands and a handoff file handed to the user | active if the user runs the command as given |
 

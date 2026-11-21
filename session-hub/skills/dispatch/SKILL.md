@@ -23,8 +23,8 @@ Starting a child is `session-hub:spawn`'s job; this skill decides when to call i
    *Master only* key and any dispatch criteria the hub adds in its instruction file: they extend the table below.
 2. **Children record.** Reconcile it with the live sessions, as `session-hub:spawn` does in its step 3, with
    `reconcile` (commands in *Children record* below). Take the live names from the same sources as
-   `session-hub:spawn` step 4 (`ListAgents`, `herdr agent list`, `tmux list-panes -a`, the desktop app's linked
-   sessions). They match the record because each child is started with `-n <name>`. If no list could be read,
+   `session-hub:spawn` step 4 (`ListAgents`, `herdr agent list`, tmux's live panes tagged `@session_hub_child`,
+   the desktop app's linked sessions). They match the record because each child is started with `-n <name>`. If no list could be read,
    skip the reconcile and say so. Report any child that became `lost`.
 3. **Repositories.** Resolve which repositories the work touches from the task and the hub's *Repositories*. When
    unsure, ask. Never guess.
@@ -63,7 +63,7 @@ sibling always reaches you first; `/session-hub` shows the children panel.
 | `out-of-scope` | Route it (below) | `lastMessage`, a request with its outcome |
 | `pr` | Record the URL; do what the hub's rules say about pull requests | `lastMessage` |
 | `done` | Record it; follow the hub's closing rules | status `done` |
-| `abandoned` | Record it with the reason; tell the user | status `abandoned` |
+| `abandoned` | Record it with the reason; tell the user | status `abandoned --reason "<why>"` |
 
 Record each one with the helper script (*Children record* below). When a child says it waits for a person (an
 approval comment, a merge gate), set its status to `waiting-user`.
@@ -102,8 +102,8 @@ message, open requests. The record and the live session list are the source; the
 ## Replacing a child
 
 When a child fails on its task (repeated errors, a wrong turn it cannot recover from), ask the user before
-replacing it. Then set the old child's status to `abandoned` with the reason, and start a new one with
-`session-hub:spawn`, with a stronger model or effort when that was the cause, and a handoff that says what the
+replacing it. Then set the old child's status to `abandoned` with the reason
+(`status … --status abandoned --reason "<why>"`), and start a new one with `session-hub:spawn`, with a stronger model or effort when that was the cause, and a handoff that says what the
 first child tried and where it stopped.
 
 ## Common mistakes

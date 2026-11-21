@@ -21,6 +21,16 @@ test('a tmux start: the claude command quoted in send-keys -l', () => {
   assert.deepEqual(childStarts(command), [{ name: 't42-design', model: 'haiku', effort: 'low' }]);
 });
 
+test('a tmux start with the command as arguments: new-window or split-window, the variables in -e', () => {
+  const env = ENV.split(' ').map((pair) => `-e ${pair}`).join(' ');
+  const json = `--settings '{"crossSessionInbound":"accept"}'`;
+  for (const create of ["new-window -d -c /h/product -n t42-api -P -F '#{pane_id}'", "split-window -h -d -t \"$TMUX_PANE\" -c /h/product -P -F '#{pane_id}'"]) {
+    const command = `tmux ${create} ${env} -- claude ${json} -n t42-api --model sonnet --effort medium -- 'Read and follow /h/t.md'`;
+    assert.deepEqual(childStarts(command), [{ name: 't42-api', model: 'sonnet', effort: 'medium' }], create);
+  }
+  assert.deepEqual(childStarts('tmux new-window -d -- claude --model opus'), [], 'no SESSION_HUB_ROLE=child: not a child start');
+});
+
 test('a herdr start: the flags after --, the name from -n or else the agent', () => {
   assert.deepEqual(childStarts('herdr agent start t42-docs --kind claude --pane p1 -- -n t42-docs --model sonnet --effort medium'), [
     { name: 't42-docs', model: 'sonnet', effort: 'medium' },

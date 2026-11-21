@@ -4,6 +4,26 @@
 
 const NAME = 'SESSION_HUB_SCOPE_ROOT';
 
+const SETTINGS_NAME = /^settings[^/]*\.json$/;
+
+/**
+ * Whether `path` is the repository's Claude Code settings, `<root>/.claude/settings*.json`. Their `env` and hook
+ * settings can turn a child's guards off (issue #56), so a child may not write them. Both paths are absolute and
+ * normalised; the comparison ignores case, as the usual macOS file system does.
+ * @param {string} path
+ * @param {string} root
+ */
+export function isRootSettings(path, root) {
+  const folder = `${root === '/' ? '' : root}/.claude/`.toLowerCase();
+  const lower = path.toLowerCase();
+  return lower.startsWith(folder) && SETTINGS_NAME.test(lower.slice(folder.length));
+}
+
+/** Why a write to the repository's settings is blocked; the caller adds the route to the master. */
+export const settingsReason = (path) =>
+  `${path} is this repository's Claude Code settings file. Its env and hook settings can turn this child's guards ` +
+  'off, so a child does not change it: the master does, if the change is needed.';
+
 /**
  * The root as configured: set and absolute. Returns it unchanged.
  * @param {unknown} raw

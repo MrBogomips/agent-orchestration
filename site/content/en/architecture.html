@@ -1,4 +1,4 @@
-<!-- translated-from: it/architecture.html sha256:98e6ad19f967 -->
+<!-- translated-from: it/architecture.html sha256:1a111c0f49cd -->
 <h1>Architecture</h1>
 <p class="lede">This page shows how the two plugins are built in the released version (session-hub {{version:session-hub}} and model-router {{version:model-router}}): what components they consist of, how they interact, what files they store on disk, and how they behave when something goes wrong.</p>
 
@@ -130,8 +130,8 @@
 <pre><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></pre>
 <p>The <code>&lt;hub id&gt;</code> identifier is the first 16 hexadecimal digits of the SHA-256 of the hub's real path normalized to Unicode NFC, so the same hub reached through a symlink always gets the same ID. The directory is created with <code>0700</code> permissions, and the record file and its lock with <code>0600</code>.</p>
 <ul>
-  <li><strong>Commands:</strong> <code>path</code>, <code>read</code>, <code>upsert</code>, <code>status</code>, <code>request</code>, and <code>reconcile</code>, each taking <code>--hub</code> or <code>--file</code>.</li>
-  <li><strong>Lock:</strong> an exclusive <code>&lt;record&gt;.lock</code> file; writers wait up to 5 seconds, and a lock older than 30 seconds is treated as stale.</li>
+  <li><strong>Commands:</strong> <code>path</code>, <code>read</code>, <code>upsert</code>, <code>status</code>, <code>request</code>, and <code>reconcile</code>, each with <code>--hub</code> (and <code>--file</code> for a record at a different path). An option the command does not accept exits with an error without writing anything, and a path that resolves inside the hub, even through a link or a directory that has not been created yet, is rejected.</li>
+  <li><strong>Lock:</strong> an exclusive <code>&lt;record&gt;.lock</code> file; writers wait up to 5 seconds, and a lock older than 30 seconds, or whose process has exited, is treated as stale and taken over atomically, so two processes cannot delete each other's lock.</li>
   <li><strong>Atomic writes:</strong> write to a temporary file in the same directory, flush to disk, and rename over the record.</li>
   <li><strong>Never overwritten when unreadable:</strong> a file that does not contain valid JSON, or that belongs to a newer format version, is reported and left untouched so you can inspect it.</li>
   <li><strong>States:</strong> <code>running</code> → <code>waiting-user</code>, <code>done</code>, <code>abandoned</code>, or <code>lost</code>; <code>reconcile</code> marks an active entry missing from the session list as <code>lost</code> and rejects an empty list.</li>

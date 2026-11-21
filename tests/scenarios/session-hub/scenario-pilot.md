@@ -30,8 +30,16 @@ In the master, ask:
 
 ## Role variables, model and effort
 
-- [ ] Herdr: each pane gets `--env SESSION_HUB_ROLE=child` and the other five `SESSION_HUB_*` variables; tmux,
-      terminal and manual: the command starts with `env SESSION_HUB_ROLE=child …`
+- [ ] Herdr: each pane gets `--env SESSION_HUB_ROLE=child` and the other five `SESSION_HUB_*` variables; tmux:
+      the pane is made with `-e SESSION_HUB_ROLE=child` and the others; terminal and manual: the command starts
+      with `env SESSION_HUB_ROLE=child …`
+- [ ] tmux, the child's name (issue #31): once the child has drawn its interface,
+      `tmux list-panes -a -F '#{pane_dead} #{@session_hub_child}'` shows `0 <name>` for its pane (the pane title
+      shows Claude Code's own title, which is why it is not used); after the child exits, the line starts with `1`
+- [ ] tmux, carried values (issue #30): with the hub's carried flags holding
+      `--settings '{"crossSessionInbound":"accept"}'`, start a child; in it, `ps -o args= -p $PPID` (or the
+      transcript's first lines) shows the JSON with its double quotes, and a carried value with `$HOME` arrives
+      unexpanded
 - [ ] In the child, `printenv SESSION_HUB_ROLE SESSION_HUB_SCOPE_ROOT SESSION_HUB_MASTER` shows `child`, the
       write root and the master's name
 - [ ] Desktop app: the report says the scope guard is inactive there
@@ -65,7 +73,8 @@ In the master, ask:
 Start the master through a wrapper that sets `CLAUDE_CONFIG_DIR` to a second profile and adds a configuration
 flag, for example `env CLAUDE_CONFIG_DIR=<profile>/.claude claude --setting-sources user,project`.
 
-- [ ] Herdr: each child pane gets `--env CLAUDE_CONFIG_DIR=…`; tmux and manual: the `env` prefix has it;
+- [ ] Herdr: each child pane gets `--env CLAUDE_CONFIG_DIR=…`; tmux: `-e CLAUDE_CONFIG_DIR=…`; manual: the `env`
+      prefix has it;
       `claude --bg`: no identity variables on the command line
 - [ ] The child's command carries `--setting-sources user,project` and not the master's `-n`, `--resume` or
       prompt

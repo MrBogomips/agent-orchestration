@@ -612,3 +612,18 @@ test('find -delete removes under its starting points', async () => {
     await allowed(command);
   }
 });
+
+// Issue #56: the repository's settings can turn the guards off
+
+test("a shell write to the repository's Claude Code settings is blocked, with the master as the route", async () => {
+  for (const command of ["echo '{\"env\":{\"SESSION_HUB_GUARDS\":\"off\"}}' > .claude/settings.local.json", 'tee /w/repo/.claude/settings.json < x',
+    'rm .claude/settings.local.json', 'sed -i s/on/off/ .claude/settings.json', 'cp x .claude/settings.local.json', 'mv x .claude/Settings.Local.json',
+    'cd .claude && echo {} > settings.json', 'echo {} > src/../.claude/settings.json']) {
+    const verdict = await denied(command);
+    assert.match(verdict.reason, /settings/, command);
+    assert.match(verdict.reason, /out-of-scope/, command);
+  }
+  for (const command of ['cat .claude/settings.json', 'echo x > .claude/agents/a.md', 'echo {} > .claude/notes.json', 'echo {} > src/.claude/settings.json']) {
+    await allowed(command);
+  }
+});

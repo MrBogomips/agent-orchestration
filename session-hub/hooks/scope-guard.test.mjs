@@ -203,6 +203,31 @@ describe('evaluate', () => {
     assert.equal(evaluate(edit(join(root, 'src', 'a.txt')), childEnv()).allow, true);
   });
 
+  test("blocks a write to the repository's Claude Code settings, which can turn the guards off", () => {
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    for (const name of ['settings.json', 'settings.local.json', 'SETTINGS.LOCAL.JSON']) {
+      for (const tool of ['Write', 'Edit']) {
+        const result = evaluate({ tool_name: tool, tool_input: { file_path: join(root, '.claude', name) } }, childEnv());
+        assert.equal(result.allow, false, `${tool} ${name}`);
+        assert.match(result.reason, /settings/, name);
+        assert.match(result.reason, /out-of-scope/, name);
+        assert.match(result.reason, /master/, name);
+      }
+    }
+    const viaDots = evaluate(edit(`${root}/src/../.claude/settings.local.json`), childEnv());
+    assert.equal(viaDots.allow, false);
+    for (const allowed of [join(root, '.claude', 'agents', 'x.md'), join(root, '.claude', 'notes.json'), join(root, 'src', '.claude', 'settings.json')]) {
+      assert.equal(evaluate(edit(allowed), childEnv()).allow, true, allowed);
+    }
+  });
+
+  test('a link inside the root to the settings file is blocked too', () => {
+    mkdirSync(join(root, '.claude'), { recursive: true });
+    writeFileSync(join(root, '.claude', 'settings.local.json'), '{}');
+    symlinkSync(join(root, '.claude', 'settings.local.json'), join(root, 'src', 'cfg.json'));
+    assert.equal(evaluate(edit(join(root, 'src', 'cfg.json')), childEnv()).allow, false);
+  });
+
   test('a folder with several links is not a hard-linked file', () => {
     mkdirSync(join(root, 'src', 'nested', 'deeper'), { recursive: true });
     assert.equal(evaluate(edit(join(root, 'src', 'nested')), childEnv()).allow, true);
