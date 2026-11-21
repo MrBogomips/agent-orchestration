@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync, utimesSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, realpathSync, existsSync, utimesSync, symlinkSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -17,6 +17,7 @@ import {
   addRequest,
   reconcile,
   RegistryError,
+  removeIfStale,
 } from './registry.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'registry.mjs');
@@ -219,6 +220,29 @@ describe('record', () => {
     assert.equal(existsSync(`${file}.lock`), false);
   });
 
+  test('a stale lock is taken over only if it is still the one examined', () => {
+    const lock = `${file}.lock`;
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(lock, 'stale');
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(lock, old, old);
+    const examined = statSync(lock);
+    // Between the look and the takeover, another writer removed the stale lock and took its own.
+    rmSync(lock);
+    writeFileSync(lock, `${process.pid}\n`);
+    removeIfStale(lock, examined);
+    assert.equal(readFileSync(lock, 'utf8'), `${process.pid}\n`, 'the fresh lock is left in place');
+    assert.deepEqual(readdirSync(dirname(file)).filter((f) => f.includes('.stale')), []);
+  });
+
+  test('a lock whose holder is no longer running is cleared without waiting for it to go stale', () => {
+    upsertChild(file, entry('a'), { now });
+    const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
+    writeFileSync(`${file}.lock`, `${gone.stdout}\n`);
+    upsertChild(file, entry('b'), { now, lockTimeoutMs: 1000 });
+    assert.equal(readRecord(file).children.length, 2);
+  });
+
   test('the lock is released after a failed write', () => {
     upsertChild(file, entry('a'), { now });
     assert.throws(() => setStatus(file, 'nobody', 'done'), RegistryError);
@@ -297,6 +321,29 @@ describe('command line', () => {
     for (const r of results) assert.equal(r.code, 0, r.stderr);
     const names = readRecord(defaultRegistryPath(hub, { CLAUDE_CONFIG_DIR: join(base, 'cfg') })).children.map((c) => c.name);
     assert.equal(names.length, 10);
+  });
+
+  test('writers racing for a stale lock lose no update', async () => {
+    const { spawn } = await import('node:child_process');
+    const cfg = { CLAUDE_CONFIG_DIR: join(base, 'cfg') };
+    const record = defaultRegistryPath(hub, cfg);
+    mkdirSync(dirname(record), { recursive: true });
+    for (let round = 0; round < 3; round += 1) {
+      writeFileSync(`${record}.lock`, 'stale');
+      const old = new Date(Date.now() - 60_000);
+      utimesSync(`${record}.lock`, old, old);
+      const runOne = (i) =>
+        new Promise((resolve) => {
+          const child = spawn(process.execPath, [SCRIPT, 'upsert', '--hub', hub, '--entry', JSON.stringify(entry(`r${round}-${i}`))],
+            { env: { ...process.env, ...cfg }, stdio: ['ignore', 'ignore', 'pipe'] });
+          let stderr = '';
+          child.stderr.on('data', (chunk) => (stderr += chunk));
+          child.on('exit', (code) => resolve({ code, stderr }));
+        });
+      const results = await Promise.all(Array.from({ length: 12 }, (_, i) => runOne(i)));
+      for (const r of results) assert.equal(r.code, 0, r.stderr);
+    }
+    assert.equal(readRecord(record).children.length, 36);
   });
 
   test('--file overrides the default path, and a file inside the hub is refused', () => {

@@ -46,7 +46,8 @@ node "$R" request --hub /abs/hub --name <child> --text "<request>" --outcome "<w
   `upsert` with status `running` or `waiting-user` onto a `done`, `abandoned` or `lost` entry is a new child under
   the old name: it gets a fresh entry, with nothing of the old one.
 - Writes take a lock next to the file. The script waits up to 5 seconds for it, then fails without writing;
-  a lock older than 30 seconds is stale and removed. Retry once, then treat it as an error.
+  a lock older than 30 seconds, or whose writer has ended, is stale and taken over. Retry once, then treat it as
+  an error.
 - An entry: `name`, `repo`, `task`, `scope` (`writeRoot`, `external`), `model`, `effort`, `status`, `reason` (set
   with `status --reason`, dropped by the next status without one), `started`, `lastMessage` (`type`, `at`, `text`),
   `requests`. Status is one of `running`, `waiting-user`, `done`,

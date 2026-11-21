@@ -22,6 +22,7 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
+  linkSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -108,12 +109,58 @@ export function readRecord(file) {
 // Synchronous sleep, so the helper stays a plain synchronous command.
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-function removeIfStale(lock) {
+const statOrNull = (path) => {
   try {
-    if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmSync(lock, { force: true });
+    return statSync(path);
   } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
+};
+
+// Whether the process that wrote its pid in the lock has ended. A lock still empty, or a pid of another user's
+// process (EPERM), counts as held.
+function holderIsGone(lock) {
+  let pid;
+  try {
+    pid = Number(readFileSync(lock, 'utf8').trim());
+  } catch {
+    return false;
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+}
+
+/**
+ * Removes the lock when it is stale (older than LOCK_STALE_MS, or its holder has ended), and only if it is still the
+ * lock that was examined (`examined`, its stat): the lock is first moved aside atomically, and if what was moved is
+ * another writer's fresh lock, it is put back. Two writers that both saw the stale lock can no longer remove each
+ * other's fresh one (issue #33).
+ */
+export function removeIfStale(lock, examined = statOrNull(lock)) {
+  if (!examined) return;
+  if (Date.now() - examined.mtimeMs <= LOCK_STALE_MS && !holderIsGone(lock)) return;
+  const aside = `${lock}.${process.pid}.${randomBytes(4).toString('hex')}.stale`;
+  try {
+    renameSync(lock, aside);
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+  const moved = statSync(aside);
+  if (moved.ino !== examined.ino || moved.mtimeMs !== examined.mtimeMs) {
+    try {
+      linkSync(aside, lock);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+  rmSync(aside, { force: true });
 }
 
 function acquireLock(file, timeoutMs) {
