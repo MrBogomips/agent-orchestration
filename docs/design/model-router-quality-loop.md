@@ -110,7 +110,7 @@ inside a hub or a repository.
 | `quality/.lock` | compaction lock (pid, time) | compaction |
 
 *Project id*: the first 16 hex characters of the SHA-256 of the normalized git remote URL of the session's
-repository, else of its root path. The file also stores the readable root path for the report.
+repository (`host/owner/repo`: no scheme, user, port or `.git`, lower case), else of its root path. The file also stores the readable root path for the report.
 
 **Aggregate cell**, keyed by class × tier × effort:
 
