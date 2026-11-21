@@ -215,5 +215,8 @@ It works in any project, with or without `session-hub`; when `session-hub` is in
 uses `choose-model` for the model and effort of child sessions. The skills work with mods turned off; the router,
 the command and the measurement need the mod.
 
+The user manual for both plugins, with screenshots of every tab of the usage view and of the report page, is
+`docs/manual/user-manual.pdf` in the source repository.
+
 Design: `docs/design/model-router.md` and `docs/design/model-router-quality-loop.md` in the source repository.
 Adaptive selection from the quality data comes in 0.4.

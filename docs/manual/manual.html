@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>session-hub and model-router: user manual</title>
+<meta name="description" content="User manual for the session-hub 0.2.4 and model-router 0.3.2 Claude Code plugins.">
+<style>
+:root {
+  --fg: #1d1d1b; --muted: #5f5f5a; --line: #d9d8d2; --accent: #2f5f9e; --code-bg: #f4f3ef; --note-bg: #eef3fa;
+  --warn-bg: #fbf3e4; --warn: #8a5300; --bg: #ffffff;
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fg: #e8e7e3; --muted: #a8a7a1; --line: #3a3935; --accent: #8db8ee; --code-bg: #232321; --note-bg: #1f2733;
+    --warn-bg: #2d261a; --warn: #e3a94f; --bg: #161615;
+  }
+}
+@page { size: A4; margin: 18mm 16mm 18mm 16mm;
+  @bottom-center { content: counter(page); font: 9pt "Helvetica Neue", Arial, sans-serif; color: #777; } }
+@page :first { @bottom-center { content: none; } }
+html { background: var(--bg); }
+body { margin: 0 auto; max-width: 180mm; padding: 0 16px; color: var(--fg); background: var(--bg);
+  font: 10.5pt/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+h1, h2, h3, h4 { line-height: 1.25; break-after: avoid; }
+h1 { font-size: 21pt; margin: 0 0 12pt; padding-top: 4pt; border-bottom: 2px solid var(--accent); padding-bottom: 6pt; }
+h2 { font-size: 14.5pt; margin: 20pt 0 6pt; color: var(--accent); }
+h3 { font-size: 11.5pt; margin: 14pt 0 4pt; }
+h4 { font-size: 10.5pt; margin: 10pt 0 2pt; }
+p { margin: 5pt 0; }
+a { color: var(--accent); text-decoration: none; }
+code { font: 9pt Menlo, "DejaVu Sans Mono", monospace; background: var(--code-bg); padding: 0 2px; border-radius: 2px; }
+pre { font: 8.6pt/1.4 Menlo, "DejaVu Sans Mono", monospace; background: var(--code-bg); border: 1px solid var(--line);
+  border-radius: 4px; padding: 7pt 9pt; white-space: pre-wrap; overflow-wrap: anywhere; break-inside: avoid; margin: 6pt 0; }
+pre code { background: none; padding: 0; font-size: inherit; }
+table { border-collapse: collapse; width: 100%; margin: 6pt 0 9pt; font-size: 9.4pt; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th, td { border-bottom: 1px solid var(--line); padding: 3pt 5pt; text-align: left; vertical-align: top; }
+th { border-bottom: 1.5px solid var(--fg); font-weight: 600; }
+figure { margin: 9pt 0 12pt; break-inside: avoid; text-align: center; }
+figure img { max-width: 100%; border-radius: 4px; border: 1px solid var(--line); }
+figure.half img { max-width: 72%; }
+figcaption { font-size: 9pt; color: var(--muted); margin-top: 4pt; text-align: left; }
+.note, .warn { border-left: 3px solid var(--accent); background: var(--note-bg); padding: 5pt 9pt; margin: 8pt 0; break-inside: avoid; }
+.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.chapter { break-before: page; }
+.cover { min-height: 230mm; display: flex; flex-direction: column; justify-content: center; }
+.cover h1 { border: none; font-size: 30pt; margin-bottom: 4pt; }
+.cover .sub { font-size: 14pt; color: var(--muted); margin: 0 0 24pt; }
+.cover table { width: auto; font-size: 10.5pt; }
+.toc ol { list-style: none; padding-left: 0; margin: 0; }
+.toc ol ol { padding-left: 16pt; }
+.toc li { margin: 2pt 0; }
+.toc > ol > li { margin-top: 7pt; font-weight: 600; }
+.toc > ol > li li { font-weight: normal; }
+.small { font-size: 9pt; color: var(--muted); }
+dl.faq dt { font-weight: 600; margin-top: 8pt; break-after: avoid; }
+dl.faq dd { margin: 2pt 0 0 0; }
+.qr table { font-size: 8.8pt; }
+.qr h3 { margin-top: 10pt; }
+@media screen { body { padding-top: 24px; padding-bottom: 48px; } .chapter { margin-top: 48px; } }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>session-hub and model-router</h1>
+  <p class="sub">User manual for two Claude Code plugins: coordinating sessions across a hub of repositories, and
+  choosing the model and the effort level of every agent.</p>
+  <table>
+    <tr><th>Plugin</th><th>Version</th><th>Marketplace</th></tr>
+    <tr><td><code>session-hub</code></td><td>0.2.4</td><td><code>mrbogomips</code></td></tr>
+    <tr><td><code>model-router</code></td><td>0.3.2</td><td><code>mrbogomips</code></td></tr>
+  </table>
+  <p class="small">Claude Code 2.1.329 or later for the mods; tested on 2.1.329 and 2.1.330. Source:
+  <code>docs/manual/manual.html</code> in the plugins' repository; rebuild the PDF with
+  <code>docs/manual/build.sh</code>. License: MIT.</p>
+</section>
+
+<nav class="toc chapter" id="toc">
+<h1>Contents</h1>
+<ol>
+  <li><a href="#ch1">1. The two plugins</a>
+    <ol>
+      <li><a href="#what">1.1 What they are and when to use them</a></li>
+      <li><a href="#install">1.2 Installation</a></li>
+      <li><a href="#requirements">1.3 Requirements</a></li>
+      <li><a href="#alone">1.4 Each plugin on its own</a></li>
+      <li><a href="#mods">1.5 Mods on and mods off</a></li>
+    </ol></li>
+  <li><a href="#ch2">2. session-hub</a>
+    <ol>
+      <li><a href="#concepts">2.1 Hub, master and child</a></li>
+      <li><a href="#sh-setup">2.2 Setting up a hub: <code>setup</code> and the <em>Child sessions</em> section</a></li>
+      <li><a href="#dispatch">2.3 Deciding: <code>dispatch</code></a></li>
+      <li><a href="#spawn">2.4 Starting children: <code>spawn</code></a></li>
+      <li><a href="#example">2.5 Worked example: one task, two repositories</a></li>
+      <li><a href="#record">2.6 The children record</a></li>
+      <li><a href="#messages">2.7 Messages and their five types</a></li>
+      <li><a href="#guards">2.8 The guards</a></li>
+      <li><a href="#origin">2.9 Origin marking and the scope line</a></li>
+      <li><a href="#sh-command">2.10 The <code>/session-hub</code> command and the children panel</a></li>
+      <li><a href="#sh-limits">2.11 Limits</a></li>
+    </ol></li>
+  <li><a href="#ch3">3. model-router</a>
+    <ol>
+      <li><a href="#grid">3.1 The grid</a></li>
+      <li><a href="#choose">3.2 <code>choose-model</code></a></li>
+      <li><a href="#mr-setup">3.3 Project defaults: <code>setup</code> and the <em>Model routing</em> section</a></li>
+      <li><a href="#router">3.4 The router mod and the judge</a></li>
+      <li><a href="#loop">3.5 The quality loop</a></li>
+      <li><a href="#mr-command">3.6 The <code>/model-router</code> usage view</a></li>
+      <li><a href="#report">3.7 The report page</a></li>
+      <li><a href="#options">3.8 Options</a></li>
+      <li><a href="#privacy">3.9 What is recorded, and where</a></li>
+      <li><a href="#mr-limits">3.10 Limits</a></li>
+    </ol></li>
+  <li><a href="#ch4">4. Troubleshooting and FAQ</a></li>
+  <li><a href="#ch5">5. Quick reference</a></li>
+</ol>
+<p class="small">The screenshots were taken from live sessions with invented data: a demo hub with two repositories,
+<code>design</code> and <code>product</code>, shown here under <code>/work/hub</code>, and six weeks of synthetic
+subagent records. Paths in them are shortened the same way.</p>
+</nav>
+
+<!-- ============================================================ 1 -->
+<section class="chapter" id="ch1">
+<h1>1. The two plugins</h1>
+
+<h2 id="what">1.1 What they are and when to use them</h2>
+<table>
+  <thead><tr><th style="width:22%">Plugin</th><th>What it does</th><th style="width:30%">Use it when</th></tr></thead>
+  <tr><td><code>session-hub</code> 0.2.4</td>
+      <td>A <em>master</em> session opened in a hub of repositories starts one <em>child</em> session per repository.
+      Each child gets a written scope, a model and an effort level, talks only to the master and sends requests
+      outside its scope to the master. A hook blocks a child's file writes outside its scope, and the master keeps a
+      record of its children.</td>
+      <td>Your work spans several repositories kept side by side in one folder, each with its own instructions,
+      skills and agents.</td></tr>
+  <tr><td><code>model-router</code> 0.3.2</td>
+      <td>One written grid guides the choice of model and effort level for subagents, child sessions and workflow
+      agents. A mod routes the subagent starts (through the <code>Agent</code> tool) that carry no model, and measures on your machine how often each choice was
+      right the first time and what a successful task cost.</td>
+      <td>You start subagents and want cheap work on cheap models, hard work on strong ones, and numbers to check the
+      choice against.</td></tr>
+</table>
+<p>Why a session per repository? An agent loads the instructions, skills and agents of the folder it runs in.
+Subagents, <code>--add-dir</code> and similar options run from the master's folder and miss the repository's own
+rules; a child started <em>in</em> the repository loads them.</p>
+<p>Why a grid? Left to itself, an agent starts every subagent on its own model and effort: simple lookups run on the
+most expensive model, and hard reviews sometimes run on a cheap one and come back for rework.</p>
+
+<h2 id="install">1.2 Installation</h2>
+<p>Both plugins are listed in the <code>mrbogomips</code> marketplace. Inside Claude Code:</p>
+<pre><code>/plugin marketplace add MrBogomips/claude-plugins
+/plugin install session-hub@mrbogomips
+/plugin install model-router@mrbogomips</code></pre>
+<p>Or from a shell:</p>
+<pre><code>claude plugin marketplace add MrBogomips/claude-plugins
+claude plugin install session-hub@mrbogomips
+claude plugin install model-router@mrbogomips</code></pre>
+<p>To try a plugin from a checkout of its source without installing it, start Claude Code with
+<code>claude --plugin-dir &lt;checkout&gt;/session-hub</code> (or <code>/model-router</code>).</p>
+
+<h2 id="requirements">1.3 Requirements</h2>
+<table>
+  <thead><tr><th style="width:32%">Requirement</th><th>Value</th></tr></thead>
+  <tr><td>Claude Code, for the mods</td><td>2.1.329 or later (both plugins declare <code>engines["claude-code"]: "&gt;=2.1.329"</code>); tested on 2.1.329 and 2.1.330</td></tr>
+  <tr><td>Claude Code, for messages between sessions (<code>session-hub</code>)</td><td>2.1.224 or later on macOS and Linux</td></tr>
+  <tr><td>Mods</td><td>Turned on, for the <code>session-hub</code> mod (send guard, shell check, origin marking, scope line, children panel, <code>/session-hub</code>) and the <code>model-router</code> mod (router, measurement, <code>/model-router</code>). The skills and the scope guard hook work without them.</td></tr>
+  <tr><td><code>node</code></td><td>On <code>PATH</code>: the scope guard, the record script, the panel and every <code>model-router</code> script run on Node. No dependencies.</td></tr>
+  <tr><td>Operating system</td><td>macOS or Linux</td></tr>
+</table>
+
+<h2 id="alone">1.4 Each plugin on its own</h2>
+<p>Each plugin works without the other. Where they meet, a skill names the other plugin's skill in full and checks at
+run time whether it is installed:</p>
+<ul>
+  <li><strong>Both installed.</strong> <code>session-hub:spawn</code> loads <code>model-router:choose-model</code> to
+  choose a child's model and effort when neither you nor the hub's <em>Model</em> and <em>Effort</em> keys did.</li>
+  <li><strong>Only <code>session-hub</code>.</strong> A child gets the <code>--model</code> and <code>--effort</code>
+  the master was launched with (without them, Claude Code's defaults), and <code>spawn</code> says so in its
+  report.</li>
+  <li><strong>Only <code>model-router</code>.</strong> It works in any project, with or without a hub. It knows
+  nothing about hubs.</li>
+</ul>
+
+<h2 id="mods">1.5 Mods on and mods off</h2>
+<p>A <em>mod</em> is a module a plugin loads into Claude Code to change its interface or behaviour: a panel, a
+command, a hook on a tool call. Both plugins ship one, loaded from <code>hooks/hooks.json</code>. With mods off:</p>
+<table>
+  <thead><tr><th>Part</th><th>Mods on</th><th>Mods off</th></tr></thead>
+  <tr><td><code>session-hub</code> skills, scope guard hook, children record</td><td>yes</td><td>yes</td></tr>
+  <tr><td>Send guard, shell check, origin marking, scope line, children panel, <code>/session-hub</code></td><td>yes</td><td>no</td></tr>
+  <tr><td><code>model-router</code> skills (<code>choose-model</code>, <code>setup</code>, <code>report</code>)</td><td>yes</td><td>yes</td></tr>
+  <tr><td>Routing of starts with no model, measurement, <code>/model-router</code></td><td>yes</td><td>no</td></tr>
+</table>
+<p>A quick check: type <code>/session-hub</code> or <code>/model-router</code>. If Claude Code does not know the
+command, the mod is not loaded (mods off, or a Claude Code version older than 2.1.329).</p>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="chapter" id="ch2">
+<h1>2. session-hub</h1>
+
+<h2 id="concepts">2.1 Hub, master and child</h2>
+<table>
+  <thead><tr><th style="width:22%">Term</th><th>Meaning</th></tr></thead>
+  <tr><td>Hub</td><td>A folder that holds several git repositories (as subfolders or submodules), each with its own instructions, skills and agents.</td></tr>
+  <tr><td>Master</td><td>The session opened in the hub. It coordinates and never writes in a child repository.</td></tr>
+  <tr><td>Child</td><td>A Claude Code session started by the master with a repository (or a worktree of it) as its working directory, so that it loads that repository's own rules.</td></tr>
+  <tr><td>Write root</td><td>The one folder where a child may create and change files.</td></tr>
+  <tr><td>Handoff</td><td>What the master writes for each child: role, goal, scope, references, siblings, message rules, first step. A file outside the hub, except in the desktop app, where it is passed inline.</td></tr>
+  <tr><td>Children record</td><td>A JSON file kept by the master outside the hub, with one entry per child.</td></tr>
+</table>
+
+<h3>How a session gets its role</h3>
+<p>A session is a <strong>child</strong> only when its launch command sets <code>SESSION_HUB_ROLE=child</code>;
+<code>spawn</code> does that. A session is a <strong>master</strong> when it runs <code>session-hub:spawn</code> or
+<code>session-hub:dispatch</code>; with mods on, the mod also treats a session as master once it runs the record script
+with a literal absolute <code>--hub</code> or <code>--file</code>, or when the record for its folder already lists
+children. Every other session is left alone. No role is inferred from the conversation.</p>
+<table>
+  <thead><tr><th style="width:36%">Variable (set by <code>spawn</code>)</th><th>Value</th></tr></thead>
+  <tr><td><code>SESSION_HUB_ROLE</code></td><td><code>child</code></td></tr>
+  <tr><td><code>SESSION_HUB_MASTER</code></td><td>the master's session name</td></tr>
+  <tr><td><code>SESSION_HUB_SCOPE_ROOT</code></td><td>absolute path of the write root; it must exist when the child starts</td></tr>
+  <tr><td><code>SESSION_HUB_HANDOFF</code></td><td>absolute path of the handoff file</td></tr>
+  <tr><td><code>SESSION_HUB_REGISTRY</code></td><td>absolute path of the children record (a child only reads it)</td></tr>
+  <tr><td><code>SESSION_HUB_GUARDS</code></td><td><code>on</code> or <code>off</code>; absent means <code>on</code></td></tr>
+</table>
+<p><code>SESSION_HUB_ROLE</code> is read without regard to case or surrounding spaces. Any value other than empty,
+<code>none</code>, <code>master</code> or <code>child</code> makes every guard block, so that a typo cannot switch
+the guards off.</p>
+
+<h3>The three skills</h3>
+<table>
+  <thead><tr><th style="width:24%">Skill</th><th>Side</th><th>Does</th></tr></thead>
+  <tr><td><code>session-hub:setup</code></td><td>master</td><td>Writes or updates the hub's <em>Child sessions</em> section, after an explicit yes.</td></tr>
+  <tr><td><code>session-hub:dispatch</code></td><td>master</td><td>Decides per repository whether the master reads, a subagent reads, or a child works; handles the children's messages and routes out-of-scope requests; keeps master-only duties.</td></tr>
+  <tr><td><code>session-hub:spawn</code></td><td>master</td><td>Starts one child per repository with a scope, a model, an effort, the role variables and a handoff; records each child.</td></tr>
+</table>
+<p>You rarely name a skill: ask in plain words ("start a child in product for T-42", "set up session-hub in this
+hub", "what are the children doing?") and the matching skill loads.</p>
+
+<h2 id="sh-setup">2.2 Setting up a hub: <code>setup</code> and the <em>Child sessions</em> section</h2>
+<p>The hub keeps its rules for children in a <code>## Child sessions</code> section of its instruction file:
+<code>AGENTS.md</code> at the hub root, or <code>CLAUDE.md</code> when there is no <code>AGENTS.md</code> (when
+<code>CLAUDE.md</code> is a link to <code>AGENTS.md</code>, the skills edit <code>AGENTS.md</code>). Every key is
+optional; without the section, <code>spawn</code> uses the defaults and offers <code>setup</code> in its report.</p>
+<p>Ask "set up session-hub for this hub" in the hub. <code>setup</code> looks at the hub (child folders with
+<code>.git</code>, <code>.gitmodules</code>, each repository's base branch and role, worktree rules), proposes a
+section, shows it, and writes it only when you choose <em>write it</em>. It does not commit.</p>
+<table>
+  <thead><tr><th style="width:17%">Key</th><th>Content</th><th style="width:32%">Default</th></tr></thead>
+  <tr><td>Repositories</td><td>relative path, one-line role, optionally the base branch</td><td>child folders holding <code>.git</code>, plus <code>.gitmodules</code> paths</td></tr>
+  <tr><td>Task IDs</td><td>the form of a task ID and where tasks live</td><td>the ID you give; otherwise a short slug</td></tr>
+  <tr><td>Propagate</td><td>hub rules to quote into the handoff of a child working <em>outside</em> the hub (a sibling worktree)</td><td>none</td></tr>
+  <tr><td>Master only</td><td>parts of the hub's file and duties that apply to the master only</td><td>none</td></tr>
+  <tr><td>Model</td><td>default model per repository or kind of work</td><td>none: <code>choose-model</code>, else inherited</td></tr>
+  <tr><td>Effort</td><td>default effort per repository or kind of work (<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>)</td><td>none: <code>choose-model</code>, else inherited</td></tr>
+  <tr><td>Scope</td><td>per repository, what a child may read outside its write root</td><td>nothing</td></tr>
+  <tr><td>Registry</td><td>path of the children record, outside the hub</td><td><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></td></tr>
+  <tr><td>Guards</td><td><code>on</code> or <code>off</code></td><td><code>on</code></td></tr>
+  <tr><td>Environment</td><td><code>auto</code>, <code>desktop</code>, <code>herdr</code>, <code>tmux</code>, <code>cli</code> or <code>manual</code></td><td><code>auto</code></td></tr>
+  <tr><td>Layout</td><td><code>tabs</code>, <code>panes</code> or <code>ask</code></td><td><code>ask</code></td></tr>
+  <tr><td>Worktrees</td><td><code>repo</code>, <code>always</code> or <code>never</code>, for children that edit</td><td><code>repo</code></td></tr>
+  <tr><td>Session name</td><td>a pattern for children's names</td><td><code>&lt;task&gt;-&lt;repo&gt;</code></td></tr>
+</table>
+<p>What you say in the conversation beats the keys, and the keys beat the defaults. An example section:</p>
+<pre><code>## Child sessions
+
+Settings for the session-hub plugin. The invocation says which repositories a piece of work touches.
+
+- Repositories:
+  - `design/`: specification and API documents, base branch `main`
+  - `product/`: code monorepo, base branch `develop`
+- Task IDs: `T-123`, listed in `backlog/tasks.md`
+- Master only: the sections *Backlog* and *Meetings* of this file; writing the story tracker
+- Model: design: opus; product: sonnet; read-only: haiku
+- Effort: product: medium; read-only: low
+- Scope:
+  - product: `design/docs/api/`
+- Environment: auto
+- Layout: panes
+- Worktrees: repo
+- Session name: `&lt;task&gt;-&lt;repo&gt;`</code></pre>
+<p><em>Model</em> and <em>Effort</em> take values per repository (the folder name) or per kind of work
+(<code>read-only</code>, <code>editing</code>, or a word the hub uses); a repository match beats a kind match.
+A <em>Scope</em> entry lets a child of that repository read those files; it does not let it analyse or change the
+other repository. A <em>Registry</em> path inside the hub is refused: state lives outside the hub.</p>
+
+<h2 id="dispatch">2.3 Deciding: <code>dispatch</code></h2>
+<p>In the master, a task that touches the hub's repositories goes through <code>dispatch</code>. It reads the
+<em>Child sessions</em> section, reconciles the children record with the live sessions, resolves which repositories
+the work touches (it asks when unsure, and never guesses), then picks the first row that fits for each:</p>
+<table>
+  <thead><tr><th>Situation</th><th style="width:44%">Action</th></tr></thead>
+  <tr><td>A child for that repository and task is already running</td><td>Message that child (<code>[master] …</code>); no second child</td></tr>
+  <tr><td>Any write in the repository</td><td>A child, with <code>session-hub:spawn</code></td></tr>
+  <tr><td>A read that needs the repository's own skills or rules to interpret</td><td>A read-only child</td></tr>
+  <tr><td>A broad read whose result is a conclusion</td><td>A read-only subagent of the master</td></tr>
+  <tr><td>A few known files to read</td><td>The master reads them itself</td></tr>
+</table>
+<p>More than about five files, a search of the repository or its build tools is no longer "a few known files". A
+read that turns into a change becomes a child. <code>dispatch</code> states its decision in a short table, then
+starts all the children in one <code>spawn</code> call, so that their handoffs name each other as siblings.</p>
+
+<h2 id="spawn">2.4 Starting children: <code>spawn</code></h2>
+<p>For each child, <code>spawn</code>:</p>
+<ol>
+  <li>resolves the repository and its base branch, and reads the hub configuration;</li>
+  <li>reconciles the children record (a child recorded as live but no longer listed becomes <code>lost</code>);</li>
+  <li>looks for a live child on the same repository and task, and sends it the request instead of starting another;</li>
+  <li>picks the environment, the name, the worktree and the write root, and the scope;</li>
+  <li>chooses the model and the effort: what you said, then the hub's <em>Model</em> and <em>Effort</em> keys, then
+  <code>model-router:choose-model</code> when installed, otherwise the <code>--model</code> and
+  <code>--effort</code> the master was launched with (none when it set none);</li>
+  <li>writes a handoff file outside the hub (<code>&lt;name&gt;-handoff.md</code> in the harness's scratchpad or a
+  new <code>mktemp -d</code> folder) and starts the child with a one-line prompt, <code>Read and follow &lt;file&gt;</code>;</li>
+  <li>records the child as <code>running</code>, and reports per child: name, repository, write root, model and
+  effort, environment, how to open it, and the caveats that apply.</li>
+</ol>
+
+<h3>Environments</h3>
+<p><code>spawn</code> takes the first environment that applies, unless the hub's <em>Environment</em> key names one.</p>
+<table>
+  <thead><tr><th style="width:16%">Environment</th><th style="width:30%">Detected when</th><th>Starts the child with</th><th style="width:14%">Scope guard</th></tr></thead>
+  <tr><td>Desktop app</td><td>a session-starting tool such as <code>start_session</code> is available</td><td>the tool, with the repository as working folder</td><td><strong>inactive</strong></td></tr>
+  <tr><td>Herdr</td><td><code>HERDR_ENV</code> is <code>1</code> and <code>herdr</code> is on <code>PATH</code></td><td>a tab or pane with <code>--env</code>, then <code>herdr agent start</code></td><td>active</td></tr>
+  <tr><td>tmux</td><td><code>TMUX</code> is set and <code>tmux</code> is on <code>PATH</code></td><td>a window or pane, then the command typed into it</td><td>active</td></tr>
+  <tr><td>Terminal</td><td><code>claude --help</code> lists <code>--bg</code></td><td><code>claude --bg</code> from the repository</td><td>active</td></tr>
+  <tr><td>Manual</td><td>none of the above</td><td>commands and a handoff handed to you</td><td>active if run as given</td></tr>
+</table>
+
+<h3>The launch command</h3>
+<p>A child starts the way the master was started, so that it uses the same account and configuration folder (two
+sessions with different configuration folders cannot message each other). <code>spawn</code> reads the master's
+arguments from the process list and builds:</p>
+<ul>
+  <li><strong>carried flags</strong> that configure the session (<code>--settings</code>, <code>--mcp-config</code>,
+  <code>--plugin-dir</code>, <code>--setting-sources</code>, <code>--agent</code>, <code>--append-system-prompt</code>);
+  the master's own (<code>--name</code>, <code>--resume</code>, <code>--worktree</code>, <code>--add-dir</code>, a
+  prompt…) and permission flags are left out;</li>
+  <li><strong>identity variables</strong>: <code>CLAUDE_CONFIG_DIR</code> when set, and <code>HOME</code> when it
+  differs from the account's home; nothing else from the environment;</li>
+  <li><strong>child flags</strong>: <code>-n &lt;name&gt;</code>, <code>--model</code>, <code>--effort</code>,
+  <code>--permission-mode</code>, <code>--add-dir &lt;handoff folder&gt;</code>, then <code>--</code> and the prompt;</li>
+  <li>the <strong>role variables</strong>, placed as each environment allows.</li>
+</ul>
+<p>Children start in the master's permission mode, because messages between sessions that differ on bypassing
+permission prompts wait for your approval. When the master bypasses permission prompts, <code>spawn</code> asks at
+every start which mode the children get.</p>
+
+<h3>Worktrees and the write root</h3>
+<table>
+  <thead><tr><th>Where the worktree lives</th><th>Who makes it</th><th>Write root</th></tr></thead>
+  <tr><td>No worktree (read-only child, or <code>Worktrees: never</code>)</td><td>—</td><td>the repository</td></tr>
+  <tr><td>Under the repository (for example <code>&lt;repo&gt;/.claude/worktrees/…</code>)</td><td>the child, as its repository's policy says</td><td>the repository</td></tr>
+  <tr><td>In a sibling folder (<code>&lt;repo&gt;-worktrees/&lt;name&gt;</code>)</td><td>the master, before the start (<code>git -C &lt;repo&gt; worktree add …</code>)</td><td>the worktree</td></tr>
+</table>
+<p>Making a sibling worktree is the only thing the master does in a repository. A background child
+(<code>claude --bg</code>) moves into a worktree under <code>&lt;repo&gt;/.claude/worktrees/</code> before its first
+edit, unless the repository sets <code>worktree.bgIsolation</code> to <code>"none"</code>.</p>
+<h3>Names and layout</h3>
+<p>Names come from the <em>Session name</em> pattern, lowercased, limited to <code>a-z0-9_-</code>, starting with a
+letter, at most 24 characters, with <code>-2</code>, <code>-3</code>… when taken. With <code>Layout: ask</code> (the
+default), <code>spawn</code> asks for tabs or panes and whether to save the answer as the hub's default; with more
+than four children in a stack of panes, the rest open as tabs. In Herdr, a child stopped at a trust prompt makes
+<code>herdr agent start</code> return <code>agent_not_ready</code>. In the desktop app, archiving a child session can
+lose its uncommitted changes.</p>
+
+<h2 id="example">2.5 Worked example: one task, two repositories</h2>
+<p>The hub <code>/work/hub</code> holds <code>design</code> (the API specification) and <code>product</code> (the
+code), with the section shown in 2.2. Task T-42: add a CSV export endpoint to <code>product</code>, and document its
+size limit in <code>design</code>. The master runs in tmux, in a session named <code>hub</code>
+(<code>claude -n hub</code>). The hub sets <code>- Session name: `t&lt;number&gt;-&lt;repo&gt;`</code>, so T-42 gives
+<code>t42-product</code>; with the default pattern <code>&lt;task&gt;-&lt;repo&gt;</code> the name would be
+<code>t-42-product</code>. The screenshots' children (<code>t123-…</code>) follow the same pattern. You type:</p>
+<pre><code>T-42: add GET /export to product (CSV, at most 10 000 rows) and document the limit in design/docs/api/export.md.</code></pre>
+<p><code>dispatch</code> loads, reconciles the record and states its decision:</p>
+<pre><code>| Repository | Action           | Why                                  |
+|------------|------------------|--------------------------------------|
+| product    | child (editing)  | writes code and tests                |
+| design     | child (editing)  | writes the API document              |</code></pre>
+<p>It then calls <code>spawn</code> once for both. With the hub's keys, <code>t42-product</code> runs on
+<code>sonnet</code> at <code>medium</code> and <code>t42-design</code> on <code>opus</code> (no <em>Effort</em> key
+for design, so <code>choose-model</code> chooses it when installed, or the master's is inherited). With
+<code>Layout: panes</code>, the first child opens to the right of the master and the next one below it:</p>
+<pre><code>tmux split-window -h -d -t "$TMUX_PANE" -c /work/hub/product -P -F '#{pane_id}'      # prints %12
+tmux select-pane -t %12 -T t42-product
+tmux send-keys -t %12 -l "env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub \
+  SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
+  SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json SESSION_HUB_GUARDS=on \
+  claude -n t42-product --model sonnet --effort medium --permission-mode default \
+  --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'"
+tmux send-keys -t %12 Enter</code></pre>
+<p>The same child in the other environments:</p>
+<pre><code># Herdr: the variables go on the pane, then the agent starts in it
+herdr pane split --current --direction right --cwd /work/hub/product --no-focus \
+  --env SESSION_HUB_ROLE=child --env SESSION_HUB_MASTER=hub ...
+herdr agent start t42-product --kind claude --pane &lt;pane-id&gt; -- -n t42-product --model sonnet ...
+herdr agent prompt t42-product "Read and follow &lt;dir&gt;/t42-product-handoff.md"
+
+# Terminal: a background session, opened with `claude attach t42-product`
+cd /work/hub/product &amp;&amp; env SESSION_HUB_ROLE=child ... claude --bg -n t42-product --model sonnet ... \
+  -- "Read and follow &lt;dir&gt;/t42-product-handoff.md"</code></pre>
+<p>The handoff (abridged) tells the child everything it needs and nothing it loads by itself:</p>
+<pre><code># T-42: CSV export endpoint (product)
+
+2026-11-20 · /work/hub/product · base branch develop · task T-42
+
+## Session
+Your role is `child` of the master `hub` (ref `8f2c1a`). Model sonnet, effort medium: the hub's Model and Effort
+keys for product.
+## Goal
+Add `GET /export`, which returns the filtered records as CSV. Done when a PR is open on `develop` with tests.
+## Scope
+- Write root: /work/hub/product
+- Task: the endpoint and its tests; no change to the record model or to other endpoints.
+- External references (read only): /work/hub/design/docs/api/export.md
+## Siblings
+`t42-design` (/work/hub/design) owns export.md. If the columns must change, ask the master first.
+## Messages
+The master is `hub`: `SendMessage` to `hub`. Start every message with `[T-42 product] &lt;type&gt;:` ...
+## Rules
+- You write only under your write root. ...
+## First step
+Read export.md, then write the failing test for `GET /export`.</code></pre>
+<p>The report ends with each child's name, repository, write root, model and effort, environment and how to watch it
+(here: its pane). While the children work, the master hears them through their messages and through
+<code>SendMessage</code> with <code>notify_when_idle</code>; it never polls. When <code>t42-product</code> needs the
+document changed, it sends <code>[T-42 product] out-of-scope: …</code>; the master routes it to
+<code>t42-design</code> and tells <code>t42-product</code> what will happen. When a child opens a pull request it
+sends <code>[T-42 product] pr: &lt;url&gt;</code>, and <code>done</code> when finished.</p>
+<div class="note"><strong>First run in a repository.</strong> Folder trust is not inherited by a repository nested in
+a trusted hub. A child may stop at the trust prompt in its own window, and <code>claude --bg</code> fails with
+<code>Workspace not trusted</code>. These prompts are yours to answer; <code>spawn</code> never answers them.</div>
+
+<h2 id="record">2.6 The children record</h2>
+<p>The master keeps one JSON file per hub, outside the hub:</p>
+<pre><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code></pre>
+<p><code>&lt;config dir&gt;</code> is <code>CLAUDE_CONFIG_DIR</code> when set, else <code>~/.claude</code>;
+<code>&lt;hub id&gt;</code> is the first 16 hexadecimal digits of the SHA-256 of the hub's real path (NFC). The hub's
+<em>Registry</em> key can name another path outside the hub. The folder is created with mode <code>0700</code>, the
+file with <code>0600</code>. One entry per child:</p>
+<pre><code>{
+  "name": "t42-product",
+  "repo": "/work/hub/product",
+  "task": "T-42",
+  "scope": { "writeRoot": "/work/hub/product", "external": ["/work/hub/design/docs/api/export.md"] },
+  "model": "sonnet", "effort": "medium",
+  "status": "running",
+  "started": "2026-11-20T10:00:00.000Z",
+  "lastMessage": { "type": "pr", "at": "2026-11-20T11:30:00Z", "text": "https://example.com/pr/1" },
+  "requests": [{ "at": "2026-11-20T11:00:00.000Z", "text": "update the API spec", "outcome": "sent to t42-design" }]
+}</code></pre>
+<table>
+  <thead><tr><th style="width:18%">Status</th><th>Meaning</th><th style="width:34%">Set by</th></tr></thead>
+  <tr><td><code>running</code></td><td>started, working</td><td>a new entry</td></tr>
+  <tr><td><code>waiting-user</code></td><td>waiting for a person: an approval, a merge gate</td><td><code>dispatch</code>, when the child says so</td></tr>
+  <tr><td><code>done</code></td><td>finished</td><td><code>dispatch</code>, on a <code>done</code> message</td></tr>
+  <tr><td><code>abandoned</code></td><td>stopped, with a reason</td><td><code>dispatch</code>, on <code>abandoned</code>, or when you agree to replace a failing child</td></tr>
+  <tr><td><code>lost</code></td><td>recorded as live, no longer in the session list</td><td>a reconcile</td></tr>
+</table>
+<p>The skills write the record only through <code>scripts/registry.mjs</code>, never by hand. You can read it
+yourself:</p>
+<pre><code>R="&lt;plugin folder&gt;/scripts/registry.mjs"
+node "$R" path --hub /work/hub          # the default path
+node "$R" read --hub /work/hub          # the record as JSON</code></pre>
+<p>The other commands are <code>upsert --entry '&lt;json&gt;'</code>, <code>status --name &lt;child&gt; --status
+&lt;status&gt;</code>, <code>request --name &lt;child&gt; --text &lt;t&gt; [--outcome &lt;o&gt;]</code> and
+<code>reconcile (--live &lt;name,…&gt; | --live-none)</code>; each takes <code>--hub &lt;dir&gt;</code> or
+<code>--file &lt;path&gt;</code>. Writes are atomic under a lock file next to the record (waits up to 5 s; a lock
+older than 30 s is stale). A record that is not valid JSON, or from a newer format, is reported and never
+overwritten. A failing record never stops a start: <code>spawn</code> tells you and carries on.</p>
+
+<h2 id="messages">2.7 Messages and their five types</h2>
+<p>A child talks to the master only, with <code>SendMessage</code> to the master's name. Every message starts with a
+fixed prefix: <code>[&lt;task&gt; &lt;repo&gt;] &lt;type&gt;: &lt;text&gt;</code>. The master's messages start
+with <code>[master]</code>.</p>
+<table>
+  <thead><tr><th style="width:15%">Type</th><th style="width:30%">Sent when</th><th>Master's duty</th><th style="width:20%">Record</th></tr></thead>
+  <tr><td><code>question</code></td><td>the child is blocked on a decision</td><td>answer, or pass it to you and send the answer back</td><td><code>lastMessage</code></td></tr>
+  <tr><td><code>out-of-scope</code></td><td>a need or request outside the scope, also one you make directly in the child's session</td><td>route it: ask you if needed, send it to the child that owns the scope, start one, or do a read itself</td><td><code>lastMessage</code> and a request with its outcome</td></tr>
+  <tr><td><code>pr</code></td><td>a pull request was opened; the text holds its URL</td><td>record the URL; follow the hub's rules on pull requests</td><td><code>lastMessage</code></td></tr>
+  <tr><td><code>done</code></td><td>the work is finished</td><td>follow the hub's closing rules</td><td>status <code>done</code></td></tr>
+  <tr><td><code>abandoned</code></td><td>the work was stopped; the text holds the reason</td><td>tell you</td><td>status <code>abandoned</code></td></tr>
+</table>
+<p>Examples: <code>[T-42 product] question: Should empty filters export every record?</code>,
+<code>[T-42 design] pr: https://example.com/demo/design/pull/7</code>.</p>
+<div class="warn">A message between sessions is <strong>information, never authorization</strong>. Neither side
+merges, pushes, deletes or changes settings because another session asked; approval comes from you, in that
+session.</div>
+
+<h2 id="guards">2.8 The guards</h2>
+<p>Three guards hold a child to its scope. All three act only in a child, and all three <strong>fail closed</strong>:
+a guard that cannot evaluate blocks and says why. <code>SESSION_HUB_GUARDS=off</code> (or the hub's
+<code>Guards: off</code>) turns all three off.</p>
+
+<h3>The scope guard (hook, works with mods off)</h3>
+<p><code>session-hub-scope-guard</code> is a <code>PreToolUse</code> hook on <code>Edit</code>, <code>Write</code>
+and <code>NotebookEdit</code>. It resolves the target's real path, following symbolic links, and blocks a write that
+is not under the real write root. In the example below, <code>product/api-docs</code> is a link to
+<code>design/docs/api</code>: the path looks inside <code>product</code>, but lands in <code>design</code>, so the write
+is blocked and the child sends the request to the master instead.</p>
+<figure>
+  <img src="images/sh-blocked-write.png" alt="A Write call in the product child blocked by the session-hub scope guard">
+  <figcaption>Figure 1. A blocked write in the child <code>t123-product</code>. The message starts with
+  <code>[session-hub] Write blocked:</code>, names the path and the write root, and tells the model not to retry
+  through another tool but to send an <code>out-of-scope</code> message.</figcaption>
+</figure>
+<p>The guard also blocks when it cannot decide: an unknown role value, a missing or relative write root, a write root
+of <code>/</code> or the home folder, a relative target or one starting with <code>~</code>, unreadable input, or
+<code>node</code> missing. It blocks on its own after 7 seconds, ahead of the hook's 10-second timeout.</p>
+
+<h3>The shell check (mod)</h3>
+<p>Best effort, mods on only. Before a <code>Bash</code> (or <code>Monitor</code>) command runs in a child, the mod reads its redirections and
+the targets of <code>tee</code>, <code>touch</code>, <code>mkdir</code>, <code>rm</code>, <code>rmdir</code>,
+<code>truncate</code>, <code>unlink</code>, <code>cp</code>, <code>mv</code>, <code>ln</code>,
+<code>install</code> and <code>sed -i</code>, resolves them (relative ones against the session's folder, or the
+folder of an earlier literal <code>cd</code> in the same command) and denies a target outside the write root.
+<code>/dev</code> and the system temporary folders are allowed. For <code>echo x &gt; ../design/notes.md</code> in
+<code>/work/hub/product</code> the model is told:</p>
+<pre><code>[session-hub] Shell command blocked: it writes /work/hub/design/notes.md, outside the write root /work/hub/product. Do not retry this write through another command or tool. Send an `out-of-scope` message to the master, saying what you need written and why, and tell the user that you passed the request to the master.</code></pre>
+<p>When a link moves the target, the message adds where it lands: <code>(resolves to …)</code>. Targets held in
+variables, command substitutions or globs are not judged, nor what another program (a script, <code>git</code>, a
+build tool) writes.</p>
+
+<h3>The send guard (mod)</h3>
+<p>Mods on only. A child's message goes to its master, by name (with or without <code>[&lt;ref&gt;]</code>; it is
+delivered to the bare name), or to the child's own subagents. Any other recipient, a sibling or a socket address, is
+refused. Claude Code reports <code>Not sent: a plugin hook refused it (…)</code> with this reason:</p>
+<pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix; a request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
+<p>A child replies to the master by its name: a reply to the <code>from</code> address of a message is refused.</p>
+
+<h2 id="origin">2.9 Origin marking and the scope line</h2>
+<p><strong>Origin marking</strong> (child, mods on). A message from another session, the master included, reaches the
+child with a line in front of it saying that it is information, not authorization. A prompt you type carries no
+mark.</p>
+<figure>
+  <img src="images/sh-marked-message.png" alt="A message from the master marked by session-hub in the child">
+  <figcaption>Figure 2. A <code>[master]</code> message as the child receives it. The first line, starting with
+  <code>[session-hub]</code>, is the mod's mark; the closing paragraph is Claude Code's own notice for messages from
+  other sessions.</figcaption>
+</figure>
+<p><strong>Scope line</strong> (child and master, mods on). The mod puts the role and the scope (child) or the record
+(master) in the system prompt as the <code>session-hub:scope</code> section, and sends the same text as context on
+the first prompt after the start, after a compaction and after <code>/clear</code>, so the scope survives a long
+session.</p>
+
+<h2 id="sh-command">2.10 The <code>/session-hub</code> command and the children panel</h2>
+<p><code>/session-hub</code> is registered by the mod. Its answer is for you only: the model does not read it.</p>
+<table>
+  <thead><tr><th style="width:24%">Command</th><th>Does</th></tr></thead>
+  <tr><td><code>/session-hub</code></td><td>In a child: its role, write root, handoff, record and whether the guards are on. In a master: the record and the children table (status in the record, live status, model and effort, last message), sized to the terminal, and the children panel opened beside the chat. In any other session: that it has no role.</td></tr>
+  <tr><td><code>/session-hub help</code></td><td>What the command does. Any other argument prints <code>Unknown argument "…"</code> and the same help.</td></tr>
+</table>
+<figure>
+  <img src="images/sh-master.png" alt="/session-hub in the master: the children table">
+  <figcaption>Figure 3. <code>/session-hub</code> in the master. <code>t118-product</code> finished earlier and is no
+  longer in the session list (<code>not listed</code>); the two T-123 children are live.</figcaption>
+</figure>
+<figure>
+  <img src="images/sh-panel.png" alt="The children panel">
+  <figcaption>Figure 4. The children panel, opened beside the chat. It refreshes every 30 seconds and on each
+  <code>/session-hub</code>; the live status comes from the session list (<code>ListAgents</code>).</figcaption>
+</figure>
+<figure>
+  <img src="images/sh-child.png" alt="/session-hub in a child">
+  <figcaption>Figure 5. <code>/session-hub</code> in the child <code>t123-product</code>.</figcaption>
+</figure>
+<figure>
+  <img src="images/sh-help.png" alt="/session-hub help">
+  <figcaption>Figure 6. <code>/session-hub help</code>.</figcaption>
+</figure>
+<p>In a session with no role the answer is: <code>This session has no session-hub role. It becomes a master when it
+uses session-hub:spawn or session-hub:dispatch.</code> With mods off there is no command; the record stays readable
+at its path (2.6).</p>
+
+<h2 id="sh-limits">2.11 Limits</h2>
+<ul>
+  <li><strong>Shell writes are covered on a best-effort basis, and only with mods on.</strong> The hook sees
+  <code>Edit</code>, <code>Write</code> and <code>NotebookEdit</code>; the shell check reads the command line only.
+  With mods off, a shell write is held back by the handoff alone.</li>
+  <li><strong>The desktop app has no guard.</strong> Its session tool takes no environment variables, so a child
+  started there has no role: the scope holds by the handoff alone, and <code>spawn</code> says so. Model and effort on
+  the app's start tool are unverified.</li>
+  <li><strong>The send guard needs mods on.</strong> With mods off, a sibling can still be messaged; the master-only
+  rule is then prose in the handoff.</li>
+  <li><strong>A child resumed without its variables is no longer a child.</strong> <code>claude --resume</code> typed
+  without the <code>SESSION_HUB_*</code> variables leaves the hook and the mod inactive.</li>
+  <li><strong>A killed hook lets the write through.</strong> Claude Code treats a hook killed or past its timeout as a
+  non-blocking error; the guard's own 7-second limit covers a slow guard, not a killed one.</li>
+  <li><strong>Trust is per repository</strong> (see 2.5).</li>
+  <li><strong>An organization's managed mod can skip parts of the mod.</strong> A managed mod that runs first can pass
+  an event on without the plugin's hooks; Claude Code then shows lines such as <code>session-hub: its prompt.compose
+  hook was skipped</code>. The scope line then rides prompts as context, and a compaction is told from the context's
+  size.</li>
+  <li>The panel's live status comes from the session list; a child the list does not show reads <code>not
+  listed</code>.</li>
+</ul>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="chapter" id="ch3">
+<h1>3. model-router</h1>
+<table>
+  <thead><tr><th style="width:26%">Component</th><th style="width:12%">Kind</th><th>Does</th></tr></thead>
+  <tr><td><code>model-router:choose-model</code></td><td>skill</td><td>The grid. Meant to load whenever the agent is about to start a subagent, a child session or a workflow, so that it passes a model and an effort explicitly.</td></tr>
+  <tr><td><code>model-router:setup</code></td><td>skill</td><td>Writes a project's <em>Model routing</em> section, after your yes.</td></tr>
+  <tr><td><code>model-router:report</code></td><td>skill</td><td>Builds and opens the quality report page.</td></tr>
+  <tr><td><code>model-router</code></td><td>mod</td><td>Routes subagent starts that carry no model; records decisions, starts, signals and reports. Fails open.</td></tr>
+  <tr><td><code>/model-router</code></td><td>command (mod)</td><td>The usage view, routing on or off, the report.</td></tr>
+</table>
+
+<h2 id="grid">3.1 The grid</h2>
+<h3>Model tiers</h3>
+<p>Go down the table and stop at the first row that fits.</p>
+<table>
+  <thead><tr><th style="width:11%">Tier</th><th style="width:40%">Fits when</th><th>Examples</th></tr></thead>
+  <tr><td><code>haiku</code></td><td>Simple, repetitive work whose result is easy to check, with no judgment calls.</td><td>List or summarize files; run a single command; rename a symbol; apply the same edit in many places</td></tr>
+  <tr><td><code>sonnet</code></td><td>What done looks like fits in one sentence.</td><td>A well-specified change across a few files; tests for existing code; a bug whose cause is described</td></tr>
+  <tr><td><code>fable</code></td><td>Large <strong>and</strong> open-ended work where judgment and accuracy really matter. Both must hold.</td><td>A complex design; an architecture decision with long-lasting consequences</td></tr>
+  <tr><td><code>opus</code></td><td>Everything else, and any time you hesitate between two tiers.</td><td>A review; debugging when the cause is unknown; most coordination work</td></tr>
+</table>
+<p>The tier names are aliases; which model sits behind each is configuration. By price, cheapest first:
+<code>haiku</code> &lt; <code>sonnet</code> &lt; <code>opus</code> &lt; <code>fable</code>. "One tier up" follows this
+order.</p>
+<h3>Effort</h3>
+<p>Ask in order and stop at the first yes:</p>
+<ol>
+  <li>Is it a simple task or a quick exchange? → <code>low</code></li>
+  <li>Would an unnoticed mistake cost money, a client or a wrong decision? → <code>high</code></li>
+  <li>Is it long, hard and critical, <strong>and</strong> does it run unattended? All three. → <code>xhigh</code></li>
+  <li>None of the above. → <code>medium</code></li>
+</ol>
+<p>Never <code>max</code>.</p>
+<h3>Task classes</h3>
+<table>
+  <thead><tr><th style="width:24%">Class</th><th>Covers</th><th style="width:26%">Usual choice (prior)</th></tr></thead>
+  <tr><td><code>read-search</code></td><td>find files, symbols or facts</td><td><code>haiku</code> · <code>low</code></td></tr>
+  <tr><td><code>read-analyze</code></td><td>read and conclude: explain, compare, summarize</td><td><code>sonnet</code> · <code>medium</code></td></tr>
+  <tr><td><code>edit-mechanical</code></td><td>repetitive edits that are easy to check</td><td><code>haiku</code> · <code>low</code></td></tr>
+  <tr><td><code>edit-specified</code></td><td>a change whose done-state fits in one sentence</td><td><code>sonnet</code> · <code>medium</code></td></tr>
+  <tr><td><code>review-debug</code></td><td>review, or debugging with an unknown cause</td><td><code>opus</code> · <code>medium</code></td></tr>
+  <tr><td><code>design-open</code></td><td>open-ended design where judgment matters</td><td><code>fable</code> · <code>high</code></td></tr>
+</table>
+<p>When none fits, the closest one is used; no class is invented. <code>review-debug</code> and
+<code>design-open</code> are never taken below the grid by quality hints.</p>
+<h3>Rules around the grid</h3>
+<ul>
+  <li><strong>In doubt, go up.</strong> Rework costs more than the saving.</li>
+  <li><strong>Risk belongs to the act, not the topic.</strong> Changing production, moving money or altering data that
+  cannot be restored is risky; writing or testing code about such things is not. A risky start gets at least
+  <code>high</code> effort and the <code>!</code> marker on its tag.</li>
+  <li><strong>Sessions: choose at the start.</strong> A running session's model is never changed.</li>
+  <li><strong>Escalate one step at a time.</strong> Retry with specific feedback; then raise the effort one level;
+  then start one tier up with a handoff.</li>
+  <li><strong>A coordinator's own model.</strong> A session that mostly delegates runs on <code>opus</code> at
+  <code>medium</code>, unless its own design work is hard.</li>
+  <li><strong>Inline or delegate.</strong> A small task whose files are already in context is done inline.</li>
+  <li><strong>Continue, do not restart.</strong> A follow-up goes to the subagent already started on the topic.</li>
+</ul>
+
+<h2 id="choose">3.2 <code>choose-model</code></h2>
+<p>The skill's description makes the agent load it when it is about to start work on another model; a start that
+skips it is caught by the router (3.4). The first rule that gives a value
+wins:</p>
+<ol>
+  <li>an explicit choice by you, in the conversation;</li>
+  <li>the project's <em>Model routing</em> section, when it names the kind of work or the class;</li>
+  <li>an agent definition that fixes its own model keeps it (only an effort is passed);</li>
+  <li>the grid.</li>
+</ol>
+<p>Before each start the agent writes one line, <code>&lt;model&gt; · &lt;effort&gt; · &lt;reason in under 12
+words&gt;</code>, passes <code>model</code> and <code>effort</code> on the start call, and begins the description
+with the class tag:</p>
+<pre><code>haiku · low · find callers of parseConfig, easy to check
+→ Agent  model: haiku  effort: low  description: "[mr:read-search] Find callers of parseConfig"
+
+sonnet · medium · CSV endpoint with tests, done-state is clear
+→ Agent  model: sonnet  effort: medium  description: "[mr:edit-specified] Add GET /export with tests"
+
+opus · high · rotating the production key cannot be undone
+→ Agent  model: opus  effort: high  description: "[mr:edit-specified!] Rotate the production API key"</code></pre>
+<p>For a child session, <code>session-hub:spawn</code> loads the skill and puts the result on the launch command as
+<code>--model &lt;tier&gt; --effort &lt;level&gt;</code>. For a workflow, the skill chooses per agent, one line each.</p>
+<p><strong>Quality hints.</strong> When <code>&lt;config dir&gt;/model-router/quality/recommendations.json</code>
+exists, the skill reads the entry for the class as a hint; it never overrides the order above, never goes below the
+grid for <code>review-debug</code> or <code>design-open</code> or below the project's defaults, and does not apply to a
+risky start. Releases up to 0.3 do not write this file.</p>
+
+<h2 id="mr-setup">3.3 Project defaults: <code>setup</code> and the <em>Model routing</em> section</h2>
+<p>Ask "set up model routing for this project" (or "always use opus for migrations"). <code>setup</code> finds the
+instruction file (<code>AGENTS.md</code>, the target of a <code>CLAUDE.md</code> link, or a plain
+<code>CLAUDE.md</code>), asks about defaults and exceptions, suggests some from the repository (migrations,
+infrastructure, billing, generated code, bulk refactors), shows the exact section and writes it only after your clear
+yes. Values stay inside the grid: models <code>haiku</code>, <code>sonnet</code>, <code>fable</code>,
+<code>opus</code>; effort <code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>; the six
+classes. It does not commit.</p>
+<pre><code>## Model routing
+
+Defaults for `model-router:choose-model`. An explicit choice in the conversation still wins; anything not
+listed here follows the grid.
+
+- Default: the grid
+- Coordinator: `opus` · `medium`
+
+| Kind of work | Class | Model | Effort | Why |
+|---|---|---|---|---|
+| Database migrations | `edit-specified` | `opus` | `high` | data cannot be restored |
+| Bulk renames across the codebase | `edit-mechanical` | `haiku` | `low` | checked by the compiler |</code></pre>
+
+<h2 id="router">3.4 The router mod and the judge</h2>
+<p>The skill makes the agent pass a model; the mod catches the starts that still carry none. At each subagent start
+through the <code>Agent</code> tool:</p>
+<table>
+  <thead><tr><th>The start</th><th style="width:50%">The router</th></tr></thead>
+  <tr><td>carries a model, is a fork or a resume</td><td>keeps it</td></tr>
+  <tr><td>names an agent whose definition fixes a model, a plugin's agent, or one whose definition it cannot read</td><td>keeps it</td></tr>
+  <tr><td>runs with routing off, or under a session-wide subagent model (<code>CLAUDE_CODE_SUBAGENT_MODEL</code>)</td><td>keeps it</td></tr>
+  <tr><td>carries no model</td><td>asks the judge, then sets the model and the effort</td></tr>
+</table>
+<p><strong>The judge</strong> is one call to the fast tier (default <code>haiku</code>, 8-second limit) with a prompt
+generated from the grid. It receives the subagent type, its short description and the first 4,000 characters of its
+task, and answers a tier, an effort, a class, a risk and its confidence. The router then:</p>
+<ul>
+  <li>lowers the model only at confidence ≥ 0.6 (<code>minDowngradeConfidence</code>), raises it at ≥ 0.3
+  (<code>minUpgradeConfidence</code>);</li>
+  <li>sends risky work (risk &gt; 0.7, or a <code>!</code> tag) to the deep tier with at least <code>high</code>
+  effort;</li>
+  <li>leaves the start unchanged on a judge error, a timeout or an unreadable answer (logged as <code>error</code>),
+  except a start tagged <code>!</code>, which still goes to the deep tier.</li>
+</ul>
+<p>Decisions are logged with an action: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>,
+<code>explicit</code>, <code>forced-risk</code> or <code>error</code>.</p>
+<p><strong>What it never touches.</strong> The start call itself is never changed: the model is set when the subagent
+starts and the effort on each of the subagent's model requests, so routing works in every permission mode, auto mode
+included. An effort the call already carries is kept. Starts made by a plugin's own code and workflow agents are
+measured, not routed. Of the built-in types, only <code>general-purpose</code> and <code>Explore</code> are routed.
+The judge's tiers stop at the deep tier: with the default <code>deepModel</code> (<code>opus</code>), the router never
+picks <code>fable</code>.</p>
+<p>Turn routing off for one session with <code>/model-router off</code> (and back with <code>on</code>), or for good
+with the <code>routeSubagents</code> option.</p>
+
+<h2 id="loop">3.5 The quality loop</h2>
+<p>Up to release 0.3 the router only <em>measures</em>; choosing from the data comes in 0.4. Here is what is
+measured, in plain words.</p>
+<h3>A task and its outcome</h3>
+<p>Each subagent start is one <strong>task</strong>. Its outcome is fixed when its <strong>rework window</strong>
+closes: 30 minutes after the subagent's report (<code>reworkWindowMin</code>), or the end of the session.</p>
+<table>
+  <thead><tr><th style="width:15%">Outcome</th><th>When</th></tr></thead>
+  <tr><td><code>success</code></td><td>the subagent reported and nothing in the window redid its work</td></tr>
+  <tr><td><code>rework</code></td><td>in the window, the main session or another agent wrote one of its files; or a similar start of the same class followed; or one of the next two prompts you typed named its files or its task</td></tr>
+  <tr><td><code>failure</code></td><td>it failed, or was stopped by its parent and redone</td></tr>
+  <tr><td><code>cancelled</code></td><td>no report (for example, the session ended first), or stopped</td></tr>
+</table>
+<p>"Similar" means that the distinct words the two texts share are at least half of all the distinct words in
+both (<code>similarityThreshold</code> 0.5), ignoring common words such as <em>the</em> and <em>to</em> and the class
+tag. A task that never reports is closed as <code>cancelled</code> after 24 hours.</p>
+<h3>The numbers</h3>
+<table>
+  <thead><tr><th style="width:30%">Measure</th><th>Meaning</th></tr></thead>
+  <tr><td>First-pass yield (FPY)</td><td>success ÷ (success + rework + failure): how often the work was right the first time. A cancelled task counts in the tasks, not in FPY.</td></tr>
+  <tr><td>Rework rate</td><td>rework ÷ (success + rework + failure)</td></tr>
+  <tr><td>Cost per task</td><td>the mean estimated cost of a task, from the engine's own estimate</td></tr>
+  <tr><td>Cost per successful task (<code>$/success</code>)</td><td>cost per task ÷ FPY: what one good result really costs, rework included. A cheap model that is often wrong can cost more per success than a dearer one.</td></tr>
+</table>
+<p>The numbers are kept in <strong>cells</strong> of class × tier × effort (for example
+<code>edit-specified · sonnet · medium</code>), at two <strong>levels</strong>: you across all projects (user), and
+each project. A project is identified by its git remote, else its root folder. Aggregates are aged with a 30-day
+half-life (<code>halfLifeDays</code>), so old work weighs less.</p>
+<h3>What is learned</h3>
+<p>Cancelled tasks, risky tasks, tasks with no class (no <code>[mr:&lt;class&gt;]</code> tag and no judge answer),
+tasks on a model outside the four families and tasks with no known effort are recorded but not learned. Read-only
+classes and cells with fewer than five tasks are <strong>weak signals</strong> and are flagged.</p>
+<h3>Recommendations</h3>
+<p>For each class, the recommended cell is the one with the lowest cost per successful task among the cells with at
+least three tasks, never below the grid for <code>review-debug</code> and <code>design-open</code>; with no such cell,
+the grid's usual choice stands. A recommendation that differs from the grid is marked <code>(differs)</code>. In 0.3
+it is information only: the router does not act on it.</p>
+<h3>Class tags</h3>
+<p>The class comes from the tag at the start of the description, <code>[mr:&lt;class&gt;]</code>, or
+<code>[mr:&lt;class&gt;!]</code> for a risky start; without a tag, from the judge's answer. Tag your own starts when
+you write them by hand: an untagged start that the router does not judge has no class and is not learned.</p>
+<h3>Compaction</h3>
+<p>The mod appends records to <code>events.jsonl</code>. <strong>Compaction</strong> (at session start, when the view
+opens or refreshes, and before the report) closes the tasks whose window ended, appends their outcomes and folds them
+into the aggregates. It is safe to repeat: a task is never counted twice.</p>
+
+<h2 id="mr-command">3.6 The <code>/model-router</code> usage view</h2>
+<table>
+  <thead><tr><th style="width:46%">Command</th><th>Does</th></tr></thead>
+  <tr><td><code>/model-router</code></td><td>Opens the usage view on Overview, last 7 days, user level</td></tr>
+  <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens it on that tab, window and level, in any order (<code>stats</code> and <code>log</code> work as <code>classes</code> and <code>decisions</code>)</td></tr>
+  <tr><td><code>/model-router on</code>, <code>/model-router off</code></td><td>Turns routing on or off for this session</td></tr>
+  <tr><td><code>/model-router report</code></td><td>Writes and opens the report page, and prints its path</td></tr>
+  <tr><td><code>/model-router help</code></td><td>Lists the arguments and the keys; any unknown argument does the same</td></tr>
+</table>
+<p>For example, <code>/model-router classes 30d project</code> opens Classes over the last 30 days for this project.</p>
+<table>
+  <thead><tr><th style="width:30%">Key</th><th>Does</th></tr></thead>
+  <tr><td><code>1</code>–<code>4</code>, Tab, ← →</td><td>Switches tab</td></tr>
+  <tr><td><code>d</code>, <code>w</code>, <code>m</code>, <code>a</code></td><td>Window: last 24 hours, 7 days, 30 days, all time</td></tr>
+  <tr><td><code>p</code></td><td>Switches between your data across projects (user) and this project's</td></tr>
+  <tr><td><code>o</code></td><td>Writes and opens the report page; a toast gives its path</td></tr>
+  <tr><td><code>r</code></td><td>Refreshes: runs compaction and reads again</td></tr>
+  <tr><td>Esc</td><td>Closes the view</td></tr>
+</table>
+<p>Opening the view runs compaction for at most 3 seconds; if it takes longer, the view shows the numbers as of the
+last compaction and says so. Where no pane can be placed (<code>claude -p</code>, a headless run, a terminal under 60
+columns), the command prints the same rows as text: the tab you named, or all four. Every answer is for you only.</p>
+
+<h3>Overview</h3>
+<figure class="half">
+  <img src="images/mr-overview.png" alt="model-router usage view, Overview tab">
+  <figcaption>Figure 7. Overview: routing, measuring and adapt status; this session's subagents by model with their
+  tokens and cost; this session's routing decisions by action. Here the session itself ran on <code>haiku</code>, and
+  three <code>haiku</code> subagents ran: two <code>Explore</code> starts with no model, where the judge also chose
+  the fast tier, so the model was kept, and one started with an explicit model.</figcaption>
+</figure>
+<h3>Models</h3>
+<figure class="half">
+  <img src="images/mr-models.png" alt="model-router usage view, Models tab">
+  <figcaption>Figure 8. Models: per tier and effort over the window, closed tasks, tokens, cost, FPY with a bar, cost
+  per successful task, and the model ids seen.</figcaption>
+</figure>
+<h3>Classes</h3>
+<figure class="half">
+  <img src="images/mr-classes.png" alt="model-router usage view, Classes tab">
+  <figcaption>Figure 9. Classes, last 7 days, user level. Each class has a summary line, then a line with the grid's
+  choice next to the best measured cell (yellow when it differs) and its weak-signal flags, then its cells;
+  <code>*</code> marks the recommended one. Up to three recommendations that differ from the grid close the tab, each
+  led by its FPY.</figcaption>
+</figure>
+<p>Read Figure 9 this way. For <code>edit-specified</code>, <code>sonnet·low</code> was right first time in 80% of
+5 tasks at $0.055 per success, against 63% and $0.090 for the grid's <code>sonnet·medium</code>: the cheaper cell is
+recommended, and the line turns yellow with <code>(differs)</code>. For <code>review-debug</code>,
+<code>opus·high</code> was right every time but costs more per success than <code>opus·medium</code>, so the grid's
+choice stands. <code>design-open</code> has no cell with three tasks yet: <code>not enough data</code>, and the
+<code>n &lt; 5</code> flag marks it as a weak signal.</p>
+<figure class="half">
+  <img src="images/mr-classes-30d.png" alt="Classes tab over the last 30 days">
+  <figcaption>Figure 10. The same tab after <code>m</code>: the last 30 days. More tasks, steadier numbers. The
+  <code>all</code> window (<code>a</code>) shows the aged aggregates, the very numbers of the report page; shorter
+  windows count the tasks whose report fell inside them.</figcaption>
+</figure>
+<figure class="half">
+  <img src="images/mr-classes-project.png" alt="Classes tab at the project level">
+  <figcaption>Figure 11. After <code>p</code>: the project level, here the <code>product</code> repository, over 30
+  days.</figcaption>
+</figure>
+<h3>Decisions</h3>
+<figure class="half">
+  <img src="images/mr-decisions.png" alt="model-router usage view, Decisions tab">
+  <figcaption>Figure 12. Decisions: the latest twelve routing decisions of every session (UTC): action, the model
+  before → the tier and effort after, the subagent type and the reason. <code>•</code> marks this session's.</figcaption>
+</figure>
+<figure class="half">
+  <img src="images/mr-help.png" alt="/model-router help">
+  <figcaption>Figure 13. <code>/model-router help</code>.</figcaption>
+</figure>
+
+<h2 id="report">3.7 The report page</h2>
+<p>The same numbers on a page, for a longer look or to keep: ask for the <em>model-router report</em> (the
+<code>report</code> skill), type <code>/model-router report</code>, or press <code>o</code> in the view. The script
+compacts the event log, writes <code>&lt;config dir&gt;/model-router/report.html</code>, opens it with
+<code>open</code> (macOS) or <code>xdg-open</code> (Linux) and prints its path. From a shell:</p>
+<pre><code>node "&lt;plugin folder&gt;/scripts/report.mjs"             # write and open
+node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote or headless)</code></pre>
+<figure>
+  <img src="images/mr-report.png" alt="The model-router quality report page">
+  <figcaption>Figure 14. The top of the report page: a weekly trend of FPY and cost per successful task, the router's
+  decisions by action, then one card per class at the user level (tier, effort, n, FPY, rework, cost per task, cost
+  per success, explored share, flags) and the same per project. The page follows the system's light or dark
+  theme.</figcaption>
+</figure>
+<p>The page and the usage view share one aggregation, so their numbers agree. The page is self-contained and is
+written locally; share it only if you mean to. The <em>Explored</em> column stays at 0% before release 0.4.</p>
+
+<h2 id="options">3.8 Options</h2>
+<p>The mod's options (<code>userConfig</code> in its <code>plugin.json</code>). Set them in <code>/config</code>, or
+under <code>pluginConfigs</code> in a settings file, keyed by the installed plugin:</p>
+<pre><code>{
+  "pluginConfigs": {
+    "model-router@mrbogomips": {
+      "options": { "reworkWindowMin": 45, "deepModel": "opus" }
+    }
+  }
+}</code></pre>
+<table>
+  <thead><tr><th style="width:32%">Option</th><th style="width:13%">Default</th><th>Meaning</th></tr></thead>
+  <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>opus</code></td><td>Models behind the judge's fast, balanced and deep tiers; the fast one also runs the judge</td></tr>
+  <tr><td><code>minDowngradeConfidence</code></td><td>0.6</td><td>Judge confidence needed to lower the model, or to set effort <code>low</code></td></tr>
+  <tr><td><code>minUpgradeConfidence</code></td><td>0.3</td><td>Judge confidence needed to raise the model, or to set effort <code>medium</code>, <code>high</code> or <code>xhigh</code></td></tr>
+  <tr><td><code>riskThreshold</code></td><td>0.7</td><td>Risk above which the start gets the deep tier and at least <code>high</code> effort</td></tr>
+  <tr><td><code>timeoutMs</code></td><td>8000</td><td>Judge time limit; past it the start is left unchanged</td></tr>
+  <tr><td><code>routeSubagents</code></td><td>true</td><td>Route subagent starts at all</td></tr>
+  <tr><td><code>measure</code></td><td>true</td><td>Record the event log and the quality data</td></tr>
+  <tr><td><code>adapt</code></td><td>false</td><td>Choose from the quality data; from release 0.4, unused before</td></tr>
+  <tr><td><code>halfLifeDays</code></td><td>30</td><td>Aging of the quality data</td></tr>
+  <tr><td><code>projectPriorStrength</code></td><td>5</td><td>How many observations the user level counts for in a project's estimate; from 0.4</td></tr>
+  <tr><td><code>exploreCap</code></td><td>0.1</td><td>Share of decisions per class that may explore; from 0.4</td></tr>
+  <tr><td><code>reworkWindowMin</code></td><td>30</td><td>Minutes after a report during which a redo counts as rework</td></tr>
+  <tr><td><code>similarityThreshold</code></td><td>0.5</td><td>Word overlap at which two task descriptions count as the same task</td></tr>
+</table>
+<p>The mod saves the options compaction uses (<code>halfLifeDays</code>, <code>reworkWindowMin</code>,
+<code>similarityThreshold</code>, <code>projectPriorStrength</code>) to <code>options.json</code> at each session
+start when <code>measure</code> is on, so the report script uses the same values.</p>
+
+<h2 id="privacy">3.9 What is recorded, and where</h2>
+<p>The recorded data stays on your machine. Everything lives under <code>&lt;config dir&gt;/model-router/</code>
+(<code>CLAUDE_CONFIG_DIR</code>, else <code>~/.claude</code>); nothing is written inside a repository.</p>
+<table>
+  <thead><tr><th style="width:34%">File</th><th>Content</th></tr></thead>
+  <tr><td><code>events.jsonl</code></td><td>Append only: routing decisions; each subagent start with its type, name and short description; the paths of files the session and its subagents write; tool names of failed subagent calls and stop targets; the first 2,000 characters of the prompts you type; reports with tokens and estimated cost; session ends; outcomes (written by compaction).</td></tr>
+  <tr><td><code>options.json</code></td><td>The options compaction uses</td></tr>
+  <tr><td><code>quality/user.json</code>, <code>quality/projects/&lt;id&gt;.json</code></td><td>Aggregates per user and per project, with the project's root path</td></tr>
+  <tr><td><code>quality/state.json</code>, <code>quality/.lock</code></td><td>Compaction's position in the log, and its lock (stale after 2 minutes)</td></tr>
+  <tr><td><code>report.html</code></td><td>The report page</td></tr>
+</table>
+<p>The judge is one fast-tier model call per routed start through your session's own client, counted in the
+session's cost: like any other request of the session, its input (the subagent type, its short description and the
+first 4,000 characters of its task) goes to the model provider. Turn recording off with <code>measure: false</code>;
+to reset the data, delete <code>&lt;config dir&gt;/model-router/</code> (the event log is append-only and never
+trimmed).</p>
+
+<h2 id="mr-limits">3.10 Limits</h2>
+<ul>
+  <li>The mod needs Claude Code 2.1.329 or later; the skills do not need the mod.</li>
+  <li>Only starts made through the <code>Agent</code> tool are routed. An agent defined by a plugin is never routed;
+  of the built-in types only <code>general-purpose</code> and <code>Explore</code> are.</li>
+  <li>With the default <code>deepModel</code> the router never picks <code>fable</code>, and it compares with the parent's model, so a subagent of a
+  <code>fable</code> session can be lowered. Up to 0.3 it does not hold <code>review-debug</code> and
+  <code>design-open</code> to the grid's floor.</li>
+  <li>Costs are the engine's estimates. Edits made outside the session's own tools are not seen.</li>
+  <li>Up to 0.3 the data is measured, not used: <code>adapt</code>, <code>projectPriorStrength</code> and
+  <code>exploreCap</code> take effect from 0.4.</li>
+</ul>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="chapter" id="ch4">
+<h1>4. Troubleshooting and FAQ</h1>
+<dl class="faq">
+  <dt><code>/session-hub</code> or <code>/model-router</code> is an unknown command.</dt>
+  <dd>The mod is not loaded: mods are off, or Claude Code is older than 2.1.329 (<code>claude --version</code>).
+  Without the mod, <code>session-hub</code>'s skills, scope guard and record still work, and the
+  <code>model-router</code> skills too: ask for the <em>model-router report</em> instead of the view.</dd>
+
+  <dt>Are my children guarded with mods off?</dt>
+  <dd>Their <code>Edit</code>, <code>Write</code> and <code>NotebookEdit</code> calls are, by the hook. Shell writes and
+  messages to siblings are then held back by the handoff's rules alone.</dd>
+
+  <dt>Does routing work in auto permission mode?</dt>
+  <dd>Yes. The router never changes the <code>Agent</code> call that auto mode reviews; it sets the model when the
+  subagent starts and the effort on each of its model requests.</dd>
+
+  <dt>A child's messages wait for my approval, or expire.</dt>
+  <dd>The sender and the receiver differ on bypassing permission prompts: the receiver holds the message for you
+  (five minutes by default). Children start in the master's mode to avoid this; if you chose another mode, approve
+  the messages, or set <code>crossSessionInbound</code> (<code>accept</code>, <code>hold</code>, <code>refuse</code>)
+  for that child, for example <code>--settings '{"crossSessionInbound":"accept"}'</code>.</dd>
+
+  <dt>Every write in a child is blocked, even inside its folder.</dt>
+  <dd>Read the message after <code>[session-hub] Write blocked:</code>. An unknown <code>SESSION_HUB_ROLE</code> value
+  (anything but empty, <code>none</code>, <code>master</code> or <code>child</code>) blocks every write; so does a
+  missing, relative or non-existent <code>SESSION_HUB_SCOPE_ROOT</code>, a root of <code>/</code> or the home folder,
+  or <code>node</code> missing from <code>PATH</code> (<em>the scope guard could not run</em>). Fix the launch
+  command. A path inside the folder that is a link to another place is blocked by design.</dd>
+
+  <dt>A child stopped at a trust prompt, or <code>claude --bg</code> says <code>Workspace not trusted</code>.</dt>
+  <dd>Trust is per repository and is not inherited from the hub. Open the repository once with <code>claude</code>
+  and accept the prompt, or answer it in the child's window; then let the master retry.</dd>
+
+  <dt>I resumed a child and the guards are gone.</dt>
+  <dd>The role comes from the launch environment. Resume with the same <code>SESSION_HUB_*</code> variables in front
+  of <code>claude --resume</code>.</dd>
+
+  <dt>The panel shows <code>not listed</code> for a child that runs.</dt>
+  <dd>The live status comes from the session list. A child started with another configuration folder or account, on
+  another machine, or in the desktop app may not be listed; it also cannot message the master.</dd>
+
+  <dt>The children record is reported as corrupt.</dt>
+  <dd>The script never overwrites a file it cannot read. Fix or move the file (its path is in the message); the work
+  goes on without recording meanwhile.</dd>
+
+  <dt>Lines like <code>session-hub: its prompt.compose hook was skipped</code> appear.</dt>
+  <dd>An organization's managed mod runs first and passed the event on without the plugin's hooks. The plugin falls
+  back to sending the scope line as context; nothing to do.</dd>
+
+  <dt>The report or the Classes tab is empty.</dt>
+  <dd>Check that mods are on and that <code>measure</code> is on (the default). A task counts only once its rework
+  window has closed (30 minutes after its report) or its session has ended. Cancelled, risky, untagged, unknown-model
+  and unknown-effort tasks are measured but not learned. If another compaction was running, the page shows the data
+  from before it: run it again in a minute.</dd>
+
+  <dt>A subagent was not routed.</dt>
+  <dd>It carried a model, was a fork or a resume, named an agent with a fixed model or a plugin's agent, or routing was
+  off (<code>/model-router off</code>, <code>routeSubagents: false</code>, or
+  <code>CLAUDE_CODE_SUBAGENT_MODEL</code> set). The Decisions tab shows the reason of each decision.</dd>
+
+  <dt>The project level shows nothing.</dt>
+  <dd>The project is the git remote of the session's folder, else its root. Data recorded under another folder or
+  remote belongs to another project; the user level shows everything.</dd>
+
+  <dt>An agent asked for <code>max</code> effort, or a model outside the grid.</dt>
+  <dd>The grid never uses <code>max</code>; <code>setup</code> shows a value outside the grid back to you with the
+  nearest valid one. An explicit choice you make in the conversation always wins.</dd>
+</dl>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="chapter qr" id="ch5">
+<h1>5. Quick reference</h1>
+<h3>Skills</h3>
+<table>
+  <thead><tr><th style="width:30%">Skill</th><th>Ask for it with</th></tr></thead>
+  <tr><td><code>session-hub:setup</code></td><td>"set up session-hub for this hub"</td></tr>
+  <tr><td><code>session-hub:dispatch</code></td><td>a task touching the hub's repositories; a <code>[&lt;task&gt; &lt;repo&gt;]</code> message; "status of the children"</td></tr>
+  <tr><td><code>session-hub:spawn</code></td><td>"start a child in product for T-42"</td></tr>
+  <tr><td><code>model-router:choose-model</code></td><td>meant to load before any start; "use the model-router grid"</td></tr>
+  <tr><td><code>model-router:setup</code></td><td>"set up model routing for this project"</td></tr>
+  <tr><td><code>model-router:report</code></td><td>"show the model-router report"</td></tr>
+</table>
+<h3>Commands and keys</h3>
+<table>
+  <thead><tr><th style="width:46%">Command or key</th><th>Does</th></tr></thead>
+  <tr><td><code>/session-hub</code></td><td>role and scope; in a master the children table and panel</td></tr>
+  <tr><td><code>/session-hub help</code></td><td>help</td></tr>
+  <tr><td><code>/model-router [tab] [24h|7d|30d|all] [user|project]</code></td><td>usage view; tabs <code>overview</code>, <code>models</code>, <code>classes</code> (<code>stats</code>), <code>decisions</code> (<code>log</code>)</td></tr>
+  <tr><td><code>/model-router on</code> | <code>off</code> | <code>report</code> | <code>help</code></td><td>routing for this session; report page; help</td></tr>
+  <tr><td><code>1</code>–<code>4</code>, Tab, ← →</td><td>tab</td></tr>
+  <tr><td><code>d</code> <code>w</code> <code>m</code> <code>a</code></td><td>window 24h, 7d, 30d, all</td></tr>
+  <tr><td><code>p</code> · <code>o</code> · <code>r</code> · Esc</td><td>user/project · report · refresh · close</td></tr>
+</table>
+<h3>Messages</h3>
+<table>
+  <tr><td style="width:46%"><code>[&lt;task&gt; &lt;repo&gt;] &lt;type&gt;: &lt;text&gt;</code></td><td>child to master; type <code>question</code>, <code>out-of-scope</code>, <code>pr</code>, <code>done</code>, <code>abandoned</code></td></tr>
+  <tr><td><code>[master] …</code></td><td>master to child</td></tr>
+  <tr><td><code>[mr:&lt;class&gt;]</code>, <code>[mr:&lt;class&gt;!]</code></td><td>class tag at the start of a subagent's description; <code>!</code> when risky</td></tr>
+</table>
+<h3>Variables</h3>
+<table>
+  <tr><td style="width:46%"><code>SESSION_HUB_ROLE</code></td><td><code>child</code></td></tr>
+  <tr><td><code>SESSION_HUB_MASTER</code></td><td>master's session name</td></tr>
+  <tr><td><code>SESSION_HUB_SCOPE_ROOT</code></td><td>write root, absolute</td></tr>
+  <tr><td><code>SESSION_HUB_HANDOFF</code></td><td>handoff file, absolute</td></tr>
+  <tr><td><code>SESSION_HUB_REGISTRY</code></td><td>children record, absolute</td></tr>
+  <tr><td><code>SESSION_HUB_GUARDS</code></td><td><code>on</code> (default) or <code>off</code></td></tr>
+  <tr><td><code>CLAUDE_CONFIG_DIR</code></td><td>config folder (else <code>~/.claude</code>) holding both plugins' state</td></tr>
+</table>
+<h3>Hub keys (<code>## Child sessions</code>)</h3>
+<p>Repositories · Task IDs · Propagate · Master only · Model · Effort · Scope · Registry · Guards (<code>on</code>) ·
+Environment (<code>auto</code>) · Layout (<code>ask</code>) · Worktrees (<code>repo</code>) · Session name
+(<code>&lt;task&gt;-&lt;repo&gt;</code>)</p>
+<h3>Options (<code>model-router</code>)</h3>
+<p><code>fastModel</code> haiku · <code>balancedModel</code> sonnet · <code>deepModel</code> opus ·
+<code>minDowngradeConfidence</code> 0.6 · <code>minUpgradeConfidence</code> 0.3 · <code>riskThreshold</code> 0.7 ·
+<code>timeoutMs</code> 8000 · <code>routeSubagents</code> true · <code>measure</code> true · <code>adapt</code> false ·
+<code>halfLifeDays</code> 30 · <code>projectPriorStrength</code> 5 · <code>exploreCap</code> 0.1 ·
+<code>reworkWindowMin</code> 30 · <code>similarityThreshold</code> 0.5</p>
+<h3>Files</h3>
+<table>
+  <tr><td style="width:56%"><code>&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json</code> (+ <code>.lock</code>)</td><td>children record</td></tr>
+  <tr><td><code>&lt;scratchpad or mktemp -d&gt;/&lt;name&gt;-handoff.md</code></td><td>a child's handoff</td></tr>
+  <tr><td><code>&lt;config dir&gt;/model-router/events.jsonl</code></td><td>event log</td></tr>
+  <tr><td><code>&lt;config dir&gt;/model-router/options.json</code></td><td>options for compaction</td></tr>
+  <tr><td><code>&lt;config dir&gt;/model-router/quality/user.json</code>, <code>projects/&lt;id&gt;.json</code></td><td>aggregates</td></tr>
+  <tr><td><code>&lt;config dir&gt;/model-router/quality/recommendations.json</code></td><td>hints, read if present (written from 0.4)</td></tr>
+  <tr><td><code>&lt;config dir&gt;/model-router/report.html</code></td><td>report page</td></tr>
+  <tr><td>Hub's <code>AGENTS.md</code> (or <code>CLAUDE.md</code>), <code>## Child sessions</code></td><td>hub configuration</td></tr>
+  <tr><td>Project's <code>AGENTS.md</code> (or <code>CLAUDE.md</code>), <code>## Model routing</code></td><td>project defaults</td></tr>
+</table>
+<h3>Scripts</h3>
+<table>
+  <tr><td style="width:56%"><code>node &lt;session-hub folder&gt;/scripts/registry.mjs read --hub &lt;dir&gt;</code></td><td>print the children record</td></tr>
+  <tr><td><code>node &lt;model-router folder&gt;/scripts/report.mjs [--no-open]</code></td><td>compact and write the report</td></tr>
+  <tr><td><code>node &lt;model-router folder&gt;/scripts/compact.mjs</code></td><td>compact the event log</td></tr>
+</table>
+<p class="small">An installed plugin's folder is listed by <code>claude plugin list</code>, or found under
+<code>&lt;config dir&gt;/plugins/</code>.</p>
+</section>
+</body>
+</html>

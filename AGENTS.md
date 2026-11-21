@@ -21,7 +21,8 @@ marketplace (`~/git/MrBogomips/claude-plugins`).
   other plugin.
 - `tests/validate.sh`: structural checks; `*.test.mjs` next to the code they test (`node --test`);
   `tests/scenarios/<skill>/`: manual scenario checklists.
-- `docs/design/` (authoritative), `docs/research/` (reference), `drafts/` (working material, committed).
+- `docs/design/` (authoritative), `docs/research/` (reference), `docs/manual/` (user manual), `drafts/` (working
+  material, committed).
 
 ## Working documents
 
@@ -30,6 +31,7 @@ marketplace (`~/git/MrBogomips/claude-plugins`).
 | `docs/design/` | Authoritative design and spike results. Change the design here first, then the code. | committed |
 | `docs/research/` | Research behind the design; reference only. | committed |
 | `docs/architecture.md` | Product architecture, written from the released code. | committed |
+| `docs/manual/` | User manual: `manual.html` (source), `images/`, `user-manual.pdf` (built by `build.sh`), `tools/` (screenshot helpers). Update it with the code it describes. | committed |
 | `drafts/` | Drafts and working documents that later sessions need. | committed |
 | `.handoff/` | The original handoff zip. | ignored |
 
