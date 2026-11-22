@@ -3,6 +3,32 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.13
+
+2026-11-22 · pull request #TBD
+
+### Added
+
+- The usage view opens the event log: the `l` key in the terminal (listed in the footer), a Log button beside
+  Report and Refresh in the Claude desktop app, and `/model-router log`. It opens
+  `<config dir>/model-router/events.jsonl` in the system's default app and writes its path as a line in the session,
+  with the `archive/` folder when there is one; a log just rotated away opens that folder. With no log yet, or
+  where nothing can be opened (a hosted session, a system with no known opener), the line says so and gives the path.
+
+### Changed
+
+- `/model-router log` no longer opens the Decisions tab: use `/model-router decisions`.
+
+## session-hub 0.4.2
+
+2026-11-22 · pull request #TBD
+
+### Added
+
+- The children panel and `/session-hub log` open the children record, session-hub's log, in the system's default
+  app: the `l` key in the terminal, a Log button in the Claude desktop app. The path is written as a line in the
+  session; with no record yet the line says so and nothing is opened. A child opens the record of its master.
+
 ## model-router 0.3.12
 
 2026-11-22 · pull request #78

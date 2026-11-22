@@ -587,6 +587,7 @@ session.</p>
 <table>
   <thead><tr><th style="width:24%">Command</th><th>Does</th></tr></thead>
   <tr><td><code>/session-hub</code></td><td>In a child: its role, write root, handoff, record and whether the guards are on. In a master: the record and the children table (status in the record, live status, model and effort as a four-cell bar and a word, <code>▰▰▰▱ high</code>, last message), sized to the terminal, and the children panel opened beside the chat. In any other session: that it has no role.</td></tr>
+  <tr><td><code>/session-hub log</code></td><td>Opens the children record, <code>session-hub</code>'s log, in the system's default app and prints its path. With no record yet it says so and opens nothing. In a child it opens the record of its master. <code>record</code> works too.</td></tr>
   <tr><td><code>/session-hub help</code></td><td>What the command does. Any other argument prints <code>Unknown argument "…"</code> and the same help.</td></tr>
 </table>
 <figure>
@@ -600,7 +601,8 @@ session.</p>
   <code>/session-hub</code>; the live status comes from the session list (<code>ListAgents</code>). The model is bold
   in its tier's colour and the effort is the bar and the word in its level's colour, as in <code>model-router</code>;
   a status is green when the child runs, yellow when it waits, was abandoned or is not listed, red when it is
-  lost.</figcaption>
+  lost. Under the rows the panel offers the children record: <code>l</code> in the terminal, a Log button in the
+  Claude desktop app (not in this screenshot).</figcaption>
 </figure>
 <p>In the master, a <code>Bash</code> call that starts children gets one line per child under its row, in the same
 colours: the model, the effort and the child's name, for example
@@ -869,9 +871,10 @@ into the aggregates. It is safe to repeat: a task is never counted twice.</p>
 <table>
   <thead><tr><th style="width:46%">Command</th><th>Does</th></tr></thead>
   <tr><td><code>/model-router</code></td><td>Opens the usage view on Overview, last 7 days, user level</td></tr>
-  <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens it on that tab, window and level, in any order (<code>stats</code> and <code>log</code> work as <code>classes</code> and <code>decisions</code>)</td></tr>
+  <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens it on that tab, window and level, in any order (<code>stats</code> works as <code>classes</code>)</td></tr>
   <tr><td><code>/model-router on</code>, <code>/model-router off</code></td><td>Turns routing on or off for this session</td></tr>
   <tr><td><code>/model-router report</code></td><td>Writes and opens the report page, and prints its path</td></tr>
+  <tr><td><code>/model-router log</code></td><td>Opens the event log (<code>events.jsonl</code>) in the system's default app, and prints its path</td></tr>
   <tr><td><code>/model-router help</code></td><td>Lists the arguments and the keys; any unknown argument does the same</td></tr>
 </table>
 <p>For example, <code>/model-router classes 30d project</code> opens Classes over the last 30 days for this project.</p>
@@ -884,8 +887,8 @@ chat; otherwise it opens above the prompt.</p>
 instead of text art: the tabs, the windows and the level are segmented buttons, the KPI tiles are cards with a large
 figure, a status chip and a small chart of the window, the Models and Classes rows have bars, and each routing decision
 has a coloured chip. When fewer than five tasks back the figures, one notice says so instead of <code>weak</code> on
-every tile. Report and Refresh are buttons in the footer, and the letter keys (<code>d</code>, <code>w</code>,
-<code>m</code>, <code>a</code>, <code>p</code>, <code>o</code>, <code>r</code>) still work.</p>
+every tile. Report, Refresh and Log are buttons in the footer, and the letter keys (<code>d</code>, <code>w</code>,
+<code>m</code>, <code>a</code>, <code>p</code>, <code>o</code>, <code>r</code>, <code>l</code>) still work.</p>
 <p>The keys work as soon as the view opens, with no click:</p>
 <table>
   <thead><tr><th style="width:30%">Key</th><th>Does</th></tr></thead>
@@ -895,9 +898,13 @@ every tile. Report and Refresh are buttons in the footer, and the letter keys (<
   <tr><td><code>p</code></td><td>Switches between your data across projects (user) and this project's</td></tr>
   <tr><td><code>o</code></td><td>Writes and opens the report page; its path is written as a line in the session</td></tr>
   <tr><td><code>r</code></td><td>Refreshes: runs compaction and reads again</td></tr>
+  <tr><td><code>l</code></td><td>Opens the event log in the system's default app; its path is written as a line in the session, with the <code>archive/</code> folder when there is one</td></tr>
   <tr><td>Page Up, Page Down</td><td>Scroll a long tab</td></tr>
   <tr><td>Esc</td><td>Closes the view</td></tr>
 </table>
+<p>The log is opened with <code>open</code> on macOS and <code>xdg-open</code> on Linux. With no log yet, on another
+system or in a hosted session nothing is opened: the line says why and gives the path. A log that compaction has just
+rotated away opens its <code>archive/</code> folder instead.</p>
 <p>← and → do not switch tabs, as they do in Claude Code's own dialog: Claude Code does not pass them to a plugin's
 pane, and ← at the prompt opens the agents view.</p>
 <p>Opening the view runs compaction for at most 3 seconds; if it takes longer, the view shows the numbers as of the
@@ -1146,12 +1153,13 @@ trimmed).</p>
 <table>
   <thead><tr><th style="width:46%">Command or key</th><th>Does</th></tr></thead>
   <tr><td><code>/session-hub</code></td><td>role and scope; in a master the children table and panel</td></tr>
+  <tr><td><code>/session-hub log</code></td><td>opens the children record</td></tr>
   <tr><td><code>/session-hub help</code></td><td>help</td></tr>
-  <tr><td><code>/model-router [tab] [24h|7d|30d|all] [user|project]</code></td><td>usage view; tabs <code>overview</code>, <code>models</code>, <code>classes</code> (<code>stats</code>), <code>decisions</code> (<code>log</code>)</td></tr>
-  <tr><td><code>/model-router on</code> | <code>off</code> | <code>report</code> | <code>help</code></td><td>routing for this session; report page; help</td></tr>
+  <tr><td><code>/model-router [tab] [24h|7d|30d|all] [user|project]</code></td><td>usage view; tabs <code>overview</code>, <code>models</code>, <code>classes</code> (<code>stats</code>), <code>decisions</code></td></tr>
+  <tr><td><code>/model-router on</code> | <code>off</code> | <code>report</code> | <code>log</code> | <code>help</code></td><td>routing for this session; report page; event log; help</td></tr>
   <tr><td>Tab, Shift+Tab</td><td>next, previous tab</td></tr>
   <tr><td>↓, ↑ · <code>d</code> <code>w</code> <code>m</code> <code>a</code></td><td>next, previous window · window 24h, 7d, 30d, all</td></tr>
-  <tr><td><code>p</code> · <code>o</code> · <code>r</code> · Page Up/Down · Esc</td><td>user/project · report · refresh · scroll · close</td></tr>
+  <tr><td><code>p</code> · <code>o</code> · <code>r</code> · <code>l</code> · Page Up/Down · Esc</td><td>user/project · report · refresh · event log · scroll · close</td></tr>
 </table>
 <h3>Messages</h3>
 <table>
