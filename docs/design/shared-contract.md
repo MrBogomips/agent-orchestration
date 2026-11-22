@@ -38,8 +38,11 @@ its input (`effort.level`).
 
 ## A shared look
 
-The two mods draw a model and an effort the same way, so a person reads them at a glance in either plugin. The
-values are `model-router`'s (`lib/route-line.mjs`). A plugin uses nothing outside its folder, so `session-hub`
+The two mods draw a model and an effort the same way, so a person reads them at a glance in either plugin. **The
+look below is the terminal's.** On the desktop app and the other graphical surfaces neither plugin uses it: no
+tier or effort colours, no effort bar, no `🔀` and no teal accent; a model and an effort are words (`Opus · high`)
+and the card follows the app's own colours (*A shared card* below, and `ui-design.md`, *Graphical surfaces: the
+card*). The values are `model-router`'s (`lib/route-line.mjs`). A plugin uses nothing outside its folder, so `session-hub`
 holds its own copy; `tests/validate.sh` fails when the two copies differ from each other.
 
 | Element | Value |
@@ -51,8 +54,17 @@ holds its own copy; `tests/validate.sh` fails when the two copies differ from ea
 | Good, fair and bad states | the theme's `success`, `warning` and `error` |
 | Secondary text | the theme's dim colour |
 
-`🔀` and the teal accent (`#14b8a6`) are the identity of `model-router`'s own view. `session-hub` uses `🔀` only
+`🔀` and the teal accent (`#14b8a6`) are the identity of `model-router`'s own view in the terminal. `session-hub` uses `🔀` only
 on a line that states a child's model and effort, and never the accent.
+
+## A shared card
+
+On the desktop app both plugins draw their command's answer as a card in the transcript, in the same grammar
+(`ui-design.md`). The layout and the drawings are one pair of files that each plugin keeps a copy of:
+`hooks/card-kit.tsx` (the card laid out from a plain value) and the drawings with the card's text
+(`model-router/lib/card-parts.mjs`, `session-hub/hooks/mod/card-parts.mjs`). The copies are the same text, checked
+by `tests/shared-copies.mjs`; a change to one is made to both in the same pull request. The card's model shades
+(`SHADES`: Opus darkest, then Sonnet, Fable, Haiku lightest) and status dots are defined there, once.
 
 ## Environment variables for a child
 
