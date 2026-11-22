@@ -4,6 +4,7 @@ import type { Elements } from 'claude-code'
 
 import type { UsageView } from '../types'
 
+import { LOG_HOTKEY, LOG_KEY, LOG_LABEL } from '../lib/open-log.mjs'
 import { ROUTE_ICON } from '../lib/route-line.mjs'
 import { tabKey, windowKey } from '../lib/usage-nav.mjs'
 import { COLORS } from '../lib/usage-svg.mjs'
@@ -79,6 +80,8 @@ function footer({ Box, Text, Button }: TerminalElements, actions: UsageActions) 
       <Button key="report" label="report" hotkey="o" plain dimColor onPress={() => actions.report()} />
       <Text {...HINT}>·</Text>
       <Button key="refresh" label="refresh" hotkey="r" plain dimColor onPress={() => actions.refresh()} />
+      <Text {...HINT}>·</Text>
+      <Button key={LOG_KEY} label={LOG_LABEL.toLowerCase()} hotkey={LOG_HOTKEY} plain dimColor onPress={() => actions.openLog()} />
       <Text {...HINT}>· Esc</Text>
     </Box>
   )

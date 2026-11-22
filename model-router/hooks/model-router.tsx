@@ -13,6 +13,7 @@ import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky
 import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
+import { failText, logPaths, openPlan } from '../lib/open-log.mjs'
 import { promptGate } from '../lib/prompt-gate.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, helpText, parseArgs, textView } from '../lib/usage-view.mjs'
 import { isArrowScroll, ringTarget, stepWindow, tabKey, tabOfKey } from '../lib/usage-nav.mjs'
@@ -27,6 +28,7 @@ const PANE_ROWS = 24
 const CLICK_MS = 500
 const USAGE_TIMEOUT_MS = 15000
 const REPORT_TIMEOUT_MS = 60000
+const OPEN_TIMEOUT_MS = 10000
 const WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit']
 
 const enabled = atom({ plugin: 'model-router', key: 'enabled' } as const, true)
@@ -265,6 +267,29 @@ async function writeReport($: any, ctx: Ctx): Promise<string> {
   return file
 }
 
+/**
+ * Opens the event log in the system's default app (its archive folder when the log was just rotated away) and
+ * answers the one line the person reads: what was opened, that there is no log yet, or why it could not be opened.
+ * Never throws: the action is a convenience of the view.
+ */
+async function openLog($: any, ctx: Ctx): Promise<string> {
+  try {
+    const configDir = await configDirOf($, ctx)
+    const { log, archive } = logPaths(configDir)
+    const info = await $.session.info().catch(() => ({}))
+    const plan = openPlan({ configDir, platform: info?.platform, isHosted: info?.isHosted === true, hasLog: await $.fs.exists(log), hasArchive: await $.fs.exists(archive) })
+    if (!plan.argv) return plan.text
+    try {
+      const run = await $.process.run(plan.argv, { timeoutMs: OPEN_TIMEOUT_MS })
+      return run.exitCode === 0 ? plan.text : failText(plan, run.stderr || `${plan.argv[0]} exited with ${run.exitCode}`)
+    } catch (err) {
+      return failText(plan, errorText(err))
+    }
+  } catch (err) {
+    return `Could not open the event log: ${errorText(err)}`
+  }
+}
+
 const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
 // A one-line answer to the person carries the identity, after the plugin name the engine puts first: `🔀 …`.
 const say = (text: string) => display(`${ROUTE_ICON} ${text}`)
@@ -397,7 +422,7 @@ export const register: Register = (on, options) => {
       await $.command.register({
         name: 'model-router',
         description: 'Usage view: subagents, models, classes and routing decisions; routing on or off for this session',
-        argumentHint: '[overview|models|classes|decisions] [24h|7d|30d|all] [user|project] | on | off | report | help',
+        argumentHint: '[overview|models|classes|decisions] [24h|7d|30d|all] [user|project] | on | off | report | log | help',
       })
       $.ui.log(`[model-router] ready: routing ${opts.routeSubagents ? 'on' : 'off'}, measuring ${opts.measure ? 'on' : 'off'}`, { to: 'debug' })
       if (opts.measure) {
@@ -427,6 +452,7 @@ export const register: Register = (on, options) => {
         return say(`Could not write the report: ${errorText(err)}`)
       }
     }
+    if (asked.kind === 'log') return say(await openLog($, ctx))
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
   }).catch(($, e, next) => ({ text: `${ROUTE_ICON} Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
 
@@ -488,6 +514,7 @@ export const register: Register = (on, options) => {
       setWindow: (window) => setView({ window }),
       setLevel: (level) => setView({ level }),
       refresh: () => refreshUsage($, ctx),
+      openLog: async () => $.ui.log(`${ROUTE_ICON} ${await openLog($, ctx)}`),
       report: async () => {
         try {
           $.ui.log(`${ROUTE_ICON} Report written to ${await writeReport($, ctx)}`)

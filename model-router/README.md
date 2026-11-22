@@ -97,9 +97,10 @@ does not read it.
 | Command | Does |
 |---|---|
 | `/model-router` | Opens the usage view on Overview, last 7 days, user level |
-| `/model-router [overview\|models\|classes\|decisions] [24h\|7d\|30d\|all] [user\|project]` | Opens it on that tab, window and level, in any order (`stats` and `log` work as `classes` and `decisions`) |
+| `/model-router [overview\|models\|classes\|decisions] [24h\|7d\|30d\|all] [user\|project]` | Opens it on that tab, window and level, in any order (`stats` works as `classes`) |
 | `/model-router on`, `/model-router off` | Turns routing on or off for this session |
 | `/model-router report` | Writes and opens the report page, and prints its path |
+| `/model-router log` | Opens the event log (`events.jsonl`) in the system's default app, and prints its path |
 | `/model-router help` | Lists the arguments and the keys; any unknown argument does the same |
 
 ### The usage view
@@ -110,7 +111,7 @@ footer of key hints. The active tab and window are drawn as a teal block; the KP
 
 That is the terminal's rendering. In Claude Desktop, the editor and the mobile apps the same data is drawn with
 native elements: buttons for the tabs, windows and level, four KPI cards with a status chip and an SVG sparkline,
-tables with aligned columns and SVG bars, and Report and Refresh buttons. Under five scored tasks one banner says
+tables with aligned columns and SVG bars, and Report, Refresh and Log buttons. Under five scored tasks one banner says
 the figures are indicative, in place of a mark on every card.
 
 ```text
@@ -135,8 +136,12 @@ The keys work as soon as the view opens, with no click:
 | `p` | Switches between your data across projects (user) and this project's |
 | `o` | Writes and opens the report page; its path is written as a line in the session |
 | `r` | Refreshes: runs compaction and reads again |
+| `l` | Opens the event log in the system's default app; its path is written as a line in the session, with the `archive/` folder when there is one |
 | Page Up, Page Down | Scroll a long tab |
 | Esc | Closes the view |
+
+The log is opened with `open` on macOS and `xdg-open` on Linux. With no log yet, on another system or in a hosted
+session nothing is opened: the line says why and gives the path.
 
 Left and Right do not switch tabs as they do in Claude Code's own dialog: Claude Code does not pass them to a
 plugin's pane, and Left at the prompt opens the agents view.

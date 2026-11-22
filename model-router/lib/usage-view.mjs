@@ -22,13 +22,14 @@ const DECISIONS_SHOWN = 12;
 const RECOMMENDATIONS_SHOWN = 3;
 const ACTION_ORDER = ['downgrade', 'upgrade', 'keep', 'explicit', 'forced-risk', 'error'];
 const has = (table, key) => Object.hasOwn(table, key);
-const TAB_ALIASES = { overview: 'overview', models: 'models', model: 'models', classes: 'classes', class: 'classes', stats: 'classes', decisions: 'decisions', log: 'decisions' };
+const TAB_ALIASES = { overview: 'overview', models: 'models', model: 'models', classes: 'classes', class: 'classes', stats: 'classes', decisions: 'decisions' };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Arguments
 
 /**
  * What `/model-router <args>` asks for: `{ kind: 'toggle', on }`, `{ kind: 'help' }`, `{ kind: 'report' }`,
+ * `{ kind: 'log' }` (open the event log),
  * `{ kind: 'view', tab, window, level }` (each null when not given), or `{ kind: 'unknown', word }`.
  */
 export function parseArgs(text) {
@@ -36,6 +37,7 @@ export function parseArgs(text) {
   if (words.length === 1 && (words[0] === 'on' || words[0] === 'off')) return { kind: 'toggle', on: words[0] === 'on' };
   if (words.length === 1 && ['help', '-h', '--help', '?'].includes(words[0])) return { kind: 'help' };
   if (words.length === 1 && words[0] === 'report') return { kind: 'report' };
+  if (words.length === 1 && words[0] === 'log') return { kind: 'log' };
   const view = { kind: 'view', tab: null, window: null, level: null };
   for (const word of words) {
     const bare = word.replace(/^--/, '');
@@ -50,7 +52,7 @@ export function parseArgs(text) {
 /** The arguments and the keys of the view, one line each. */
 export function helpText() {
   return [
-    `${ROUTE_ICON} Usage: /model-router [tab] [window] [level] | on | off | report | help`,
+    `${ROUTE_ICON} Usage: /model-router [tab] [window] [level] | on | off | report | log | help`,
     '',
     '  (none)          the usage view on Overview, last 7 days, user level',
     '  overview|models|classes|decisions',
@@ -59,10 +61,12 @@ export function helpText() {
     '  user|project    the level: all your projects, or this one',
     '  on|off          routing on or off for this session',
     '  report          write and open the HTML report; prints its path',
+    '  log             open the event log (events.jsonl); prints its path',
     '  help            this list',
     '',
     'Keys: Tab/Shift+Tab switch tab · Up/Down or d/w/m/a window 24h/7d/30d/all ·',
-    'p user/project · o report · r refresh (runs compaction) · Esc close.',
+    'p user/project · o report · r refresh (runs compaction) · l open the event log ·',
+    'Esc close.',
     'Where no pane fits (headless, -p, under 60 columns) the view prints as text.',
   ].join('\n');
 }

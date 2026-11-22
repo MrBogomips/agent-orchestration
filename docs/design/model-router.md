@@ -233,7 +233,7 @@ command `/model-router on|off` turns routing on or off for the session (kept in 
 
 ### Command
 
-`/model-router [tab] [window] [level] | on | off | report | help`, modelled on the built-in `/usage` dialog: one
+`/model-router [tab] [window] [level] | on | off | report | log | help`, modelled on the built-in `/usage` dialog: one
 view of every number the mod and the quality loop hold, in compact blocks with aligned labels, `k`/`M` token
 counts, `$` costs and text bars sized to the room.
 
@@ -248,7 +248,7 @@ colours are the theme's success, warning and error, and everything else keeps th
 🔀 model-router [Overview]  Models   Classes   Decisions
 d:  24h  w: [7d] m:  30d  a:  all                p: user · project
 ...
-Tab/⇧Tab tab · ↑/↓ period · p level · o: report · r: refresh · Esc
+Tab/⇧Tab tab · ↑/↓ period · p level · o: report · r: refresh · l: log · Esc
 ```
 
 The second row is the window, on every tab, with the level (user or project) at its right end; the level is not a
@@ -274,6 +274,7 @@ failure) of the window; at the project level they count the project's tasks and 
 | `p` | Level: the user's data or this project's |
 | `o` | Write and open the HTML report (`scripts/report.mjs`); its path is written as a line in the session |
 | `r` | Refresh: run compaction and read again |
+| `l` | Open the event log in the system's default app; its path is written as a line in the session (*Opening the log*) |
 | Page Up, Page Down, wheel | Scroll the content |
 | Esc | Close |
 
@@ -343,7 +344,7 @@ from the same data. The terminal's rendering is unchanged.
 - **Header.** The title in the accent at heading size, and the status as three pills (a dot in the accent when
   on, muted when off). Under it the tabs, the windows and the level as native Buttons, the active one of each
   group `variant: "primary"`; the level is two Buttons, `level-user` and `level-project`. The other Buttons keep
-  the terminal's element keys (`tab-…`, `window-…`, `report`, `refresh`) and hotkeys; `p` is on the level that is
+  the terminal's element keys (`tab-…`, `window-…`, `report`, `refresh`, `log`) and hotkeys; `p` is on the level that is
   not shown.
 - **Sample size.** Under five scored tasks one banner says so (`2 tasks scored — figures are indicative under
   5`), and no card carries a `weak` mark. With five or more there is no banner. At the project level of a session
@@ -365,7 +366,7 @@ from the same data. The terminal's rendering is unchanged.
   Decisions are a compact table with one chip per action: downgrade green, upgrade in the accent, forced-risk
   amber, error red, keep and explicit muted.
 - **Empty states.** A section with nothing to show says what will appear there and when, in one line.
-- **Footer.** The freshness note, and Report and Refresh as native Buttons. No key hints.
+- **Footer.** The freshness note, and Report, Refresh and Log as native Buttons. No key hints.
 - **Colours.** Text, chips and borders name the theme's own colours (`success`, `warning`, `error`,
   `inactive`), so they follow light and dark. An SVG is drawn as an image and cannot read the app's colours, and
   the API does not say which mode is on: the charts use fixed mid-tones that read on both grounds (line
@@ -382,6 +383,27 @@ plugin's name) and never throws to the engine. `report` that fails or takes more
 `Could not write the report: …`. The pane draws a note in place of the rows when it has no data; after a failed
 refresh the earlier rows stay, with a warning under them. A second `r` while a read runs is ignored.
 
+**Opening the log.** Every pane offers its plugin's own log (`ui-design.md`); model-router's is the event log,
+`<config dir>/model-router/events.jsonl`. The `l` key, the Log button and `/model-router log` do the same thing,
+decided in `lib/open-log.mjs`:
+
+- The API has no call that opens a file, and a `Link` opens what the surface chooses (on a remote surface only
+  `https:`), so the mod runs the system's opener with `$.process.run`, the path as one argument and no shell:
+  `open -t <log>` on macOS, `xdg-open <log>` on Linux, by `$.session.info().platform`. `-t` is the default text
+  editor: `.jsonl` often has no app of its own, and a plain `open` then fails.
+- One action, not two. The line written in the session names the log and, when `archive/` exists, that folder too
+  (`Event log opened: … · rotated logs: …`). A reveal in the file manager would show both, but only macOS has one
+  (`open -R`), and it would not open the log.
+- When compaction has just rotated the log away and no new record has been written, the archive folder is opened
+  instead. With neither, nothing runs and the line says that no log has been written yet.
+- Nothing runs either on a hosted session (the machine is not the person's), on a platform with no known opener
+  (Windows, WSL) or for a config folder that is not an absolute path: the line gives the path and the reason.
+- A command that exits non-zero, cannot start or runs over 10 seconds gives `Could not open <path>: <first line of
+  the reason>`. The action never throws and never changes the pane.
+
+Only these two paths are ever passed to an opener. `/model-router log` used to be an alias of
+`/model-router decisions`; from 0.3.13 it opens the log.
+
 **With mods off** there is no command; the `model-router:report` skill builds the same page from the same code.
 
 Routing the main session's effort per prompt is out of scope: a change mid-chat can discard the prompt cache.
@@ -393,6 +415,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.1 | `choose-model`, `setup`. |
 | 0.2 | The mod, the decision log, the command, the options; the quality loop measuring only, and `report`. |
 | 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. From 0.3.4, the 🔀 identity and the coloured choose-model line under `Agent` rows. |
+| 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. |
 | 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
 
 ## Open points

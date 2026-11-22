@@ -106,7 +106,8 @@ test('arguments: tab, window and level in any order; on, off, report, help; anyt
   assert.deepEqual(parseArgs(''), { kind: 'view', tab: null, window: null, level: null });
   assert.deepEqual(parseArgs('30d models'), { kind: 'view', tab: 'models', window: '30d', level: null });
   assert.deepEqual(parseArgs('stats --project all'), { kind: 'view', tab: 'classes', window: 'all', level: 'project' });
-  assert.deepEqual(parseArgs('log'), { kind: 'view', tab: 'decisions', window: null, level: null });
+  assert.deepEqual(parseArgs('log'), { kind: 'log' });
+  assert.deepEqual(parseArgs('log 7d'), { kind: 'unknown', word: 'log' });
   assert.deepEqual(parseArgs(' OFF '), { kind: 'toggle', on: false });
   assert.deepEqual(parseArgs('on'), { kind: 'toggle', on: true });
   assert.deepEqual(parseArgs('report'), { kind: 'report' });

@@ -32,7 +32,7 @@ const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confiden
 
 type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string> }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
@@ -58,6 +58,10 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
   mock.env(on, { HOME: '/home/u' })
   on('fs.read', ($, e: any) => ({ value: answers.files?.[e.path] ?? answers.grid ?? JSON.stringify(GRID) }))
   on('fs.exists', ($, e: any) => ({ value: Boolean(answers.files && e.path in answers.files) }))
+  on('session.info', () => {
+    if (answers.infoFails) throw new Error('no info')
+    return { value: (answers.info ?? { platform: 'macos', isHosted: false }) as any }
+  })
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.cwd', () => ({ value: '/repo' }))
   on('session.root', () => ({ value: '/repo' }))
@@ -76,6 +80,10 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
   on('process.run', ($, e) => {
     w.runs.push(e)
     if (e.argv[0] === 'sh' && String(e.argv[4]).includes('events.jsonl')) w.appended.push(...String(e.init?.stdin ?? '').trim().split('\n').map((l) => JSON.parse(l)))
+    if (e.argv[0] === 'open' || e.argv[0] === 'xdg-open') {
+      if (answers.openThrows) throw new Error('spawn open ENOENT')
+      return { value: { stderr: '', ...(answers.open ?? { exitCode: 0, stdout: '' }), isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     const script = String(e.argv[1] ?? '')
     const answer = script.endsWith('usage.mjs')
       ? answers.usage ?? USAGE
@@ -514,7 +522,7 @@ describe('/model-router usage view', () => {
       const ui = await $.ui.mount({ ...PANE, surface })
       expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
       const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
-      expect(keys).toEqual(['title', 'tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level', 'report', 'refresh'])
+      expect(keys).toEqual(['title', 'tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level', 'report', 'refresh', 'log'])
       const drawn = JSON.stringify(await ui.drawn())
       // The active tab and window are inverse blocks in the teal accent; no other label is.
       expect(drawn.match(/"inverse":true/g)?.length).toBe(2)
@@ -726,6 +734,86 @@ describe('/model-router usage view', () => {
   })
 })
 
+const LOG_FILE = '/home/u/.claude/model-router/events.jsonl'
+const ARCHIVE_DIR = '/home/u/.claude/model-router/archive'
+const openRuns = (w: World) => w.runs.filter((r) => r.argv[0] === 'open' || r.argv[0] === 'xdg-open').map((r) => r.argv)
+
+describe('opening the event log', () => {
+  test('in the terminal the l key opens the log and logs its path; the footer lists the key', async ($, on) => {
+    const w = world(on, undefined, { files: { [LOG_FILE]: '' } })
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const button = await ui.find({ type: 'Button', key: 'log' })
+    expect(JSON.stringify(button)).toContain('"hotkey":"l"')
+    expect(JSON.stringify(button)).toContain('"label":"log"')
+    await ui.press({ key: 'log' })
+    expect(openRuns(w)).toEqual([['open', '-t', LOG_FILE]])
+    expect(w.logs).toContain(`🔀 Event log opened: ${LOG_FILE}`)
+    await ui.unmount()
+  })
+
+  test('on a graphical surface a native button beside Report and Refresh opens it', async ($, on) => {
+    const w = world(on, undefined, { files: { [LOG_FILE]: '', [ARCHIVE_DIR]: '' }, info: { platform: 'linux', isHosted: false } })
+    await run($, '')
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      const button = JSON.stringify(await ui.find({ type: 'Button', key: 'log' }))
+      expect(button).toContain('"label":"Log"')
+      expect(button).toContain('"variant":"secondary"')
+      expect(button.includes('"plain":true')).toBe(false)
+      await ui.press({ key: 'log' })
+      await ui.unmount()
+    }
+    expect(openRuns(w)).toEqual([['xdg-open', LOG_FILE], ['xdg-open', LOG_FILE], ['xdg-open', LOG_FILE]])
+    expect(w.logs).toContain(`🔀 Event log opened: ${LOG_FILE} · rotated logs: ${ARCHIVE_DIR}`)
+  })
+
+  test('/model-router log opens it and answers its path, for the person only', async ($, on) => {
+    const w = world(on, undefined, { files: { [LOG_FILE]: '' } })
+    const out = await run($, 'log')
+    expect(out.text).toBe(`🔀 Event log opened: ${LOG_FILE}`)
+    expect(out.isTextDisplayOnly).toBe(true)
+    expect(openRuns(w)).toEqual([['open', '-t', LOG_FILE]])
+    expect(w.opens.length).toBe(0)
+  })
+
+  test('a log just rotated away opens its archive folder', async ($, on) => {
+    const w = world(on, undefined, { files: { [ARCHIVE_DIR]: '' } })
+    expect((await run($, 'log')).text).toBe(`🔀 No event log since the last rotation; archive folder opened: ${ARCHIVE_DIR}`)
+    expect(openRuns(w)).toEqual([['open', ARCHIVE_DIR]])
+  })
+
+  test('with no log yet nothing is run and the line says so', async ($, on) => {
+    const w = world(on)
+    expect((await run($, 'log')).text).toBe(`🔀 No event log yet: ${LOG_FILE} is written once a subagent has run with measuring on.`)
+    expect(openRuns(w)).toEqual([])
+  })
+
+  test('a failed open is one line in the transcript and the pane stays drawn', async ($, on) => {
+    const w = world(on, undefined, { files: { [LOG_FILE]: '' }, open: { exitCode: 1, stdout: '', stderr: 'No application knows how to open it.\nSecond line' } })
+    await run($, '')
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      await ui.press({ key: 'log' })
+      expect(await ui.find({ type: 'Button', key: 'log' })).toBeDefined()
+      await ui.unmount()
+    }
+    expect(w.logs.filter((l) => l.includes('Could not open'))).toEqual(Array(2).fill(`🔀 Could not open ${LOG_FILE}: No application knows how to open it.`))
+  })
+
+  test('an opener that cannot start answers one line and never throws', async ($, on) => {
+    world(on, undefined, { files: { [LOG_FILE]: '' }, openThrows: true })
+    // The kit skips a test hook that throws, so the call rejects as a command that cannot start does.
+    expect((await run($, 'log')).text.startsWith(`🔀 Could not open ${LOG_FILE}: `)).toBe(true)
+  })
+
+  test('where the platform is unknown or hosted the line gives the path and runs nothing', async ($, on) => {
+    const w = world(on, undefined, { files: { [LOG_FILE]: '' }, infoFails: true })
+    expect((await run($, 'log')).text).toBe(`🔀 The event log is at ${LOG_FILE} (not opened: no opener known for this system)`)
+    expect(openRuns(w)).toEqual([])
+  })
+})
+
 describe('/model-router usage view on graphical surfaces', () => {
   const GRAPHICAL = ['desktop', 'vscode', 'mobile'] as const
   const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
@@ -759,7 +847,7 @@ describe('/model-router usage view on graphical surfaces', () => {
     await run($, 'classes 30d')
     const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
     const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
-    expect(keys).toEqual(['tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level-user', 'level-project', 'report', 'refresh'])
+    expect(keys).toEqual(['tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level-user', 'level-project', 'report', 'refresh', 'log'])
     const drawn = JSON.stringify(await ui.drawn())
     expect(drawn.match(/"variant":"primary"/g)?.length).toBe(3)
     expect(drawn.includes('"plain":true')).toBe(false)
