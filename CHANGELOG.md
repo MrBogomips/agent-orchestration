@@ -16,6 +16,26 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
   out and that *Open as page* shows everything; past that it draws one line and the page button. The usage view
   and the log dashboard keep to the same bounds.
 
+### Changed
+
+- The log dashboard charts the last 24 hours by hour, under the title *By hour (UTC)*; with one bar for the whole
+  window the chart said nothing. The other windows stay by day.
+- A record of a written file shows the file's name, not its path: a path showed the machine's folders, and a
+  temporary one the user's name. The path is no longer read into the pane at all; *Open file* has the log itself.
+- A `session-end` record reads `session ended`, with its reason when it has one; it used to show the bare word
+  `other`.
+
+## session-hub 0.4.4
+
+2026-11-22 · pull request #TBD
+
+### Fixed
+
+- The log pane and the children panel keep within Claude Code's bounds for what a pane draws (100,000 characters),
+  past which the Claude desktop app shows an empty pane. A record with many children is drawn in brief in the log
+  pane, each child as one line with the latest events, then its first sixty children with the rest counted; the
+  children panel draws as many rows as fit and counts the others. Each says that the file has everything.
+
 ## model-router 0.3.14
 
 2026-11-22 · pull request #81
