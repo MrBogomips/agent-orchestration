@@ -11,12 +11,14 @@
 import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, RenderInputOf, RenderSurface } from 'claude-code'
 
-import type { ScopeLine, SessionHubMaster, SessionHubPanel, SessionHubStarts } from '../types'
+import type { ScopeLine, SessionHubLog, SessionHubMaster, SessionHubPanel, SessionHubStarts } from '../types'
 import { helpText, parseCommand } from './mod/command.mjs'
+import { hostKind, isGraphical } from './mod/host.mjs'
 import { identityMismatch, mismatchText } from './mod/identity.mjs'
 import { markContext, markText } from './mod/origin.mjs'
 import { failText, recordPlan, recordSource } from './mod/open-record.mjs'
 import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
+import { LOG_PANE, LOG_PANE_TITLE } from './mod/record-cards.mjs'
 import { childStarts, isSessionStartTool, startLineSegments, toolStarts } from './mod/start-line.mjs'
 import type { ChildStart } from './mod/start-line.mjs'
 import { readRole } from './mod/role.mjs'
@@ -24,6 +26,7 @@ import { SECTION_ID, roleSummary, scopeSection } from './mod/scope-line.mjs'
 import { judgeSend } from './mod/send-guard.mjs'
 import { judgeShell } from './mod/shell-guard.mjs'
 import { childrenPane, segmentProps } from './children-pane'
+import { recordPane } from './record-pane'
 import type { Segment } from './children-pane'
 
 type Role = ReturnType<typeof readRole>
@@ -52,6 +55,8 @@ const scopeLineState = atom({ plugin: 'session-hub', key: 'scopeLine' } as const
 const panelState = atom({ plugin: 'session-hub', key: 'panel' } as const, { rows: [] } as SessionHubPanel, {
   shape: 'panel-1',
 })
+// The log pane: the children record as a dashboard, on graphical surfaces.
+const logState = atom({ plugin: 'session-hub', key: 'log' } as const, { isLoading: false } as SessionHubLog, { shape: 'log-1' })
 // The start lines of each Bash call that started children, by the call's tool_use_id.
 const startLines = atom({ plugin: 'session-hub', key: 'starts' } as const, null as SessionHubStarts | null)
 
@@ -187,6 +192,44 @@ async function openRecord($: $): Promise<string> {
     }
   } catch (error) {
     return `Could not open the children record: ${reasonOf(error).slice(0, 200)}`
+  }
+}
+
+// Reads the record this session's log is into the log pane's state. An error (no record to open, a file that
+// cannot be read) is kept for the pane to show, never thrown.
+async function readLog($: $) {
+  await update($, logState, (log) => ({ ...log, isLoading: true }))
+  try {
+    const found = await recordFile($)
+    if ('none' in found) throw new Error(found.none)
+    const script = `${$.plugin.root}/scripts/registry.mjs`
+    const { exitCode, stdout, stderr } = await $.process.run(['node', script, 'read', '--file', found.file], { timeoutMs: REGISTRY_TIMEOUT_MS })
+    if (exitCode !== 0) throw new Error(stderr.trim() || `registry.mjs exited with ${exitCode}`)
+    const record: unknown = JSON.parse(stdout)
+    await update($, logState, () => ({ record, file: found.file, readAt: new Date().toISOString(), isLoading: false }))
+  } catch (error) {
+    await update($, logState, (log) => ({ ...log, isLoading: false, error: `Cannot read the children record: ${reasonOf(error).slice(0, 200)}` }))
+  }
+}
+
+// Where the session is shown: a terminal, a graphical host (attached, or about to attach), or nowhere.
+async function hostOf($: $) {
+  const surfaces = await $.session.surfaces().catch(() => [])
+  const entrypoint = await $.env.get('CLAUDE_CODE_ENTRYPOINT').catch(() => undefined)
+  return hostKind({ surfaces, entrypoint })
+}
+
+// Shows the children record: the log pane on a graphical host (`onGraphical`: the press came from a graphical
+// drawing), the file in the system's default app anywhere else. A pane that is not placed yet is kept: an app
+// attaches its surface at its first draw. Never throws.
+async function showRecord($: $, onGraphical = false): Promise<string> {
+  if (!onGraphical && (await hostOf($)) !== 'graphical') return openRecord($)
+  try {
+    await $.ui.open({ id: LOG_PANE, title: LOG_PANE_TITLE, focus: true })
+    await readLog($)
+    return 'Children record opened beside the chat.'
+  } catch (error) {
+    return `Could not open the children record pane: ${reasonOf(error).slice(0, 200)}`
   }
 }
 
@@ -364,7 +407,7 @@ export const register: Register = (on) => {
     const asked = parseCommand(e.args)
     if (asked.kind === 'help') return { text: helpText(), isTextDisplayOnly: true as const }
     if (asked.kind === 'unknown') return { text: `Unknown argument "${asked.word}".\n\n${helpText()}`, isTextDisplayOnly: true as const }
-    if (asked.kind === 'log') return { text: await openRecord($), isTextDisplayOnly: true as const }
+    if (asked.kind === 'log') return { text: await showRecord($), isTextDisplayOnly: true as const }
     const width = Math.max(MIN_TABLE_COLUMNS, e.presentation?.columns ?? 80)
     const role = await loadRole($)
     if (role.kind === 'none' && !(await read($, masterState)).isMaster) await detectMaster($, await $.session.cwd())
@@ -386,8 +429,20 @@ export const register: Register = (on) => {
     const panel = await read($, panelState)
     const width = Math.max(20, e.props.bodyColumns ?? 80)
     return childrenPane($.ui.resolve(e), e.surface, panel, width, {
-      openRecord: async () => $.ui.log(`[session-hub] ${await openRecord($)}`),
+      openRecord: async () => $.ui.log(`[session-hub] ${await showRecord($, isGraphical(e.surface))}`),
     })
+  })
+
+  // The log pane (hooks/record-pane.tsx): the children record as a dashboard. Its file button opens the record
+  // in the system's default app, as the panel's key does in the terminal.
+  on('ui.render', { component: 'Pane', requestId: LOG_PANE }, async ($, e) => {
+    const width = Math.max(20, e.props.bodyColumns ?? 80)
+    const actions = {
+      refresh: () => readLog($),
+      openFile: async () => $.ui.log(`[session-hub] ${await openRecord($)}`),
+    }
+    return recordPane($.ui.resolve(e), e.surface, await read($, logState), actions, width, (reason) =>
+      $.ui.log(`[session-hub] log pane: ${reason.slice(0, 200)}`, { to: 'debug' }))
   })
 
   // In the desktop app a child starts with the app's session tool, not a launch command: its line comes from the
