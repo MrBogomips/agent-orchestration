@@ -307,7 +307,7 @@ async function openInPane($: any, file: string): Promise<string | null> {
 async function openInBrowser($: any, file: string): Promise<string | null> {
   try {
     const info = await $.session.info().catch(() => ({}))
-    const argv = info?.isHosted === true ? null : openerArgv(info?.platform, file, 'default')
+    const argv = info?.isHosted === true ? null : openerArgv(info?.platform, file)
     if (!argv) return whyNot(info?.platform, info?.isHosted === true)
     const run = await $.process.run(argv, { timeoutMs: OPEN_TIMEOUT_MS })
     return run.exitCode === 0 ? null : run.stderr.trim() || `${argv[0]} exited with ${run.exitCode}`

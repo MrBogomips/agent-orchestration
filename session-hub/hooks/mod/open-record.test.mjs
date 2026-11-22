@@ -5,9 +5,9 @@ import { LOG_HOTKEY, LOG_KEY, LOG_LABEL, failText, openerArgv, recordPlan, recor
 const RECORD = '/home/u/.claude/session-hub/children-0123456789abcdef.json';
 
 test('the opener is the platform\'s own, with the path as one argument', () => {
-  assert.deepEqual(openerArgv('macos', RECORD), ['open', '-t', RECORD]);
+  assert.deepEqual(openerArgv('macos', RECORD), ['open', RECORD]);
   assert.deepEqual(openerArgv('linux', RECORD), ['xdg-open', RECORD]);
-  assert.deepEqual(openerArgv('macos', '/a b/$(x);y.json'), ['open', '-t', '/a b/$(x);y.json']);
+  assert.deepEqual(openerArgv('macos', '/a b/$(x);y.json'), ['open', '/a b/$(x);y.json']);
 });
 
 test('no opener for another platform, or for a path that is not absolute', () => {
@@ -33,7 +33,7 @@ test('where the record is: a child has its master\'s, a master its own or the de
 test('an existing record is opened, and the line names it', () => {
   assert.deepEqual(recordPlan({ file: RECORD, exists: true, platform: 'macos' }), {
     target: RECORD,
-    argv: ['open', '-t', RECORD],
+    argv: ['open', RECORD],
     text: `Children record opened: ${RECORD}`,
   });
   assert.deepEqual(recordPlan({ file: RECORD, exists: true, platform: 'linux' }).argv, ['xdg-open', RECORD]);

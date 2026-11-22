@@ -12,23 +12,23 @@ test('the log and its archive folder are under the config folder', () => {
 });
 
 test('the opener is the platform\'s own, with the path as one argument', () => {
-  assert.deepEqual(openerArgv('macos', LOG, 'text'), ['open', '-t', LOG]);
-  assert.deepEqual(openerArgv('macos', ARCHIVE, 'default'), ['open', ARCHIVE]);
-  assert.deepEqual(openerArgv('linux', LOG, 'text'), ['xdg-open', LOG]);
-  assert.deepEqual(openerArgv('linux', ARCHIVE, 'default'), ['xdg-open', ARCHIVE]);
-  assert.deepEqual(openerArgv('macos', '/a b/$(x);y.jsonl', 'text'), ['open', '-t', '/a b/$(x);y.jsonl']);
+  assert.deepEqual(openerArgv('macos', LOG), ['open', LOG]);
+  assert.deepEqual(openerArgv('macos', ARCHIVE), ['open', ARCHIVE]);
+  assert.deepEqual(openerArgv('linux', LOG), ['xdg-open', LOG]);
+  assert.deepEqual(openerArgv('linux', ARCHIVE), ['xdg-open', ARCHIVE]);
+  assert.deepEqual(openerArgv('macos', '/a b/$(x);y.jsonl'), ['open', '/a b/$(x);y.jsonl']);
 });
 
 test('no opener for another platform, or for a path that is not absolute', () => {
-  for (const platform of ['windows', 'wsl', 'unknown', undefined, 'constructor']) assert.equal(openerArgv(platform, LOG, 'text'), null);
-  assert.equal(openerArgv('macos', '-R', 'text'), null);
-  assert.equal(openerArgv('macos', '~/.claude/x', 'text'), null);
-  assert.equal(openerArgv('macos', undefined, 'text'), null);
+  for (const platform of ['windows', 'wsl', 'unknown', undefined, 'constructor']) assert.equal(openerArgv(platform, LOG), null);
+  assert.equal(openerArgv('macos', '-R'), null);
+  assert.equal(openerArgv('macos', '~/.claude/x'), null);
+  assert.equal(openerArgv('macos', undefined), null);
 });
 
 test('the log is opened, and the line names it', () => {
   const plan = openPlan({ configDir: DIR, platform: 'macos', hasLog: true, hasArchive: false });
-  assert.deepEqual(plan, { target: LOG, argv: ['open', '-t', LOG], text: `Event log opened: ${LOG}` });
+  assert.deepEqual(plan, { target: LOG, argv: ['open', LOG], text: `Event log opened: ${LOG}` });
 });
 
 test('with an archive the line names its folder too', () => {

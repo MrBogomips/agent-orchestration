@@ -263,8 +263,8 @@ results for 0.2 (`spikes.md`); the pure logic lives in `hooks/mod/*.mjs`, the en
 Opening the children record (`hooks/mod/open-record.mjs`), from the panel and from `/session-hub log`. The record
 is the one the session reads: a child's `SESSION_HUB_REGISTRY`, a master's own `--file`, else the default path of
 the hub, asked of `scripts/registry.mjs path`. The API has no call that opens a file, so the mod runs the system's
-opener with `$.process.run`, the path as one argument and no shell: `open -t <record>` on macOS (the default text
-editor), `xdg-open <record>` on Linux, by `$.session.info().platform`. The line the person reads is written in the
+opener with `$.process.run`, the path as one argument and no shell: `open <record>` on macOS, `xdg-open <record>` on
+Linux, by `$.session.info().platform`. The line the person reads is written in the
 session (`[session-hub] Children record opened: <path>`), or is the command's answer. With no record yet the line
 says so and nothing runs; on a hosted session, a platform with no known opener or a path that is not absolute it
 gives the path and the reason; a failed or slow opener (10 seconds) gives `Could not open <path>: <reason>`. The

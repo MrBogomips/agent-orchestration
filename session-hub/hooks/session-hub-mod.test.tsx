@@ -411,7 +411,7 @@ test('/session-hub log opens the children record at the default path of the hub 
   const out = await $.command.run({ ...RUN, args: 'log' })
   expect(out.text).toBe(`Children record opened: ${DEFAULT_RECORD}`)
   expect(out.isTextDisplayOnly).toBe(true)
-  expect(world.opened).toEqual([['open', '-t', DEFAULT_RECORD]])
+  expect(world.opened).toEqual([['open', DEFAULT_RECORD]])
 })
 
 test('a master that named its record with --file opens that file; on Linux with xdg-open', async ($, on) => {
@@ -440,7 +440,7 @@ test('a child opens the record of its master', async ($, on) => {
   on('fs.exists', () => ({ value: true }))
   on('process.run', (_, e) => (opened.push(e.argv), ran('')))
   expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe(`Children record opened: ${MASTER_RECORD}`)
-  expect(opened).toEqual([['open', '-t', MASTER_RECORD]])
+  expect(opened).toEqual([['open', MASTER_RECORD]])
 })
 
 test('a child started without a record is told to open it from its master', async ($, on) => {
@@ -468,7 +468,7 @@ test('the panel offers the record: a key hint in the terminal, a native button o
     await ui.press({ key: 'log' })
     await ui.unmount()
   }
-  expect(world.opened).toEqual(Array(4).fill(['open', '-t', DEFAULT_RECORD]))
+  expect(world.opened).toEqual(Array(4).fill(['open', DEFAULT_RECORD]))
   expect(world.logs.filter((l) => l.startsWith('[session-hub] Children record opened'))).toEqual(Array(4).fill(`[session-hub] Children record opened: ${DEFAULT_RECORD}`))
 })
 

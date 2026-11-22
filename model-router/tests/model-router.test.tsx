@@ -815,7 +815,7 @@ describe('opening the event log', () => {
     expect(JSON.stringify(button)).toContain('"hotkey":"l"')
     expect(JSON.stringify(button)).toContain('"label":"log"')
     await ui.press({ key: 'log' })
-    expect(openRuns(w)).toEqual([['open', '-t', LOG_FILE]])
+    expect(openRuns(w)).toEqual([['open', LOG_FILE]])
     expect(w.logs).toContain(`🔀 Event log opened: ${LOG_FILE}`)
     await ui.unmount()
   })
@@ -841,7 +841,7 @@ describe('opening the event log', () => {
     const out = await run($, 'log')
     expect(out.text).toBe(`🔀 Event log opened: ${LOG_FILE}`)
     expect(out.isTextDisplayOnly).toBe(true)
-    expect(openRuns(w)).toEqual([['open', '-t', LOG_FILE]])
+    expect(openRuns(w)).toEqual([['open', LOG_FILE]])
     expect(w.opens.length).toBe(0)
   })
 

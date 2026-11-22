@@ -11,11 +11,10 @@ export const LOG_LABEL = 'Log';
 const REASON_CHARS = 200;
 
 // The command that opens a path in the system's default app, by platform (`$.session.info().platform`).
-// `text` is a log: macOS opens it with `-t`, the default text editor, since `.jsonl` often has no app of its own and
-// `open` then fails. `default` is a folder or a page, opened by the app the system has for it.
+// A file, a folder and a page are opened alike, by the app the system has for them.
 const OPENERS = Object.freeze({
-  macos: Object.freeze({ text: ['open', '-t'], default: ['open'] }),
-  linux: Object.freeze({ text: ['xdg-open'], default: ['xdg-open'] }),
+  macos: Object.freeze(['open']),
+  linux: Object.freeze(['xdg-open']),
 });
 
 /** The event log and the folder its rotated parts are kept in, under the config folder. */
@@ -25,11 +24,10 @@ export function logPaths(configDir) {
 }
 
 /**
- * The argument vector that opens `path` (`kind`: `text` or `default`) on `platform`, the path one argument of its
- * own; null where no opener is known, or the path is not absolute (it could read as an option).
+ * The argument vector that opens `path` on `platform`, the path one argument of its own; null where no opener is known, or the path is not absolute (it could read as an option).
  */
-export function openerArgv(platform, path, kind) {
-  const opener = Object.hasOwn(OPENERS, String(platform)) ? OPENERS[platform][kind === 'text' ? 'text' : 'default'] : null;
+export function openerArgv(platform, path) {
+  const opener = Object.hasOwn(OPENERS, String(platform)) ? OPENERS[platform] : null;
   if (!opener || typeof path !== 'string' || !path.startsWith('/')) return null;
   return [...opener, path];
 }
@@ -49,7 +47,7 @@ export function openPlan({ configDir, platform, isHosted = false, hasLog, hasArc
     return { target: null, argv: null, text: `No event log yet: ${log} is written once a subagent has run with measuring on.` };
   }
   const target = hasLog ? log : archive;
-  const argv = isHosted ? null : openerArgv(platform, target, hasLog ? 'text' : 'default');
+  const argv = isHosted ? null : openerArgv(platform, target);
   const rotated = hasLog && hasArchive ? ` · rotated logs: ${archive}` : '';
   if (!argv) {
     const what = hasLog ? 'The event log is at' : 'No event log since the last rotation; the archive folder is at';

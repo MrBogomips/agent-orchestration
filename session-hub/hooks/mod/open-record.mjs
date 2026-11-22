@@ -10,9 +10,8 @@ export const LOG_LABEL = 'Log';
 const REASON_CHARS = 200;
 
 // The command that opens a file in the system's default app, by platform (`$.session.info().platform`).
-// macOS opens it with `-t`, the default text editor, so a machine with no app set for `.json` still opens it.
 const OPENERS = Object.freeze({
-  macos: Object.freeze(['open', '-t']),
+  macos: Object.freeze(['open']),
   linux: Object.freeze(['xdg-open']),
 });
 

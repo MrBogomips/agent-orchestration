@@ -389,8 +389,8 @@ decided in `lib/open-log.mjs`:
 
 - The API has no call that opens a file, and a `Link` opens what the surface chooses (on a remote surface only
   `https:`), so the mod runs the system's opener with `$.process.run`, the path as one argument and no shell:
-  `open -t <log>` on macOS, `xdg-open <log>` on Linux, by `$.session.info().platform`. `-t` is the default text
-  editor: `.jsonl` often has no app of its own, and a plain `open` then fails.
+  `open <log>` on macOS, `xdg-open <log>` on Linux, by `$.session.info().platform`: the app the system has for the
+  file. A machine with no app set for `.jsonl` gets the failure line, which gives the path.
 - One action, not two. The line written in the session names the log and, when `archive/` exists, that folder too
   (`Event log opened: … · rotated logs: …`). A reveal in the file manager would show both, but only macOS has one
   (`open -R`), and it would not open the log.
