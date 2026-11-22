@@ -32,7 +32,7 @@ marketplace (`~/git/MrBogomips/claude-plugins`).
 
 | Location | Role | Git |
 |---|---|---|
-| `docs/design/` | Authoritative design and spike results. Change the design here first, then the code. | committed |
+| `docs/design/` | Authoritative design and spike results. Change the design here first, then the code. `docs/design/ui-design.md` holds the rules for every interface the plugins draw. | committed |
 | `docs/research/` | Research behind the design; reference only. | committed |
 | `docs/architecture.md` | Product architecture, written from the released code. | committed |
 | `docs/manual/` | User manual: `manual.html` (source), `images/`, `user-manual.pdf` (built by `build.sh`), `tools/` (screenshot helpers). Update it with the code it describes. | committed |
@@ -57,6 +57,9 @@ request, before either plugin builds on the change.
   whether the other plugin is installed.
 - Never copy code from the reference pack, except the MIT-licensed router, with its notice.
 - Hooks and scripts: Node `.mjs`, no dependencies, macOS and Linux.
+- Every interface a plugin draws follows `docs/design/ui-design.md`. On the Claude desktop app, VS Code and the mobile
+  apps it follows the desktop app's design system, with native elements and theme colours, never the terminal's
+  text art. Each pane offers its plugin's own log.
 - Repository documents are in English.
 
 ## Git / PR Working Policy
