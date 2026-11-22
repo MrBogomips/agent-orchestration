@@ -129,3 +129,9 @@ test('the help is a static list', () => {
   assert.equal(hubHelpCard().isStatic, true);
   assert.match(textOf(hubHelpCard()), /\| `log  record` \|/);
 });
+
+test('a session with no role gets no read error under its note; a child or a master does', () => {
+  const log = { isLoading: false, error: 'Cannot read the children record: no record' };
+  assert.equal(hubCardOf({ state: {}, role: NONE, master: { isMaster: false }, log }).blocks.length, 1);
+  assert.equal(hubCardOf({ state: {}, role: NONE, master: MASTER, log }).blocks.at(-1).tone, 'warn');
+});

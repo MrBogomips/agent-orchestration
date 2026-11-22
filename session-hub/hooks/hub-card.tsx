@@ -47,14 +47,15 @@ async function cardFor(deps: HubDeps, state: HubCardState): Promise<Card> {
  */
 export async function openHubCard($: any, deps: HubDeps, view: string): Promise<string> {
   const state = hubStateOf({ ...DEFAULT_HUB_CARD, view })
+  // What the newest card says now, before the read for the new one.
+  const before = await read($, cards)
+  const old = before.latest ? await read($, memberOf(cardStates, memberKey(before.latest.seq))) : null
+  const last = before.latest && old ? await cardFor(deps, hubStateOf(old)) : null
   await deps.readAll()
   const card = await cardFor(deps, state)
-  const before = await read($, cards)
   const seq = before.seq + 1
   const stamp = parts.stampOf(seq, Date.now())
   const readAt = parts.cardIdOf(stamp)?.read ?? ''
-  const old = before.latest ? await read($, memberOf(cardStates, memberKey(before.latest.seq))) : null
-  const last = before.latest && old ? await cardFor(deps, hubStateOf(old)) : null
   await update($, memberOf(cardStates, memberKey(seq)), () => state)
   await update($, cards, (index) => ({
     seq,

@@ -427,8 +427,10 @@ function blocksOf({ state, usage, report, log, status }) {
  * read yet says so in one line; a view that cannot be built says why, and the card is still drawn.
  */
 export function cardOf(input) {
-  const state = cardStateOf(input.state);
   const data = input.usage?.data ?? null;
+  // This project's figures need a project: a session without one shows all projects, as the dropdown is not drawn.
+  const asked = cardStateOf(input.state);
+  const state = asked.level === 'project' && data && !data.project ? { ...asked, level: 'user' } : asked;
   const logData = input.log?.data;
   const summary = state.view === 'log' && logData ? `${plural(logData.total ?? 0, 'record')} · ${windowText(state.window)}` : data ? summaryOf(data, state) : 'reading…';
   let blocks;

@@ -189,7 +189,12 @@ export function hubCardOf(input) {
   let blocks;
   try {
     if (state.view === 'record') blocks = input.log?.record ? [...recordBlocks({ ...input, state }, children), ...closing(file)] : failed.length ? failed : [note('Reading the children record…')];
-    else blocks = [...childrenBlocks({ ...input, state, file }, children), ...(reading && input.master?.isMaster ? [note('Reading the children record…')] : failed), ...closing(file)];
+    else {
+      // A session with no role has no record to read: its note says so, and no read error is added under it.
+      const hasRole = input.master?.isMaster || input.role?.kind === 'child';
+      const status = !hasRole ? [] : reading ? [note('Reading the children record…')] : failed;
+      blocks = [...childrenBlocks({ ...input, state, file }, children), ...status, ...closing(file)];
+    }
   } catch (err) {
     blocks = [note(`Could not draw this view: ${String(err?.message ?? err).slice(0, 200)}`, 'warn')];
   }

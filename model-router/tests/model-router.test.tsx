@@ -970,6 +970,26 @@ describe('the card on the desktop app', () => {
     await ui.unmount()
   })
 
+  test('the Log view reads the latest records of its first kind, and of a kind picked; the card before keeps its window', async ($, on) => {
+    const w = world(on, undefined, { ...DESKTOP, files: { [LOG_FILE]: '' } })
+    const logRuns = () => w.runs.filter((r) => String(r.argv[1]).endsWith('log.mjs')).map((r) => `${r.argv[r.argv.indexOf('--window') + 1]}:${r.argv[r.argv.indexOf('--type') + 1]}`)
+    const first = await run($, 'log')
+    const ui = await $.ui.mount({ ...cardRow(first, 'log'), surface: 'desktop' })
+    await ui.select({ key: 'window', value: '7d' })
+    const kinds = logRuns()
+    expect(kinds[0]).toBe('24h:all')
+    expect(kinds.filter((k) => k === '7d:all').length).toBe(1)
+    expect(kinds.at(-1)?.startsWith('7d:') && kinds.at(-1) !== '7d:all').toBe(true)
+    const open = (await ui.findAll({ type: 'Button' })).map((b: any) => b.key).filter((k: string) => k.startsWith('group:'))
+    await ui.press({ key: open[1] })
+    expect(logRuns().at(-1)).toBe(`7d:${open[1].slice(6)}`)
+    await ui.unmount()
+    await run($, 'log')
+    const before = await $.ui.mount({ ...cardRow(first, 'log'), surface: 'desktop' })
+    expect(await before.find({ type: 'Text', text: /· last 7 days · read \d\d:\d\d UTC$/ })).toBeDefined()
+    await before.unmount()
+  })
+
   test('a group opens and closes on its name; one group is open at a time', async ($, on) => {
     world(on, undefined, DESKTOP)
     const ui = await $.ui.mount({ ...cardRow(await run($, 'decisions 30d')), surface: 'desktop' })

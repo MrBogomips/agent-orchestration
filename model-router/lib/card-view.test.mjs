@@ -158,3 +158,10 @@ test('the help is a static list of what each argument opens', () => {
   assert.equal(help.isStatic, true);
   assert.match(textOf(help), /\| `report` \| The card on Trend; its last line links the report page \|/);
 });
+
+test('a session without a project shows all projects even when this project was asked for', () => {
+  const data = { ...usageData(), project: null };
+  const c = cardOf({ state: { view: 'overview', level: 'project', window: '30d' }, usage: { data, isLoading: false }, status: STATUS });
+  assert.equal(c.nav.scope, undefined);
+  assert.equal(blockOf(c, 'grid').pairs[0].value, '75%');
+});

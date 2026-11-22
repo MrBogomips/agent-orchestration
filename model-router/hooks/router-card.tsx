@@ -66,8 +66,14 @@ async function readLog($: any, deps: CardDeps, patch: { window?: string; type?: 
 
 /** Reads what a view draws from and is read on demand: the report, or the log for its window and open group. */
 async function readFor($: any, deps: CardDeps, state: CardState) {
-  if (state.view === 'log') await readLog($, deps, { window: state.window, type: state.group && state.group !== NONE ? state.group : 'all' })
-  else if (REPORT_VIEWS.includes(state.view)) await deps.readReport()
+  if (REPORT_VIEWS.includes(state.view)) await deps.readReport()
+  if (state.view !== 'log') return
+  if (state.group && state.group !== NONE) return readLog($, deps, { window: state.window, type: state.group })
+  // No group picked: the first kind is open, so after the count of every kind read that kind's latest records.
+  await readLog($, deps, { window: state.window, type: 'all' })
+  if (state.group === NONE) return
+  const first = (await read($, logState)).data?.byType as { type?: unknown }[] | undefined
+  if (typeof first?.[0]?.type === 'string') await readLog($, deps, { window: state.window, type: first[0].type })
 }
 
 async function cardFor($: any, deps: CardDeps, state: CardState): Promise<Card> {
@@ -81,15 +87,16 @@ async function cardFor($: any, deps: CardDeps, state: CardState): Promise<Card> 
  */
 export async function openCard($: any, deps: CardDeps, ask: CardAsk): Promise<string> {
   const state = cardStateOf({ ...DEFAULT_CARD, view: ask.view ?? DEFAULT_CARD.view, window: ask.window ?? (ask.view === 'log' ? '24h' : DEFAULT_CARD.window), level: ask.level ?? DEFAULT_CARD.level })
+  // What the newest card says now, before the reads for the new one change the data it shares (the log's window).
+  const before = await read($, cards)
+  const old = before.latest ? await read($, memberOf(cardStates, memberKey(before.latest.seq))) : null
+  const last = before.latest && old ? await cardFor($, deps, cardStateOf(old)) : null
   await deps.readUsage()
   await readFor($, deps, state)
   const card = await cardFor($, deps, state)
-  const before = await read($, cards)
   const seq = before.seq + 1
   const stamp = parts.stampOf(seq, Date.now())
   const readAt = parts.cardIdOf(stamp)?.read ?? ''
-  const old = before.latest ? await read($, memberOf(cardStates, memberKey(before.latest.seq))) : null
-  const last = before.latest && old ? await cardFor($, deps, cardStateOf(old)) : null
   await update($, memberOf(cardStates, memberKey(seq)), () => state)
   await update($, cards, (index) => ({
     seq,

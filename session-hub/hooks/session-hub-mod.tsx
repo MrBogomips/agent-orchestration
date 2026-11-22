@@ -244,7 +244,8 @@ async function readLog($: $) {
     const record: unknown = JSON.parse(stdout)
     await update($, logState, () => ({ record, file: found.file, readAt: new Date().toISOString(), isLoading: false }))
   } catch (error) {
-    await update($, logState, (log) => ({ ...log, isLoading: false, error: `Cannot read the children record: ${reasonOf(error).slice(0, 200)}` }))
+    // The record read before is dropped: a card shows the error rather than figures that may be stale.
+    await update($, logState, () => ({ isLoading: false, error: `Cannot read the children record: ${reasonOf(error).slice(0, 200)}` }))
   }
 }
 

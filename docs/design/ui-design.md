@@ -159,7 +159,7 @@ eight cells about a thousand, an SVG bar about three hundred: a hundred table ro
 - A mod test for such a tree draws data large enough to be past the bound and asserts the size of the drawn tree
   (`treeSize(await ui.drawn())`), not only what it shows.
 
-A card is bounded by design. It draws one view; its rows are capped (4 models, 8 task classes or projects, the
+A card is bounded by design. It draws one view; its rows are capped (a row per model family, 8 task classes or projects, the
 latest 6 decisions of the open group, the latest 5 records, 12 children then "n more in the record", 7 timeline
 events); each chart is one `Svg` (a heatmap about 10,000 characters, a 30-bar stacked chart about 9,000). The
 heaviest card is under 30,000 characters and about 6 levels deep. It still goes through `firstThatFits`: the view,
