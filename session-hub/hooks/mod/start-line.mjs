@@ -1,8 +1,9 @@
-// The start line: under the row of a Bash call that starts child sessions, one line per child,
+// The start line: under the row of a Bash call that starts child sessions, or of the desktop app's session tool,
+// one line per child,
 // `⎿  🔀 opus   ▰▰▰▱ high   -> <child name>`, drawn like model-router's choose-model line.
 // Pure: reads the launch commands of skills/spawn/references/environments/ with the shell lexer: `claude` after
 // SESSION_HUB_ROLE=child, tmux's new-window or split-window with the command as arguments (or, as before, typed with
-// send-keys -l), and herdr agent start.
+// send-keys -l), and herdr agent start; and the input of the desktop app's start_session call.
 
 import { ARROW, ROUTE_ICON, modelEffortSegments } from './look.mjs';
 import { commandName, stripPrefix } from './shell-commands.mjs';
@@ -88,6 +89,31 @@ export function childStarts(command) {
   } catch {
     return [];
   }
+}
+
+// The desktop app's session-starting tool (skills/spawn/references/environments/desktop-app.md), whatever server
+// name the app gives it: `mcp__ccd_session__start_session` today.
+const SESSION_START_TOOL = /^mcp__[\w-]+__start_session$/;
+
+/** Whether a tool starts a session the way the desktop app's `start_session` does. */
+export function isSessionStartTool(tool) {
+  return typeof tool === 'string' && SESSION_START_TOOL.test(tool);
+}
+
+const text = (value) => (typeof value === 'string' && value !== '' ? value : undefined);
+
+/**
+ * The child a session-starting tool call starts, `{ name, model, effort }`, from its input: the name, else the
+ * title. Like a launch command, a start that states neither model nor effort gets no line.
+ * @param {string} tool
+ * @param {unknown} input
+ */
+export function toolStarts(tool, input) {
+  if (!isSessionStartTool(tool) || !input || typeof input !== 'object') return [];
+  const model = text(input.model);
+  const effort = text(input.effort);
+  if (model === undefined && effort === undefined) return [];
+  return [{ name: text(input.name) ?? text(input.title) ?? FALLBACK_NAME, model, effort }];
 }
 
 /** The line as segments: `{ text, color?, bold?, tone? }`, for the mod to colour. */
