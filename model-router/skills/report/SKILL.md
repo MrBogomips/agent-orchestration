@@ -45,5 +45,5 @@ When the page has no data yet, say why it may be empty:
   act on it before 0.4.
 - In a session with mods on, `/model-router` shows the same numbers in the terminal, and `/model-router report`
   writes and opens this same page. Suggest it to the user for next time.
-- Read-only classes and cells with fewer than five tasks are weak signals; the page marks them.
+- Read-only classes and cells with fewer than five tasks are weak signals; the page flags them.
 - Nothing leaves the machine. Share the page only when the user asks.
