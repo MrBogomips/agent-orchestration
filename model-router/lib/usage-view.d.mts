@@ -36,3 +36,7 @@ export declare function cellName(tier: unknown, effort: unknown): string
 export declare function headlineFor(data: unknown, view: View): Record<string, any> | null
 export declare function levelName(data: unknown, view: View): string
 export declare function shortModel(model: unknown): string
+export declare function statusParts(status: unknown): { key: string; text: string; on: boolean }[]
+export declare function viewOf<V extends View>(view: V | null | undefined): V & { tab: string; window: string; level: string }
+export declare function sessionParts(model: Record<string, unknown>): string[]
+export declare function bestText(cls: Record<string, any>): string

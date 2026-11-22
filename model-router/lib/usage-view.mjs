@@ -140,11 +140,42 @@ function wrapParts(prefix, parts, width, indent) {
 const LABEL = 22;
 const labelled = (label, value, width) => fit(`${padEndTo(label, LABEL)}${value}`, width);
 
-function statusText(status) {
-  if (!status) return 'unknown';
+/** The status as its three parts, each `{ key, text, on }`: routing, measuring, adapt. Empty when it is unknown. */
+export function statusParts(status) {
+  if (!status) return [];
   const routing = status.routing ? 'on' : `off${status.routeSubagents === false ? ' (routeSubagents is false)' : ''}`;
   const adapt = status.adapt ? 'on (not used before 0.4)' : 'off';
-  return `routing ${routing} · measuring ${status.measuring ? 'on' : 'off'} · adapt ${adapt}`;
+  return [
+    { key: 'routing', text: `routing ${routing}`, on: Boolean(status.routing) },
+    { key: 'measuring', text: `measuring ${status.measuring ? 'on' : 'off'}`, on: Boolean(status.measuring) },
+    { key: 'adapt', text: `adapt ${adapt}`, on: Boolean(status.adapt) },
+  ];
+}
+
+const statusText = (status) => statusParts(status).map((p) => p.text).join(' · ') || 'unknown';
+
+/** The view with its defaults: a missing or unknown tab, window or level takes the default one. */
+export function viewOf(view) {
+  const v = { ...DEFAULT_VIEW, ...Object.fromEntries(Object.entries(view ?? {}).filter(([, x]) => x !== null && x !== undefined)) };
+  if (!TABS.includes(v.tab)) v.tab = DEFAULT_VIEW.tab;
+  if (!has(WINDOW_TITLES, v.window)) v.window = DEFAULT_VIEW.window;
+  if (!LEVELS.includes(v.level)) v.level = DEFAULT_VIEW.level;
+  return v;
+}
+
+/** The token counts of one model of the session: its four kinds, or the total alone for agents read from the log. */
+export function sessionParts(m) {
+  return m.isPartial && !m.input && !m.output
+    ? [`${fmtTokens(m.tokens)} tokens`]
+    : [`${fmtTokens(m.input)} input`, `${fmtTokens(m.output)} output`, `${fmtTokens(m.cacheRead)} cache read`, `${fmtTokens(m.cacheWrite)} cache write`];
+}
+
+/** The best measured cell of a class with its cost per success, or that the data is not enough to name one. */
+export function bestText(c) {
+  const rec = c.recommendation;
+  return rec?.source === 'data'
+    ? `best ${cell(rec.tier, rec.effort)} ${fmtUsd(c.cells.find((x) => x.recommended)?.costPerSuccess)}`
+    : 'best: not enough data';
 }
 
 /** The headline of the window at the view's level: `{ current, previous, series }`, or null. */
@@ -188,9 +219,7 @@ function overviewRows(data, view, width) {
   } else {
     rows.push(row(labelled('Subagents:', `${s.agents} · ${fmtUsd(s.cost)}`, width)), row('Usage by model:'));
     for (const m of s.models) {
-      const parts = m.isPartial && !m.input && !m.output
-        ? [`${fmtTokens(m.tokens)} tokens`]
-        : [`${fmtTokens(m.input)} input`, `${fmtTokens(m.output)} output`, `${fmtTokens(m.cacheRead)} cache read`, `${fmtTokens(m.cacheWrite)} cache write`];
+      const parts = sessionParts(m);
       const head = `${padEndTo(`   ${m.model}:`, LABEL)}${m.agents} × `;
       const lines = wrapParts(head, [...parts.slice(0, -1), `${parts.at(-1)} (${fmtUsd(m.cost)})`], width, LABEL);
       rows.push(...lines.map((l) => row(l)));
@@ -249,12 +278,8 @@ function classRows(data, view, width) {
   const line = (label, m) => `${left(label, L)} ${right(fmtNum(m.n), 5)}  ${bar(m.fpy, b)}${right(fmtPct(m.fpy), 5)} ${right(fmtPct(m.reworkRate), 7)} ${right(fmtUsd(m.costPerSuccess), 9)}`;
   for (const c of classes) {
     rows.push(row(fit(line(c.cls, c.summary), width)));
-    const rec = c.recommendation;
-    const best = rec?.source === 'data'
-      ? `best ${cell(rec.tier, rec.effort)} ${fmtUsd(c.cells.find((x) => x.recommended)?.costPerSuccess)}`
-      : 'best: not enough data';
     const flags = c.summary.flags?.length ? ` · ${c.summary.flags.join(', ')}` : '';
-    rows.push(row(fit(`  grid ${cell(c.default.tier, c.default.effort)} · ${best}${c.differs ? ' (differs)' : ''}${flags}`, width), c.differs ? 'warn' : 'dim'));
+    rows.push(row(fit(`  grid ${cell(c.default.tier, c.default.effort)} · ${bestText(c)}${c.differs ? ' (differs)' : ''}${flags}`, width), c.differs ? 'warn' : 'dim'));
     for (const x of c.cells) rows.push(dim(fit(line(`  ${x.recommended ? '*' : ' '} ${cell(x.tier, x.effort)}`, x), width)));
   }
   const differing = classes.filter((c) => c.differs).slice(0, RECOMMENDATIONS_SHOWN);
@@ -299,9 +324,7 @@ const BUILDERS = { overview: overviewRows, models: withTiles(modelsRows), classe
  */
 export function tabRows(data, view, columns) {
   const width = layoutWidth(columns);
-  const v = { ...DEFAULT_VIEW, ...Object.fromEntries(Object.entries(view ?? {}).filter(([, x]) => x !== null && x !== undefined)) };
-  if (!TABS.includes(v.tab)) v.tab = DEFAULT_VIEW.tab;
-  if (!has(WINDOW_TITLES, v.window)) v.window = DEFAULT_VIEW.window;
+  const v = viewOf(view);
   if (!data) return [dim('Reading the usage data…')];
   return BUILDERS[v.tab](data, v, width);
 }
@@ -321,8 +344,7 @@ export function noteRows(data, columns) {
  */
 export function textView(data, view, columns) {
   const width = layoutWidth(columns);
-  const v = { ...DEFAULT_VIEW, ...Object.fromEntries(Object.entries(view ?? {}).filter(([, x]) => x !== null && x !== undefined)) };
-  if (!has(WINDOW_TITLES, v.window)) v.window = DEFAULT_VIEW.window;
+  const v = viewOf(view);
   const tabs = TABS.includes(view?.tab) ? [view.tab] : TABS;
   const out = [`${ROUTE_ICON} Usage · ${WINDOW_TITLES[v.window] ?? v.window} · ${v.level === 'project' ? 'project' : 'user'} level`];
   for (const tab of tabs) {

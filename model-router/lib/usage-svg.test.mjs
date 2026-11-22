@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { COLORS, SVG_MAX, barSvg, escapeXml, sparklineSvg, toneColor } from './usage-svg.mjs';
+import { BAR_SIZE, COLORS, SPARK_SIZE, SVG_MAX, barSvg, escapeXml, sparklineSvg, toneColor } from './usage-svg.mjs';
 
 const count = (text, piece) => text.split(piece).length - 1;
 
@@ -30,32 +30,46 @@ test('a sparkline is one svg document of the size asked for, with an area, a lin
 });
 
 test('the highest value sits at the top and zero on the baseline', () => {
-  const svg = sparklineSvg([0, 1], { width: 100, height: 40 });
+  const svg = sparklineSvg([0, 1, 0.5, 0.25], { width: 100, height: 40 });
   const points = svg.match(/<polyline[^>]* points="([^"]+)"/)[1].split(' ').map((p) => p.split(',').map(Number));
-  assert.deepEqual(points, [[4, 36], [96, 4]]);
+  assert.deepEqual(points, [[4, 36], [34.7, 4], [65.3, 20], [96, 28]]);
 });
 
 test('a fixed domain keeps a rate on its own scale', () => {
-  const svg = sparklineSvg([0.5, 0.5], { width: 100, height: 40, domain: [0, 1] });
+  const svg = sparklineSvg([0.5, 0.5, 0.5, 0.5], { width: 100, height: 40, domain: [0, 1] });
   const ys = svg.match(/<polyline[^>]* points="([^"]+)"/)[1].split(' ').map((p) => Number(p.split(',')[1]));
-  assert.deepEqual(ys, [20, 20]);
+  assert.deepEqual(ys, [20, 20, 20, 20]);
 });
 
 test('a gap breaks the line, and a point with no neighbour is a dot', () => {
-  const svg = sparklineSvg([0.4, 0.6, null, 0.9], { width: 160, height: 40 });
+  const svg = sparklineSvg([0.2, 0.4, 0.6, null, 0.9], { width: 160, height: 40 });
   assert.equal(count(svg, '<polyline'), 1);
   // The lone point is also the last one: one dot stands for both.
   assert.equal(count(svg, '<circle'), 1);
-  const lone = sparklineSvg([0.4, null, 0.6, 0.9], { width: 160, height: 40 });
+  const lone = sparklineSvg([0.4, null, 0.6, 0.9, 0.5], { width: 160, height: 40 });
   assert.equal(count(lone, '<polyline'), 1);
   assert.equal(count(lone, '<circle'), 2);
 });
 
-test('one value alone is a dot on the baseline, never an empty picture', () => {
-  const svg = sparklineSvg([null, null, 1], { width: 160, height: 40 });
-  assert.equal(count(svg, '<polyline'), 0);
-  assert.equal(count(svg, '<circle'), 1);
-  assert.equal(count(svg, 'class="base"'), 1);
+test('up to three values are one bar each, so a thin series still reads as a chart', () => {
+  const one = sparklineSvg([null, null, 1], { width: 160, height: 40 });
+  assert.equal(count(one, '<polyline'), 0);
+  assert.equal(count(one, '<circle'), 0);
+  assert.equal(count(one, 'class="bar"'), 1);
+  assert.equal(count(one, 'class="base"'), 1);
+  assert.equal(count(sparklineSvg([0.5, null, 1, null, 0.2], { width: 160, height: 40 }), 'class="bar"'), 3);
+  const four = sparklineSvg([0.5, 0.6, 1, 0.2], { width: 160, height: 40 });
+  assert.equal(count(four, 'class="bar"'), 0);
+  assert.equal(count(four, '<polyline'), 1);
+});
+
+test('a bar of a sparkline stands on the baseline, as tall as its value, and a zero still shows', () => {
+  const svg = sparklineSvg([1, 0], { width: 100, height: 40 });
+  const bars = [...svg.matchAll(/<rect class="bar" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g)].map((m) => m.slice(1).map(Number));
+  assert.equal(bars.length, 2);
+  assert.deepEqual([bars[0][1], bars[0][3]], [4, 32]);
+  assert.deepEqual([bars[1][1], bars[1][3]], [34, 2]);
+  assert.ok(bars[0][0] >= 0 && bars[1][0] + bars[1][2] <= 100);
 });
 
 test('no value at all leaves the baseline only', () => {
@@ -100,6 +114,18 @@ test('a bar is a track filled to the share, clamped', () => {
   assert.ok(svg.includes(`width="90" height="8" rx="4" fill="${COLORS.good}"`));
   assert.ok(barSvg(7, { width: 120 }).includes('width="120" height="8" rx="4" fill='));
   assert.ok(barSvg(-1, { width: 120 }).includes('class="track"'));
+});
+
+test('a share above zero always shows, at least one pixel wide', () => {
+  assert.ok(barSvg(0.001, { width: 120 }).includes('<rect width="1" height="8" rx="0.5"'));
+  assert.ok(barSvg(0.02, { width: 120 }).includes('<rect width="2" height="8" rx="1"'));
+});
+
+test('the default sizes are exported for the layout', () => {
+  assert.deepEqual(SPARK_SIZE, { width: 168, height: 40 });
+  assert.deepEqual(BAR_SIZE, { width: 120, height: 8 });
+  assert.match(sparklineSvg([1]), /width="168" height="40"/);
+  assert.match(barSvg(1), /width="120" height="8"/);
 });
 
 test('an unknown share draws the track alone', () => {

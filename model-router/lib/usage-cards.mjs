@@ -5,16 +5,14 @@
 // See docs/design/model-router.md, "Graphical surfaces".
 // Plain ES module with no Node or engine imports, so both the mod and node tests load it.
 import { SERIES } from './usage-data.mjs';
-import { COLORS, barSvg, sparklineSvg, toneColor } from './usage-svg.mjs';
+import { BAR_SIZE, COLORS, SPARK_SIZE, barSvg, sparklineSvg, toneColor } from './usage-svg.mjs';
 import { WEAK_N, costStatus, deltaOf, fpyStatus, reworkStatus } from './usage-tiles.mjs';
 import {
-  ACTION_ORDER, DECISIONS_SHOWN, DEFAULT_VIEW, LEVELS, RECOMMENDATIONS_SHOWN, TABS, WINDOW_TITLES,
-  cellName, fmtNum, fmtPct, fmtTokens, fmtUsd, headlineFor, levelName, noteRows, shortModel,
+  ACTION_ORDER, DECISIONS_SHOWN, RECOMMENDATIONS_SHOWN, WINDOW_TITLES, bestText, cellName, fmtNum, fmtPct, fmtTokens, fmtUsd,
+  headlineFor, levelName, noteRows, sessionParts, shortModel, statusParts, viewOf,
 } from './usage-view.mjs';
 
 const NOTE_COLUMNS = 140;
-const SPARK_SIZE = Object.freeze({ width: 168, height: 40 });
-const BAR_SIZE = Object.freeze({ width: 120, height: 8 });
 const BEFORE = Object.freeze({ '24h': 'vs the 24 hours before', '7d': 'vs the 7 days before', '30d': 'vs the 30 days before' });
 /** How an action reads as a chip: cheaper is good, a forced upgrade a caution, an error bad; the rest neutral. */
 export const ACTION_TONES = Object.freeze({ downgrade: 'good', upgrade: 'accent', keep: 'dim', explicit: 'dim', 'forced-risk': 'fair', error: 'bad' });
@@ -33,17 +31,6 @@ const plural = (n, word) => `${fmtNum(n)} ${word}${n === 1 ? '' : 's'}`;
 const capital = (text) => `${text[0].toUpperCase()}${text.slice(1)}`;
 const has = (table, key) => Object.hasOwn(table, key);
 
-/** The three status pills: routing, measuring, adapt, each on or off. Empty when the status is unknown. */
-export function pillsOf(status) {
-  if (!status) return [];
-  const routing = status.routing ? 'on' : `off${status.routeSubagents === false ? ' (routeSubagents is false)' : ''}`;
-  return [
-    { key: 'routing', text: `routing ${routing}`, on: Boolean(status.routing) },
-    { key: 'measuring', text: `measuring ${status.measuring ? 'on' : 'off'}`, on: Boolean(status.measuring) },
-    { key: 'adapt', text: `adapt ${status.adapt ? 'on (not used before 0.4)' : 'off'}`, on: Boolean(status.adapt) },
-  ];
-}
-
 /** The one line that stands for the sample size: under WEAK_N closed tasks the figures are indicative. Else null. */
 export function bannerOf(headline) {
   const closed = headline?.current?.closed;
@@ -53,8 +40,8 @@ export function bannerOf(headline) {
   return `${plural(n, 'task')} scored — figures are indicative under ${WEAK_N}`;
 }
 
-/** A status as a chip, or null where it only says the sample is small (the banner says that once). */
-const chipOf = (status) => (status.tone === 'dim' ? null : { text: status.word, tone: status.tone });
+/** A status as a chip, muted when it is neutral; null where it only says the sample is small (the banner says that once). */
+const chipOf = (status) => (status.word === 'weak' ? null : { text: status.word, tone: status.tone });
 
 /** The change against the window before as the card writes it: `▼ 25 pts`, `▲ 12%`, `no change`; null when unknown. */
 function deltaChip(now, before, { points, higherIsBetter }) {
@@ -109,7 +96,7 @@ export function kpiCards(headline, context = {}) {
   const c = headline?.current ?? {};
   const p = headline?.previous ?? null;
   const closed = isNum(c.closed) ? c.closed : 0;
-  const r = { total: 0, downgrade: 0, upgrade: 0, keep: 0, ...(c.routed ?? {}) };
+  const r = Object.fromEntries(['total', 'downgrade', 'upgrade', 'keep'].map((k) => [k, isNum(c.routed?.[k]) ? c.routed[k] : 0]));
   const spark = (field, label, fmt, domain) => sparkOf(headline?.series, field, { ...context, label, fmt, domain });
   const card = (key, label, value, rest) => ({ key, label, value, unit: null, chip: null, delta: null, detail: null, spark: null, ...rest });
   return [
@@ -156,10 +143,7 @@ function sessionSection(data) {
   const s = data.session ?? { models: [], agents: 0, cost: 0 };
   if (!s.agents) return { title: 'Session', summary: null, empty: EMPTY.session, rows: [], note: null };
   const rows = (s.models ?? []).map((m) => {
-    const parts = m.isPartial && !m.input && !m.output
-      ? [`${fmtTokens(m.tokens)} tokens`]
-      : [`${fmtTokens(m.input)} input`, `${fmtTokens(m.output)} output`, `${fmtTokens(m.cacheRead)} cache read`, `${fmtTokens(m.cacheWrite)} cache write`];
-    return { model: String(m.model), detail: `${m.agents} × ${parts.join(' · ')}`, cost: fmtUsd(m.cost) };
+    return { model: String(m.model), detail: `${m.agents} × ${sessionParts(m).join(' · ')}`, cost: fmtUsd(m.cost) };
   });
   return {
     title: 'Session', summary: `${plural(s.agents, 'subagent')} · ${fmtUsd(s.cost)}`, empty: null, rows,
@@ -186,20 +170,13 @@ function classesSection(data, view) {
   const level = view.level === 'project' ? 'project' : 'user';
   const title = `Classes · ${levelName(data, view)} · ${WINDOW_TITLES[view.window]}${view.window === 'all' ? ', aged as on the report page' : ''}`;
   const none = { title, rows: [], recommendations: [], callout: null };
-  if (level === 'project' && !data.project) return { ...none, empty: EMPTY.project };
   const classes = data.windows?.[view.window]?.classes?.[level] ?? [];
   if (!classes.length) return { ...none, empty: EMPTY.classes };
-  const rows = classes.map((c) => {
-    const rec = c.recommendation;
-    const best = rec?.source === 'data'
-      ? `best ${cellName(rec.tier, rec.effort)} ${fmtUsd(c.cells.find((x) => x.recommended)?.costPerSuccess)}`
-      : 'best: not enough data';
-    return {
-      name: c.cls, ...metricsOf(c.summary), bar: fpyBar(c.summary), grid: `grid ${cellName(c.default.tier, c.default.effort)}`,
-      best, differs: Boolean(c.differs), flags: c.summary.flags?.length ? c.summary.flags.join(', ') : null,
-      cells: c.cells.map((x) => ({ name: cellName(x.tier, x.effort), recommended: Boolean(x.recommended), ...metricsOf(x), bar: fpyBar(x) })),
-    };
-  });
+  const rows = classes.map((c) => ({
+    name: c.cls, ...metricsOf(c.summary), bar: fpyBar(c.summary), grid: `grid ${cellName(c.default.tier, c.default.effort)}`,
+    best: bestText(c), differs: Boolean(c.differs), flags: c.summary.flags?.length ? c.summary.flags.join(', ') : null,
+    cells: c.cells.map((x) => ({ name: cellName(x.tier, x.effort), recommended: Boolean(x.recommended), ...metricsOf(x), bar: fpyBar(x) })),
+  }));
   const recommendations = classes.filter((c) => c.differs).slice(0, RECOMMENDATIONS_SHOWN).map((c) => {
     const x = c.cells.find((y) => y.recommended);
     return `${c.cls}: ${cellName(c.recommendation.tier, c.recommendation.effort)} over grid ${cellName(c.default.tier, c.default.effort)} · ${fmtPct(x?.fpy)} FPY · ${fmtUsd(x?.costPerSuccess)}/success`;
@@ -226,24 +203,16 @@ function notesOf(data, { error, isLoading }) {
   ];
 }
 
-/** The view with its defaults: an unknown tab, window or level takes the default one. */
-function viewOf(view) {
-  const v = { ...DEFAULT_VIEW, ...Object.fromEntries(Object.entries(view ?? {}).filter(([, x]) => x !== null && x !== undefined)) };
-  if (!TABS.includes(v.tab)) v.tab = DEFAULT_VIEW.tab;
-  if (!has(WINDOW_TITLES, v.window)) v.window = DEFAULT_VIEW.window;
-  if (!LEVELS.includes(v.level)) v.level = DEFAULT_VIEW.level;
-  return v;
-}
-
 /**
  * Everything a graphical surface draws for one tab: `view` is `{ tab, window, level, status }`, `state` the read's
  * `{ error, isLoading }`. Always `{ tab, window, level, pills, subtitle, banner, kpis, message, notes }`; with data,
  * the tab's sections too: `models`, `session` and `routing` on Overview, `models` on Models, `classes` on Classes,
- * `decisions` on Decisions. `message` stands in for the content while there is no data.
+ * `decisions` on Decisions (Classes has no section at the project level of a session with no project id).
+ * `message` stands in for the content while there is no data.
  */
 export function cardsView(data, view, state = {}) {
   const v = viewOf(view);
-  const base = { tab: v.tab, window: v.window, level: v.level, pills: pillsOf(v.status), subtitle: null, banner: null, kpis: [], message: null, notes: [] };
+  const base = { tab: v.tab, window: v.window, level: v.level, pills: statusParts(v.status), subtitle: null, banner: null, kpis: [], message: null, notes: [] };
   if (!data) {
     return { ...base, message: state.error ? { text: `Could not read the usage data: ${state.error}`, tone: 'warn' } : { text: 'Reading the usage data…', tone: 'dim' } };
   }
@@ -252,13 +221,11 @@ export function cardsView(data, view, state = {}) {
   const h = headlineFor(data, v);
   const when = capital(WINDOW_TITLES[v.window]);
   out.subtitle = [when, levelName(data, v), `${plural(h?.current?.closed ?? 0, 'task')} scored`, BEFORE[v.window]].filter(Boolean).join(' · ');
-  if (v.level === 'project' && !data.project) {
-    out.banner = EMPTY.project;
-  } else {
-    out.banner = bannerOf(h);
-    out.kpis = kpiCards(h, { window: v.window, generatedAt: data.generatedAt });
-  }
+  // A project level with no project id has no headline and no classes: the banner says why, once.
+  const hasLevel = v.level !== 'project' || Boolean(data.project);
+  out.banner = hasLevel ? bannerOf(h) : EMPTY.project;
+  if (hasLevel) out.kpis = kpiCards(h, { window: v.window, generatedAt: data.generatedAt });
   if (v.tab === 'models') return { ...out, models: modelsSection(data, v, { detailed: true }) };
-  if (v.tab === 'classes') return { ...out, classes: classesSection(data, v) };
+  if (v.tab === 'classes') return hasLevel ? { ...out, classes: classesSection(data, v) } : out;
   return { ...out, models: modelsSection(data, v, { detailed: false }), session: sessionSection(data), routing: routingSection(data) };
 }

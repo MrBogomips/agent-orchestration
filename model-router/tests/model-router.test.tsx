@@ -798,6 +798,43 @@ describe('/model-router usage view on graphical surfaces', () => {
     await ui.unmount()
   })
 
+  test('the ring, a click and the arrows are left to the app: every control is reached and the body scrolls', async ($, on) => {
+    world(on)
+    const landed: any[] = []
+    on('ui.focus', ($, e) => {
+      landed.push((e as any).element ?? (e as any).key)
+      return {}
+    })
+    const scrolled: any[] = []
+    on('ui.scroll', ($, e) => {
+      scrolled.push(e)
+      return {}
+    })
+    const person = (element: string) =>
+      $.ui.focus({ requestId: 'model-router-usage', component: 'Pane', element, origin: { kind: 'person' } } as any)
+    await run($, 'decisions')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    await person('tab-decisions')
+    // Tab off the last tab goes on to the windows, not back to the first tab; the tab stays.
+    await person('window-24h')
+    expect(landed.at(-1)).toBe('window-24h')
+    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
+    // A click on Refresh from an end tab presses Refresh and moves no ring.
+    await person('tab-decisions')
+    await person('refresh')
+    const moves = landed.length
+    await ui.press({ key: 'refresh' })
+    expect(landed.at(-1)).toBe('refresh')
+    expect(landed.length).toBe(moves)
+    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
+    // An arrow scrolls the body: the window is not stepped.
+    await $.ui.scroll({ requestId: 'model-router-usage', component: 'Pane', by: 1, offset: 0, bodyRows: 40, contentRows: 80, origin: { kind: 'person' } } as any)
+    expect(scrolled.length).toBe(1)
+    await ui.press({ key: 'tab-models' })
+    expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 7 days')
+    await ui.unmount()
+  })
+
   test('Refresh reads again and Report writes the page', async ($, on) => {
     const w = world(on)
     await run($, '')

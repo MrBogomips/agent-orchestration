@@ -32,7 +32,6 @@ export type CardsView = {
 }
 
 export declare const ACTION_TONES: Readonly<Record<string, ChipTone>>
-export declare function pillsOf(status: unknown): Pill[]
 export declare function bannerOf(headline: unknown): string | null
 export declare function kpiCards(headline: unknown, context?: { window?: string; generatedAt?: unknown }): Kpi[]
 export declare function cardsView(data: unknown, view: View, state?: { error?: string; isLoading?: boolean }): CardsView

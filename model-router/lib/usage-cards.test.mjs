@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { bannerOf, cardsView, kpiCards, pillsOf } from './usage-cards.mjs';
+import { bannerOf, cardsView, kpiCards } from './usage-cards.mjs';
 import { STATUS, usageData } from './usage-fixture.mjs';
 
 const DATA = usageData();
@@ -9,13 +9,24 @@ const view = (patch = {}) => ({ tab: 'overview', window: '30d', level: 'user', s
 const kpi = (v, key) => v.kpis.find((k) => k.key === key);
 
 test('the status is three pills, on or off', () => {
-  assert.deepEqual(pillsOf(STATUS), [
+  assert.deepEqual(cardsView(DATA, view()).pills, [
     { key: 'routing', text: 'routing on', on: true },
     { key: 'measuring', text: 'measuring on', on: true },
     { key: 'adapt', text: 'adapt off', on: false },
   ]);
-  assert.equal(pillsOf({ ...STATUS, routing: false, routeSubagents: false })[0].text, 'routing off (routeSubagents is false)');
-  assert.deepEqual(pillsOf(null), []);
+  assert.deepEqual(cardsView(DATA, view({ status: null })).pills, []);
+});
+
+test('a routed count that is missing reads as zero', () => {
+  const routed = kpiCards({ current: { closed: 9, routed: { total: 2, downgrade: undefined, upgrade: 'x' } } }, { window: '7d' }).at(-1);
+  assert.equal(routed.value, '2');
+  assert.equal(routed.detail, '0 down · 0 up · 0 kept');
+});
+
+test('a status that is not about the sample size shows as a muted chip', () => {
+  const v = cardsView(DATA, view({ window: 'all' }));
+  assert.deepEqual(kpi(v, 'cost').chip, { text: 'no prior', tone: 'dim' });
+  assert.notEqual(kpi(v, 'fpy').chip, null);
 });
 
 test('one banner stands for the sample size, under five closed tasks only', () => {
@@ -125,7 +136,9 @@ test('Classes lists each class with its cells, and the recommendations as a call
   assert.ok(Array.isArray(v.classes.recommendations));
   assert.equal(typeof v.classes.callout, 'string');
   const project = cardsView({ ...DATA, project: null }, view({ tab: 'classes', level: 'project' }));
-  assert.equal(project.classes.empty, 'This session has no project id yet.');
+  assert.equal(project.banner, 'This session has no project id yet.');
+  assert.equal(project.classes, undefined);
+  assert.equal(JSON.stringify(project).split('no project id').length - 1, 1);
 });
 
 test('Decisions is a compact table with one chip per action', () => {

@@ -18,8 +18,13 @@ export const COLORS = Object.freeze({
   dim: '#8b8b8b',
 });
 
-const SPARK = Object.freeze({ width: 168, height: 40, pad: 4 });
-const BAR = Object.freeze({ width: 120, height: 8 });
+/** The size a sparkline and a bar are drawn at when none is asked for, in CSS pixels. */
+export const SPARK_SIZE = Object.freeze({ width: 168, height: 40 });
+export const BAR_SIZE = Object.freeze({ width: 120, height: 8 });
+const PAD = 4;
+/** Up to this many values a sparkline draws one bar each: fewer points make no line worth reading. */
+const FEW_POINTS = 3;
+const SPARK_BAR = Object.freeze({ min: 4, max: 12, floor: 2 });
 const NS = 'http://www.w3.org/2000/svg';
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
@@ -74,6 +79,17 @@ function sparkMarks(runs, base, stroke) {
   return out.join('');
 }
 
+/** One bar per known point, standing on the baseline: what a series of very few values is drawn as. */
+function sparkBars(points, base, width, fill) {
+  const step = (width - 2 * PAD) / Math.max(1, points.length - 1);
+  const w = round(Math.max(SPARK_BAR.min, Math.min(SPARK_BAR.max, step / 2)));
+  return points.filter(Boolean).map((p) => {
+    const x = round(Math.max(0, Math.min(width - w, p.x - w / 2)));
+    const h = round(Math.max(SPARK_BAR.floor, base - p.y));
+    return `<rect class="bar" x="${x}" y="${round(base - h)}" width="${w}" height="${h}" rx="1.5" fill="${fill}"/>`;
+  }).join('');
+}
+
 function sparkTitles(labels, count, width, height) {
   const step = width / Math.max(1, count);
   const out = [];
@@ -87,43 +103,48 @@ function sparkTitles(labels, count, width, height) {
 
 /**
  * A sparkline of `values`, oldest first: a line over a soft area, the last point dotted, on a faint baseline. A
- * value that is no number is a gap: it breaks the line, and a point with no neighbour is a dot.
+ * value that is no number is a gap: it breaks the line, and a point with no neighbour is a dot. Up to three values
+ * are drawn as one bar each instead.
  *
  * `domain` is `[low, high]` of the scale (a rate: `[0, 1]`); absent, zero to the highest value. `labels` gives one
  * tooltip per value (`<title>`, shown where the surface draws the SVG as interactive). Over SVG_MAX characters the
  * tooltips go first, then the marks: what is left is the baseline.
  */
 export function sparklineSvg(values, { width, height, color, domain, labels = [] } = {}) {
-  const w = size(width, SPARK.width);
-  const h = size(height, SPARK.height);
+  const w = size(width, SPARK_SIZE.width);
+  const h = size(height, SPARK_SIZE.height);
   const stroke = colour(color, COLORS.line);
   const list = Array.isArray(values) ? values : [];
   const known = list.filter(isNum);
-  const base = h - SPARK.pad;
-  const frame = `${open(w, h)}<line class="base" x1="${SPARK.pad}" y1="${base}" x2="${w - SPARK.pad}" y2="${base}" stroke="${COLORS.dim}" stroke-opacity="0.35" stroke-width="1"/>`;
+  const base = h - PAD;
+  const frame = `${open(w, h)}<line class="base" x1="${PAD}" y1="${base}" x2="${w - PAD}" y2="${base}" stroke="${COLORS.dim}" stroke-opacity="0.35" stroke-width="1"/>`;
   const bare = `${frame}</svg>`;
   if (!known.length) return bare;
   const lo = isNum(domain?.[0]) ? domain[0] : 0;
   const top = isNum(domain?.[1]) ? domain[1] : Math.max(...known);
   const hi = top > lo ? top : lo + 1;
-  const span = w - 2 * SPARK.pad;
-  const x = (i) => (list.length === 1 ? w - SPARK.pad : round(SPARK.pad + (i * span) / (list.length - 1)));
-  const y = (v) => round(base - (Math.max(0, Math.min(1, (v - lo) / (hi - lo)))) * (h - 2 * SPARK.pad));
-  const marks = sparkMarks(runsOf(list.map((v, i) => (isNum(v) ? { x: x(i), y: y(v) } : null))), base, stroke);
+  const span = w - 2 * PAD;
+  const x = (i) => (list.length === 1 ? w - PAD : round(PAD + (i * span) / (list.length - 1)));
+  const y = (v) => round(base - (Math.max(0, Math.min(1, (v - lo) / (hi - lo)))) * (h - 2 * PAD));
+  const points = list.map((v, i) => (isNum(v) ? { x: x(i), y: y(v) } : null));
+  const marks = known.length <= FEW_POINTS ? sparkBars(points, base, w, stroke) : sparkMarks(runsOf(points), base, stroke);
   const full = `${frame}${marks}${sparkTitles(Array.isArray(labels) ? labels : [], list.length, w, h)}</svg>`;
   if (full.length <= SVG_MAX) return full;
   const plain = `${frame}${marks}</svg>`;
   return plain.length <= SVG_MAX ? plain : bare;
 }
 
-/** A bar: a rounded track filled from the left to `share` (0 to 1, clamped); an unknown share is the track alone. */
+/**
+ * A bar: a rounded track filled from the left to `share` (0 to 1, clamped). A share above zero is at least one
+ * pixel wide; an unknown share, or zero, is the track alone.
+ */
 export function barSvg(share, { width, height, color } = {}) {
-  const w = size(width, BAR.width);
-  const h = size(height, BAR.height);
+  const w = size(width, BAR_SIZE.width);
+  const h = size(height, BAR_SIZE.height);
   const fill = colour(color, COLORS.accent);
   const r = round(h / 2);
-  const filled = isNum(share) ? Math.round(Math.max(0, Math.min(1, share)) * w) : 0;
+  const filled = isNum(share) && share > 0 ? Math.max(1, Math.round(Math.min(1, share) * w)) : 0;
   const track = `<rect class="track" width="${w}" height="${h}" rx="${r}" fill="${COLORS.dim}" fill-opacity="0.25"/>`;
-  const bar = filled > 0 ? `<rect width="${Math.max(filled, Math.min(w, h))}" height="${h}" rx="${r}" fill="${fill}"/>` : '';
+  const bar = filled > 0 ? `<rect width="${filled}" height="${h}" rx="${Math.min(r, filled / 2)}" fill="${fill}"/>` : '';
   return `${open(w, h)}${track}${bar}</svg>`;
 }

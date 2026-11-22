@@ -6,3 +6,5 @@ export declare function escapeXml(text: unknown): string
 export declare function toneColor(tone: unknown): string
 export declare function sparklineSvg(values: unknown, options?: SvgOptions & { domain?: readonly [number, number]; labels?: readonly string[] }): string
 export declare function barSvg(share: unknown, options?: SvgOptions): string
+export declare const SPARK_SIZE: Readonly<{ width: number; height: number }>
+export declare const BAR_SIZE: Readonly<{ width: number; height: number }>

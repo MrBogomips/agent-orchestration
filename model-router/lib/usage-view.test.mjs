@@ -136,3 +136,31 @@ test('formatting: tokens, dollars, shares, bars and cuts', () => {
   assert.equal(fit('abcdef', 4), 'abc…');
   assert.equal(fit('abc', 4), 'abc');
 });
+
+test('the status reads as three parts, each on or off, shared by the rows and the pills', async () => {
+  const { statusParts } = await import('./usage-view.mjs');
+  assert.deepEqual(statusParts(STATUS), [
+    { key: 'routing', text: 'routing on', on: true },
+    { key: 'measuring', text: 'measuring on', on: true },
+    { key: 'adapt', text: 'adapt off', on: false },
+  ]);
+  assert.equal(statusParts({ ...STATUS, routing: false, routeSubagents: false })[0].text, 'routing off (routeSubagents is false)');
+  assert.equal(statusParts({ ...STATUS, adapt: true })[2].text, 'adapt on (not used before 0.4)');
+  assert.deepEqual(statusParts(null), []);
+});
+
+test('a view takes the default for a missing or unknown tab, window or level', async () => {
+  const { viewOf } = await import('./usage-view.mjs');
+  assert.deepEqual(viewOf({ tab: 'nope', window: '1y', level: 'galaxy' }), { tab: 'overview', window: '7d', level: 'user' });
+  assert.deepEqual(viewOf({ tab: 'models', window: null, level: 'project', status: STATUS }), { tab: 'models', window: '7d', level: 'project', status: STATUS });
+  assert.deepEqual(viewOf(undefined), { tab: 'overview', window: '7d', level: 'user' });
+});
+
+test('the token parts of a session model, and the best cell of a class, are written one way', async () => {
+  const { bestText, sessionParts } = await import('./usage-view.mjs');
+  assert.deepEqual(sessionParts({ isPartial: true, tokens: 52000 }), ['52.0k tokens']);
+  assert.deepEqual(sessionParts({ input: 2000, output: 6000, cacheRead: 950000, cacheWrite: 50000 }),
+    ['2.0k input', '6.0k output', '950.0k cache read', '50.0k cache write']);
+  assert.equal(bestText({ recommendation: { source: 'data', tier: 'sonnet', effort: 'low' }, cells: [{ recommended: true, costPerSuccess: 0.023 }] }), 'best sonnet·low $0.023');
+  assert.equal(bestText({ recommendation: { source: 'grid' }, cells: [] }), 'best: not enough data');
+});
