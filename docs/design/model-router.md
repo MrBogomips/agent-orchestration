@@ -374,7 +374,8 @@ from the same data. The terminal's rendering is unchanged.
 - **Minimized.** In the desktop app's `widget` seat the pane draws the title, the FPY figure and its sparkline,
   with no controls.
 - **Limits.** An SVG source is capped at 131,072 characters: over it a sparkline drops its tooltips, then its
-  marks. If the view model cannot be built the hook logs why and draws the terminal's rows; if those cannot be
+  marks. A tree past the budget of `lib/tree-bounds.mjs` is replaced by one line that names `/model-router report`
+  (a refused tree would leave the app's empty state); the log dashboard does the same, with its file button. If the view model cannot be built the hook logs why and draws the terminal's rows; if those cannot be
   built either it draws one line (`Could not draw the usage view: …`). The pane is never left empty.
 
 **A session whose app has not attached yet.** The Claude desktop app attaches its surface to the session only at
@@ -430,11 +431,13 @@ the app has not attached yet. `ui-design.md` asks for it: a rich view is a mod p
 - **What it shows** (`logView` of `lib/log-cards.mjs`, drawn by `hooks/log-desktop.tsx`): the title and
   `<n> records · <window> · archive included`; the windows 24h, 7d, 30d and all as native Buttons; *Records by
   type*, a row per type with a Button that filters on it, a share bar and the count (`all` first); *By day (UTC)*,
-  an SVG column chart of the matching records over the window's days (the last thirty for `all`), with a tooltip
+  an SVG column chart of the matching records over the window's days (the last thirty for `all`); for the 24-hour
+  window it is *By hour (UTC)*, over its 24 hours, since one bar for the day says nothing; each has a tooltip
   per day; *Latest records*, a table of when (UTC), type, the first eight characters of the session, a chip (a
   decision's action, an outcome's result, a signal's kind) and the type's fields (a decision's models, subagent
   type and reason; a spawn's type, class, model and route; an outcome's class, tier, cost and why; a report's
-  status, model, tokens and cost; a signal's file); the page and *Newer* and *Older* Buttons, each drawn only where
+  status, model, tokens and cost; a signal's file, by its name alone, since `slimRecord` keeps no path; for a
+  `session-end`, `session ended` and its reason unless it is the engine's `other`); the page and *Newer* and *Older* Buttons, each drawn only where
   there is a page; then the log's path and size, the archive's file count, size and newest names, and when the log
   was read.
 - **Controls.** A window or a type reads again from the newest page; *Refresh* (`refresh`, `r`) reads the same
@@ -462,7 +465,15 @@ session is shown (`showReport`; `hostKind` of `lib/open-report.mjs`, above):
   repeats the user level, else a heading and its cards per project; the footnotes and where the data was read.
   The footer has two native Buttons: **Open as page** (`page`, `o`), which writes the HTML page and opens it as in
   the terminal, and **Refresh** (`refresh`, `r`). The app owns focus and scrolling. A pane not placed yet is kept
-  (a session whose app has not attached). Data that cannot be read is one line in place of the content; a model
+  (a session whose app has not attached). **Size.** A report drawn whole grows with its classes and projects, and a
+  real one (six classes, two projects) is a tree of about 150,000 characters, past the engine's 100,000
+  (`ui-design.md`, *The size of a tree*): the app then showed its own empty state. `drawReportPane` therefore builds
+  the tree at three levels of detail (`DETAILS` of `lib/report-cards.mjs`) and returns the first within the budget
+  of `lib/tree-bounds.mjs`: `full`; `projects`, each project as one line (its classes and cells counted);
+  `classes`, each class of the user level as one line too (its grid cell, its recommendation, its cells counted).
+  A level drawn in brief says so in one line and names *Open as page*; a level of more than 400 rows is not built;
+  past every level the pane is one line and the page button. Each level passed over is one debug line with its
+  size. Data that cannot be read is one line in place of the content; a model
   or a tree that cannot be built leaves one line and the page button. The answer is `Report opened beside the chat.`
 - **In a terminal, and in a headless run**, the HTML page: written with `scripts/report.mjs --no-open`, then opened
   in the system's default browser with `open <page>` on macOS or `xdg-open <page>` on Linux, through
@@ -488,6 +499,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. From 0.3.4, the 🔀 identity and the coloured choose-model line under `Agent` rows. |
 | 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. The report page is redrawn after `ui-design.md`. |
 | 0.3.14 | The report and the event log as native panes on graphical surfaces; the usage pane kept open in a session whose app has not attached yet. |
+| 0.3.15 | The panes measure their trees against the engine's bounds; the report pane draws large reports in brief. |
 | 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
 
 ## Open points

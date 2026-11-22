@@ -16,7 +16,7 @@ import { drawLogPane } from './log-desktop'
 const LOG_TIMEOUT_MS = 20000
 
 // Change the shape tag when the value's fields change: it declines what an earlier version stored.
-const logState = atom({ plugin: 'model-router', key: 'log' } as const, { isLoading: false, query: { ...DEFAULT_QUERY } } as LogCache, { shape: 'log-1' })
+const logState = atom({ plugin: 'model-router', key: 'log' } as const, { isLoading: false, query: { ...DEFAULT_QUERY } } as LogCache, { shape: 'log-2' })
 
 /**
  * What the pane needs from the mod, made for one event: the config folder, and the action that opens the log file

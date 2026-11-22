@@ -5,7 +5,7 @@
 // SESSION_HUB_ROLE=child, tmux's new-window or split-window with the command as arguments (or, as before, typed with
 // send-keys -l), and herdr agent start; and the input of the desktop app's start_session call.
 
-import { ARROW, ROUTE_ICON, modelEffortSegments } from './look.mjs';
+import { ARROW, ROUTE_ICON, effortParts, modelEffortSegments, modelParts } from './look.mjs';
 import { commandName, stripPrefix } from './shell-commands.mjs';
 import { tokenize } from './shell-words.mjs';
 
@@ -124,6 +124,18 @@ export function startLineSegments({ name, model, effort }) {
     ...modelEffortSegments(model, effort, { unknown: NO_EFFORT }),
     { text: ` ${ARROW} ${name}`, tone: 'dim' },
   ];
+}
+
+/**
+ * The line as a transcript notice, for a start the host draws as something else than a tool row (the desktop app
+ * draws its session tool as a session card): `🔀 sonnet · medium → <child>`. Words only, no bar of characters: a
+ * notice is drawn in the app's proportional font. An effort the start does not state reads `default effort`.
+ */
+export function startLogText({ name, model, effort }) {
+  const e = effortParts(effort, NO_EFFORT);
+  // A level reads as it is; an effort not stated, or not a level, reads `default effort`.
+  const word = e.color ? e.word : `${NO_EFFORT} effort`;
+  return `${ROUTE_ICON} ${model === undefined ? `${NO_EFFORT} model` : modelParts(model).name} · ${word} → ${name}`;
 }
 
 /** The line as plain text, without its leading indent. */

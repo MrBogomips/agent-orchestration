@@ -7,6 +7,7 @@ import { FILE_KEY, FILE_LABEL, logView } from '../lib/log-cards.mjs'
 import type { LogView, RecordLine } from '../lib/log-cards.mjs'
 import { ROUTE_ICON } from '../lib/route-line.mjs'
 import { errorText } from '../lib/text.mjs'
+import { fitsBudget, overBudget, treeSize } from '../lib/tree-bounds.mjs'
 import { TILES_ONE_ROW } from '../lib/usage-tiles.mjs'
 import { ACCENT, MUTED, kit } from './usage-desktop'
 import type { GraphicalElements } from './usage-desktop'
@@ -56,7 +57,7 @@ function chart(els: GraphicalElements, view: LogView) {
   const { Box } = els
   const k = kit(els)
   const c = view.chart
-  if (!c) return k.card('By day (UTC)', k.empty(view.empty ?? 'No record to chart.'))
+  if (!c) return k.card(view.chartTitle, k.empty(view.empty ?? 'No record to chart.'))
   return k.card(c.title, [k.picture(c.picture), <Box flexDirection="row" justifyContent="space-between">{k.caption(c.first)}{k.caption(c.last)}</Box>])
 }
 
@@ -146,7 +147,12 @@ export function drawLogPane($: any, e: any, cache: LogCache, actions: LogActions
   const els = $.ui.resolve(e)
   if (e.surface === 'terminal' || !('Svg' in els)) return plainPane(els, actions, 'This dashboard is drawn on graphical surfaces. Here the log is a file.')
   try {
-    return logPaneTree(els, cache.data ? logView(cache.data) : null, cache, actions, Math.max(20, e.props.bodyColumns ?? 80))
+    const tree = logPaneTree(els, cache.data ? logView(cache.data) : null, cache, actions, Math.max(20, e.props.bodyColumns ?? 80))
+    // A tree past the engine's bounds is refused whole and the app shows its own empty state: say so instead.
+    const size = treeSize(tree)
+    if (fitsBudget(size)) return tree
+    $.ui.log(`[model-router] log pane: ${overBudget(size)}`, { to: 'debug' })
+    return plainPane(els, actions, 'The dashboard is too large to draw here. Open file shows the log itself.')
   } catch (err) {
     $.ui.log(`[model-router] log pane: ${errorText(err)}`, { to: 'debug' })
     return plainPane(els, actions, `Could not draw the log: ${errorText(err)}`)

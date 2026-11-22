@@ -29,6 +29,9 @@ test('a record is one line: time, type, short session, a leading chip and its ow
   });
   assert.deepEqual(recordLine(RECORDS[2]).lead, { text: 'write', tone: 'dim' });
   assert.equal(recordLine(RECORDS[2]).detail, '/repo/a.ts');
+  assert.equal(recordLine({ type: 'session-end', ts: at(0), session: 's', reason: 'other' }).detail, 'session ended');
+  assert.equal(recordLine({ type: 'session-end', ts: at(0), session: 's', reason: 'clear' }).detail, 'session ended · reason: clear');
+  assert.equal(recordLine({ type: 'session-end', ts: at(0), session: 's' }).detail, 'session ended');
   assert.equal(recordLine(RECORDS[3]).detail, 'completed · haiku · 1.2k tokens · $0.0020');
   assert.deepEqual(recordLine({ type: 'mystery', ts: 'odd' }), { when: 'odd', type: 'mystery', session: '', lead: null, detail: '' });
   assert.deepEqual(recordLine(null), { when: '–', type: 'unknown', session: '', lead: null, detail: '' });
@@ -56,6 +59,17 @@ test('a type filter says how many of how many, and filters the chart and the row
   assert.deepEqual(view.rows.map((r) => r.type), ['signal']);
   assert.equal(logView(data({ type: 'spawn' })).empty, 'No spawn record (last 7 days).');
   assert.equal(logView(data({ type: 'spawn' })).chart, null);
+  assert.equal(logView(data({ type: 'spawn' })).chartTitle, 'By day (UTC)');
+});
+
+test('the last 24 hours are charted by hour, and the title says so', () => {
+  const view = logView(data({ window: '24h' }));
+  assert.equal(view.chartTitle, 'By hour (UTC)');
+  assert.deepEqual([view.chart.title, view.chart.first, view.chart.last], ['By hour (UTC)', '19 Nov 13:00', '20 Nov 12:00']);
+  assert.equal(view.chart.picture.source.match(/<rect class="col"/g).length, 2);
+  assert.match(view.chart.picture.source, /<title>20 Nov 07:00: 1 record<\/title>/);
+  assert.match(view.chart.picture.alt, /^2 records by hour, 19 Nov 13:00 to 20 Nov 12:00$/);
+  assert.equal(logView(data({ window: '24h', type: 'spawn' })).chartTitle, 'By hour (UTC)');
 });
 
 test('the files line gives the path and the sizes; the archive lists a few names', () => {

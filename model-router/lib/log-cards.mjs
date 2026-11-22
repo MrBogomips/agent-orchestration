@@ -44,7 +44,8 @@ const DETAILS = Object.freeze({
   outcome: (r) => join([r.class, `${r.tier ?? '?'}${r.effort ? `·${r.effort}` : ''}`, isNum(r.costUsd) ? fmtUsd(r.costUsd) : null, r.why]),
   report: (r) => join([r.status, model(r.model), isNum(r.tokens) ? `${fmtTokens(r.tokens)} tokens` : null, isNum(r.costUsd) ? fmtUsd(r.costUsd) : null]),
   signal: (r) => join([r.file ?? r.tool ?? r.target]),
-  'session-end': (r) => join([r.reason]),
+  // `other` is the engine's word for an end with no particular reason: it says nothing, so it is left out.
+  'session-end': (r) => join(['session ended', r.reason && r.reason !== 'other' ? `reason: ${r.reason}` : null]),
 });
 // The word that leads a record's line, as a chip, with its tone: the action of a decision, the result of an outcome.
 const LEADS = Object.freeze({
@@ -87,22 +88,29 @@ function typeRows(data) {
   return [row(ALL_TYPES, total), ...(data.byType ?? []).map((t) => row(t.type, t.n))];
 }
 
-function dayChart(data) {
-  const days = data.byDay ?? [];
-  if (!days.some((d) => d.n > 0)) return null;
+/** A bucket's key as the chart names it: `20 Nov` for a day, `20 Nov 14:00` for an hour. */
+const bucketLabel = (key) => (String(key).length > 10 ? `${dayLabel(String(key).slice(0, 10))} ${String(key).slice(11, 13)}:00` : dayLabel(key));
+/** The chart's title for a window: by hour for the last 24 hours, by day for the others. */
+export const chartTitle = (unit) => (unit === 'hour' ? 'By hour (UTC)' : 'By day (UTC)');
+
+function bucketChart(data) {
+  const unit = data.series?.unit === 'hour' ? 'hour' : 'day';
+  const points = data.series?.points ?? [];
+  if (!points.some((p) => p.n > 0)) return null;
   const what = data.query.type === ALL_TYPES ? 'record' : `${data.query.type} record`;
+  const [first, last] = [bucketLabel(points[0].key), bucketLabel(points.at(-1).key)];
   return {
-    title: 'By day (UTC)', first: dayLabel(days[0].day), last: dayLabel(days.at(-1).day),
+    title: chartTitle(unit), first, last,
     picture: {
-      source: columnsSvg(days.map((d) => d.n), { ...COLUMNS_SIZE, color: COLORS.line, labels: days.map((d) => `${dayLabel(d.day)}: ${plural(d.n, what)}`) }),
-      alt: `${plural(data.matched ?? 0, what)} by day, ${dayLabel(days[0].day)} to ${dayLabel(days.at(-1).day)}`, ...COLUMNS_SIZE, isInteractive: true,
+      source: columnsSvg(points.map((p) => p.n), { ...COLUMNS_SIZE, color: COLORS.line, labels: points.map((p) => `${bucketLabel(p.key)}: ${plural(p.n, what)}`) }),
+      alt: `${plural(data.matched ?? 0, what)} by ${unit}, ${first} to ${last}`, ...COLUMNS_SIZE, isInteractive: true,
     },
   };
 }
 
 /**
- * Everything the log pane draws: `data` is what scripts/log.mjs printed. `{ subtitle, files, windows, types, chart,
- * rows, paging, empty, read }`; `chart` is null with nothing to chart, `empty` says why there is no row.
+ * Everything the log pane draws: `data` is what scripts/log.mjs printed. `{ subtitle, files, windows, types,
+ * chartTitle, chart, rows, paging, empty, read }`; `chart` is null with nothing to chart, `empty` says why there is no row.
  */
 export function logView(data) {
   const q = data.query;
@@ -114,7 +122,8 @@ export function logView(data) {
     files: filesLine(data.files),
     windows: Object.keys(LOG_WINDOWS).map((w) => ({ window: w, isActive: w === q.window })),
     types: typeRows(data),
-    chart: dayChart(data),
+    chartTitle: chartTitle(data.series?.unit),
+    chart: bucketChart(data),
     rows,
     paging: {
       label: `Page ${q.page + 1} of ${data.pages} · newest first${data.isCut ? ` · the latest ${fmtNum(MAX_KEPT)} can be paged` : ''}`,

@@ -19,7 +19,7 @@ import { markContext, markText } from './mod/origin.mjs'
 import { failText, recordPlan, recordSource } from './mod/open-record.mjs'
 import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
 import { LOG_PANE, LOG_PANE_TITLE } from './mod/record-cards.mjs'
-import { childStarts, isSessionStartTool, startLineSegments, toolStarts } from './mod/start-line.mjs'
+import { childStarts, isSessionStartTool, startLineSegments, startLogText, toolStarts } from './mod/start-line.mjs'
 import type { ChildStart } from './mod/start-line.mjs'
 import { readRole } from './mod/role.mjs'
 import { SECTION_ID, roleSummary, scopeSection } from './mod/scope-line.mjs'
@@ -67,6 +67,19 @@ async function recordStarts($: $, toolUseId: unknown, startsOf: () => ChildStart
     const starts = startsOf()
     if (typeof toolUseId !== 'string' || toolUseId === '' || starts.length === 0) return
     await update($, memberOf(startLines, { requestId: toolUseId }), () => ({ starts }))
+  } catch (error) {
+    $.ui.log(`[session-hub] start line: ${error instanceof Error ? error.message : error}`, { to: 'debug' })
+  }
+}
+
+// Whether a tool call did not do what it was asked: denied by a hook, or answered as an error.
+const startFailed = (result: unknown) =>
+  result !== null && typeof result === 'object' && ('deny' in result || (result as { isError?: unknown }).isError === true)
+
+// Writes the start line of each child as a notice in the transcript. Never throws: the line is only a view.
+function logStarts($: $, starts: ChildStart[]) {
+  try {
+    for (const start of starts) $.ui.log(startLogText(start))
   } catch (error) {
     $.ui.log(`[session-hub] start line: ${error instanceof Error ? error.message : error}`, { to: 'debug' })
   }
@@ -428,9 +441,9 @@ export const register: Register = (on) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const panel = await read($, panelState)
     const width = Math.max(20, e.props.bodyColumns ?? 80)
-    return childrenPane($.ui.resolve(e), e.surface, panel, width, {
-      openRecord: async () => $.ui.log(`[session-hub] ${await showRecord($, isGraphical(e.surface))}`),
-    })
+    const actions = { openRecord: async () => $.ui.log(`[session-hub] ${await showRecord($, isGraphical(e.surface))}`) }
+    return childrenPane($.ui.resolve(e), e.surface, panel, width, actions, (reason) =>
+      $.ui.log(`[session-hub] children panel: ${reason.slice(0, 200)}`, { to: 'debug' }))
   })
 
   // The log pane (hooks/record-pane.tsx): the children record as a dashboard. Its file button opens the record
@@ -445,25 +458,22 @@ export const register: Register = (on) => {
       $.ui.log(`[session-hub] log pane: ${reason.slice(0, 200)}`, { to: 'debug' }))
   })
 
-  // In the desktop app a child starts with the app's session tool, not a launch command: its line comes from the
-  // call's input. Only a master (no role) draws start lines, as for Bash.
-  // Nothing after next() throws (the role read and the record are guarded), so the catch only sees next() fail.
+  // In the desktop app a child starts with the app's session tool, not a launch command, and the app draws that
+  // call as a session card of its own, not as a tool row: a line under the row would never show. The start line
+  // is therefore a notice in the transcript, one per child, written once the call has succeeded, from its input.
+  // Only a master (no role) writes it, as for Bash.
+  // Nothing after next() throws (the role read and the notice are guarded), so the catch only sees next() fail.
   on('tool.call', async ($, e, next) => {
     const result = await next(e)
-    if (!isSessionStartTool(e.tool)) return result
+    if (!isSessionStartTool(e.tool) || startFailed(result)) return result
     const role = await loadRole($).catch(() => undefined)
-    if (role?.kind === 'none') await recordStarts($, e.tool_use_id, () => toolStarts(String(e.tool), e))
+    if (role?.kind === 'none') logStarts($, toolStarts(String(e.tool), e))
     return result
   }).catch(($, e, next) => next(e))
 
-  // The start line under a call that started children: `⎿  🔀 opus   ▰▰▰▱ high   -> <child>`, one per child. The
-  // row is kept as it is; with no line, or on any error, only the row is drawn.
+  // The start line under a Bash call that started children: `⎿  🔀 opus   ▰▰▰▱ high   -> <child>`, one per child.
+  // The row is kept as it is; with no line, or on any error, only the row is drawn.
   on('ui.render', { component: 'ToolUse', props: { tool: 'Bash' } }, async ($, e, next) => withStarts($, e, await next(e)))
-    .catch(($, e, next) => {
-      $.ui.log(`[session-hub] start line: ${next.error?.message ?? next.error?.kind ?? 'unknown error'}`, { to: 'debug' })
-      return next(e)
-    })
-  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (isSessionStartTool(e.props.tool) ? withStarts($, e, await next(e)) : next(e)))
     .catch(($, e, next) => {
       $.ui.log(`[session-hub] start line: ${next.error?.message ?? next.error?.kind ?? 'unknown error'}`, { to: 'debug' })
       return next(e)

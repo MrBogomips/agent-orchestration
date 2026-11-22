@@ -6,6 +6,7 @@
 import type { UsageCache, UsageView } from '../types'
 
 import { errorText } from '../lib/text.mjs'
+import { fitsBudget, overBudget, treeSize } from '../lib/tree-bounds.mjs'
 import { cardsView } from '../lib/usage-cards.mjs'
 import { padRows } from '../lib/usage-nav.mjs'
 import { noteRows, tabRows } from '../lib/usage-view.mjs'
@@ -36,6 +37,16 @@ function graphicalTree(els: GraphicalElements, e: any, { view, usage, status }: 
   return e.props.placement === 'widget' ? graphicalWidget(els, model) : graphicalPane(els, model, actions, columns)
 }
 
+/** What a tab too large to draw says: one line, with the way to the same figures. */
+function tooLarge({ Box, Text }: GraphicalElements) {
+  return (
+    <Box flexDirection="column" gap="sm">
+      <Text weight="semibold">model-router</Text>
+      <Text color="warning">This tab is too large to draw here. /model-router report shows the same figures, and /model-router overview opens the first tab.</Text>
+    </Box>
+  )
+}
+
 /**
  * The pane's tree for the surface of `e`, and whether it is the graphical one: the keys of the terminal's view
  * (the ring that follows the tabs, the arrows that step the window) apply only to the rows.
@@ -45,7 +56,12 @@ export function drawUsagePane($: any, e: any, state: PaneState, actions: UsageAc
   const columns = Math.max(20, e.props.bodyColumns ?? 80)
   if (e.surface !== 'terminal' && 'Svg' in els) {
     try {
-      return { tree: graphicalTree(els, e, state, actions, columns), isGraphical: true }
+      const tree = graphicalTree(els, e, state, actions, columns)
+      // A tree past the engine's bounds is refused whole and the app shows its own empty state: say so instead.
+      const size = treeSize(tree)
+      if (fitsBudget(size)) return { tree, isGraphical: true }
+      $.ui.log(`[model-router] graphical view: ${overBudget(size)}`, { to: 'debug' })
+      return { tree: tooLarge(els), isGraphical: true }
     } catch (err) {
       $.ui.log(`[model-router] graphical view: ${errorText(err)}`, { to: 'debug' })
     }

@@ -34,6 +34,11 @@ test('a record keeps the fields of its type and nothing else: no prompt text, no
   assert.deepEqual(slimRecord(RECORDS[3]), { ts: RECORDS[3].ts, type: 'signal', session: 'sess-aaaaaaaa', kind: 'prompt' });
   assert.deepEqual(slimRecord({ type: 'mystery', ts: 'x', secret: 1 }), { ts: 'x', type: 'mystery', session: null });
   assert.deepEqual(slimRecord(null), { ts: null, type: 'unknown', session: null });
+  assert.equal(slimRecord(RECORDS[4]).file, 'a.ts', 'a file is kept by its name, never its path');
+  assert.equal(slimRecord({ type: 'signal', file: '/private/tmp/claude-501/-Users-someone/notes.md' }).file, 'notes.md');
+  assert.equal(slimRecord({ type: 'signal', file: 'C:\\Users\\someone\\a.txt' }).file, 'a.txt');
+  assert.equal(slimRecord({ type: 'signal', file: '/work/dir/' }).file, 'dir');
+  assert.equal('file' in slimRecord({ type: 'signal', file: 7 }), false);
   assert.equal(slimRecord({ type: 'decision', reason: 'x'.repeat(500) }).reason.length, 160);
 });
 
@@ -42,9 +47,10 @@ test('the window counts by type and by day, and pages the records newest first',
   assert.equal(r.total, 5);
   assert.equal(r.matched, 5);
   assert.deepEqual(r.byType, [{ type: 'signal', n: 2 }, { type: 'decision', n: 1 }, { type: 'report', n: 1 }, { type: 'spawn', n: 1 }]);
-  assert.equal(r.byDay.length, 7);
-  assert.deepEqual(r.byDay.at(-1), { day: '2026-11-20', n: 2 });
-  assert.deepEqual(r.byDay.find((d) => d.day === '2026-11-17'), { day: '2026-11-17', n: 2 });
+  assert.equal(r.series.unit, 'day');
+  assert.equal(r.series.points.length, 7);
+  assert.deepEqual(r.series.points.at(-1), { key: '2026-11-20', n: 2 });
+  assert.deepEqual(r.series.points.find((d) => d.key === '2026-11-17'), { key: '2026-11-17', n: 2 });
   assert.deepEqual(r.records.map((x) => x.type), ['report', 'signal', 'signal', 'spawn', 'decision']);
   assert.deepEqual([r.pages, r.query.page, r.isCut], [1, 0, false]);
 });
@@ -54,17 +60,20 @@ test('a type filter keeps the counts by type whole and filters the days and the 
   assert.equal(r.total, 5);
   assert.equal(r.matched, 2);
   assert.equal(r.byType.length, 4);
-  assert.equal(r.byDay.reduce((n, d) => n + d.n, 0), 2);
+  assert.equal(r.series.points.reduce((n, d) => n + d.n, 0), 2);
   assert.deepEqual(r.records.map((x) => x.kind), ['write', 'prompt']);
 });
 
 test('the windows bound what is counted; all counts everything and charts the last thirty days', () => {
   assert.equal(collect(RECORDS, { window: '24h' }).total, 2);
-  assert.equal(collect(RECORDS, { window: '24h' }).byDay.length, 1);
+  const day = collect(RECORDS, { window: '24h' }).series;
+  assert.deepEqual([day.unit, day.points.length], ['hour', 24]);
+  assert.deepEqual([day.points[0].key, day.points.at(-1).key], ['2026-11-19T13', '2026-11-20T12']);
+  assert.deepEqual(day.points.filter((p) => p.n > 0), [{ key: '2026-11-20T07', n: 1 }, { key: '2026-11-20T08', n: 1 }]);
   assert.equal(collect(RECORDS, { window: '30d' }).total, 5);
   const all = collect([...RECORDS, { type: 'signal', ts: 'not a time' }], { window: 'all' });
   assert.equal(all.total, 7);
-  assert.equal(all.byDay.length, 30);
+  assert.deepEqual([all.series.unit, all.series.points.length], ['day', 30]);
   assert.equal(all.records.at(-1).ts, 'not a time');
   assert.equal(collect([{ type: 'signal', ts: at(-HOUR) }], { window: '7d' }).total, 0, 'a record from the future is outside the window');
 });

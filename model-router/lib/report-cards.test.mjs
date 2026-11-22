@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MARKS, REPORT_WINDOW, readableTime, reportView, taskCount } from './report-cards.mjs';
+import { DETAILS, MARKS, MAX_ROWS, REPORT_WINDOW, readableTime, reportView, rowsAt, taskCount } from './report-cards.mjs';
 import { renderReport } from './report-html.mjs';
 import { cardsView } from './usage-cards.mjs';
-import { reportData } from './usage-fixture.mjs';
+import { bigReportData, reportData } from './usage-fixture.mjs';
 
 const cell = (over = {}) => ({
   tier: 'opus', effort: 'medium', n: 2.9, tasks: 3, fpy: 1, reworkRate: 0, costPerTask: 1.798, costPerSuccess: 1.798, exploreShare: 0,
@@ -83,6 +83,17 @@ test('a single project that repeats the user level is one line; projects that di
   assert.deepEqual(two.sections.map((s) => [s.title, s.cards.length, s.empty]), [['/a', 1, null], ['/b', 1, null]]);
   const empty = reportView(bare({ levels: [user, { kind: 'project', title: '/c', classes: [] }] })).projects.sections[0];
   assert.match(empty.empty, /^No learned task here yet/);
+});
+
+test('each level of detail holds fewer rows: every cell, then a line per project, then a line per class', () => {
+  const view = reportView(bigReportData({ classes: 6, cells: 3, projects: 2 }));
+  assert.deepEqual(DETAILS, ['full', 'projects', 'classes']);
+  assert.deepEqual(DETAILS.map((d) => rowsAt(view, d)), [54, 20, 8]);
+  const none = reportView({ ...reportData(), levels: [{ kind: 'user', title: 'user', classes: [] }] });
+  assert.deepEqual(DETAILS.map((d) => rowsAt(none, d)), [0, 0, 0]);
+  const same = reportView(reportData());
+  assert.equal(rowsAt(same, 'projects') - rowsAt(same, 'full') < 0, true);
+  assert.ok(rowsAt(reportView(bigReportData({ classes: 400, cells: 2, projects: 40 })), 'classes') > MAX_ROWS);
 });
 
 test('the footnotes explain the measures, the weighting and the marks once', () => {

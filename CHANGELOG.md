@@ -3,6 +3,44 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.15
+
+2026-11-22 · pull request #82
+
+### Fixed
+
+- In the Claude desktop app the report pane opened empty, with the app's own "Nothing to show yet", for a report
+  with several classes and projects. Claude Code refuses a tree of more than 100,000 characters, and a report of
+  six classes and two projects drawn whole is about 150,000. The pane now measures what it draws and, when the
+  whole report does not fit, draws each project as one line, then each class as one line too, saying what it left
+  out and that *Open as page* shows everything; past that it draws one line and the page button. The usage view
+  and the log dashboard keep to the same bounds.
+
+### Changed
+
+- The log dashboard charts the last 24 hours by hour, under the title *By hour (UTC)*; with one bar for the whole
+  window the chart said nothing. The other windows stay by day.
+- A record of a written file shows the file's name, not its path: a path showed the machine's folders, and a
+  temporary one the user's name. The path is no longer read into the pane at all; *Open file* has the log itself.
+- A `session-end` record reads `session ended`, with its reason when it has one; it used to show the bare word
+  `other`.
+
+## session-hub 0.4.4
+
+2026-11-22 · pull request #82
+
+### Fixed
+
+- The log pane and the children panel keep within Claude Code's bounds for what a pane draws (100,000 characters),
+  past which the Claude desktop app shows an empty pane. A record with many children is drawn in brief in the log
+  pane, each child as one line with the latest events, then its first sixty children with the rest counted; the
+  children panel draws as many rows as fit and counts the others. Each says that the file has everything.
+- The start line of a child started in the Claude desktop app shows again. The app draws its `start_session` call
+  as a session card of its own, not as a tool row, so the line drawn under that row since 0.4.1 was never seen.
+  The line is now a notice in the transcript, written when the start has succeeded: `🔀 sonnet · medium →
+  t-1-product-test`, in words, one per child. A start made with a launch command keeps its line under the `Bash`
+  row.
+
 ## model-router 0.3.14
 
 2026-11-22 · pull request #81

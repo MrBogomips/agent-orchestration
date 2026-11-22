@@ -3,7 +3,8 @@
 # .claude-plugin/plugin.json is a plugin named after its folder, with a semver version, no `skills` field and no
 # marketplace.json, whose version is the newest "## <plugin> X.Y.Z" heading of CHANGELOG.md; every
 # skills/<name>/SKILL.md has a closed frontmatter with a `name` equal to its directory and a description; and
-# session-hub's copy of the shared look holds model-router's values (tests/shared-look.mjs).
+# session-hub's copy of the shared look holds model-router's values (tests/shared-look.mjs); and the modules both
+# plugins keep a copy of (the host rule, the bounds of a tree) answer alike (tests/shared-copies.mjs).
 #
 # Usage: bash tests/validate.sh [repo-root]    (requires jq; bash 3.2 compatible)
 set -euo pipefail
@@ -85,6 +86,11 @@ done
 # (docs/design/shared-contract.md, "A shared look"): the two copies must not differ.
 if [ -f "$ROOT/session-hub/hooks/mod/look.mjs" ] && [ -f "$ROOT/model-router/lib/route-line.mjs" ]; then
     look="$(node "$ROOT/tests/shared-look.mjs" "$ROOT" 2>&1)" || error "the shared look differs between the plugins: $look"
+fi
+# Each plugin keeps its own copy of the host rule and of the bounds of a tree (a plugin uses nothing outside its
+# folder): the copies must answer alike.
+if [ -f "$ROOT/session-hub/hooks/mod/host.mjs" ] && [ -f "$ROOT/model-router/lib/open-report.mjs" ]; then
+    copies="$(node "$ROOT/tests/shared-copies.mjs" "$ROOT" 2>&1)" || error "a module copied in both plugins behaves differently: $copies"
 fi
 [ -f "$ROOT/CHANGELOG.md" ] || error "CHANGELOG.md is missing"
 if [ "$ERRORS" -gt 0 ]; then echo "$ERRORS error(s)"; exit 1; fi

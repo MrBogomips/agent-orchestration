@@ -609,7 +609,8 @@ not open the file in another app: they open a second pane, <em>session-hub log</
 status, model and effort, repository and task, when it started, its last message and how many requests it made) and,
 under them, a timeline of every start, message and request, newest first; a request shows what was decided about it
 after an arrow, or that nothing is recorded yet. The footer names the record's file and has two buttons: <em>Open
-file</em> opens it in the system's default app, <em>Refresh</em> reads it again.</p>
+file</em> opens it in the system's default app, <em>Refresh</em> reads it again. A record with very many children is
+too large for the pane: it then shows each child as one line, and says that the file has everything.</p>
 <p>In the master, a <code>Bash</code> call that starts children gets one line per child under its row, in the same
 colours: the model, the effort and the child's name, for example
 <code>⎿  🔀 opus   ▰▰▰▱ high   -&gt; t123-product</code>. The mod reads them from the launch command that
@@ -913,7 +914,8 @@ command answers <code>Usage view opening beside the chat.</code> and the pane is
 </table>
 <p><strong>The log dashboard.</strong> In the Claude desktop app the event log is not opened as a file: Log,
 <code>l</code> and <code>/model-router log</code> open a pane, <em>model-router log</em>. It counts the records of the
-log and of its archive by type (routing decisions, subagent starts, reports, outcomes, signals) and by day, as bars.
+log and of its archive by type (routing decisions, subagent starts, reports, outcomes, signals) and by day, as bars
+(by hour for the last 24 hours). A file is shown by its name, not its path.
 Buttons choose the window (24h, 7d, 30d, all) and the record type. Under them a table lists the latest records, twenty
 to a page, newest first: the time (UTC), the type, the start of the session id and what that type records, for example
 a decision's action, the model before and after and the reason, or an outcome's class, tier and cost.
@@ -1009,7 +1011,9 @@ open it, it says why.</p>
 <p><strong>In the Claude desktop app</strong> (and in VS Code and the mobile apps) the report opens as a pane beside the
 chat, drawn with the app's own elements in its light or dark theme, with the same content as the page, top to bottom.
 Its footer has two buttons: <em>Open as page</em> writes the HTML page and opens it in your browser, to keep or to
-share; <em>Refresh</em> reads the data again. Projects are listed one after the other, each under its path.</p>
+share; <em>Refresh</em> reads the data again. Projects are listed one after the other, each under its path. A report
+with many classes and projects is too large for the pane: it then shows each project as one line, and for a larger
+one each class as one line too, and says so above them; <em>Open as page</em> always has every table.</p>
 <p>From a shell:</p>
 <pre><code>node "&lt;plugin folder&gt;/scripts/report.mjs"             # write and open
 node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote or headless)</code></pre>
