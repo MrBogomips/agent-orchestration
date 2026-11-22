@@ -1,50 +1,48 @@
-// Where the report page is shown once it is written: the Claude desktop app's Browser pane, else the system's
-// default browser, else nowhere (the line gives the path). Pure: the mod writes the page, asks the engine which
-// surfaces the session has, calls the pane's tool and runs the opener.
+// Where the quality report is shown: as a native pane on a graphical surface (the Claude desktop app, the editor,
+// the phones), as the HTML page in the system's default browser from a terminal. Pure: the mod asks the engine which
+// surfaces the session draws on, opens the pane or writes the page and runs the opener.
 // See docs/design/model-router.md, "Opening the report".
 // Plain ES module with no Node or engine imports, so both the mod and node tests load it.
 
-/** The desktop app's browser as an MCP server, and its tool that opens the Browser pane at a URL. */
-export const BROWSER_SERVER = 'Claude_Browser';
-export const BROWSER_TOOL = 'preview_start';
-/** The surface that has a Browser pane. */
-export const PANE_SURFACE = 'desktop';
+/** The report pane, and the keys and labels of its two controls, shared by its renderings. */
+export const REPORT_PANE = 'model-router-report';
+export const REPORT_PANE_TITLE = 'model-router report';
+export const PAGE_KEY = 'page';
+export const PAGE_LABEL = 'Open as page';
+export const PAGE_HOTKEY = 'o';
 
 const REASON_CHARS = 200;
 const oneLine = (text) => String(text ?? '').trim().split('\n')[0].slice(0, REASON_CHARS);
 
-/** The `file://` URL of an absolute path, each segment percent-encoded; null for a path that is not absolute. */
-export function fileUrl(path) {
-  if (typeof path !== 'string' || !path.startsWith('/')) return null;
-  return `file://${path.split('/').map(encodeURIComponent).join('/')}`;
-}
+/** Whether a surface draws native elements in a proportional font: every surface but the terminal. */
+export const isGraphical = (surface) => typeof surface === 'string' && surface !== '' && surface !== 'terminal';
 
-/** Whether the session draws on the surface that has a Browser pane. */
-export const hasBrowserPane = (surfaces) => Array.isArray(surfaces) && surfaces.includes(PANE_SURFACE);
-
-/** Why an `$.mcp.connect` answer does not give a server to call, in one line; null when it is connected. */
-export function connectRefusal(answer) {
-  if (answer?.isConnected === true && typeof answer.server === 'string' && answer.server) return null;
-  return oneLine([answer?.reason, answer?.message].filter(Boolean).join(': ')) || 'the Browser pane is not connected';
-}
+// How Claude Code was started when it draws nowhere of its own: from a shell (`cli`, as `claude -p`) or through
+// the SDK. Any other entry point is an app that hosts the session and attaches its surface at its first draw.
+const isHeadlessEntry = (entrypoint) => {
+  const entry = String(entrypoint ?? '').trim().toLowerCase();
+  return entry === '' || entry === 'cli' || entry.startsWith('sdk');
+};
 
 /**
- * Why the pane's tool did not open the page, in one line; null when it did. A result that is missing, denied by a
- * hook (`{ deny }`) or reported as failed by the server (`isError`) is a refusal.
+ * What kind of place the session is shown in: `terminal` when a terminal is attached; `graphical` when only
+ * graphical surfaces are, or when none is attached yet and an app hosts the session (`entrypoint`, the value of
+ * CLAUDE_CODE_ENTRYPOINT: a hosting app attaches its surface only at its first draw); `headless` otherwise (a
+ * `-p` run, the SDK), where nothing is ever drawn.
  */
-export function paneRefusal(result) {
-  if (!result || typeof result !== 'object') return 'the Browser pane gave no answer';
-  if ('deny' in result) return oneLine(result.deny) || 'denied';
-  if (result.isError) return oneLine((Array.isArray(result.content) ? result.content : []).find((b) => typeof b?.text === 'string')?.text) || 'the Browser pane refused the page';
-  return null;
+export function hostKind({ surfaces, entrypoint } = {}) {
+  const list = Array.isArray(surfaces) ? surfaces : [];
+  if (list.includes('terminal')) return 'terminal';
+  if (list.some(isGraphical)) return 'graphical';
+  return isHeadlessEntry(entrypoint) ? 'headless' : 'graphical';
 }
 
 /**
- * The one line the person reads: `how` is `pane`, `browser` or `none`; `why` says, for `none`, why nothing was
- * opened.
+ * The one line the person reads: `how` is `pane` (the native report pane), `browser` (the page, in the default
+ * browser) or `none` (the page, written and not opened: `why` says why).
  */
 export function reportLine(how, file, why) {
-  if (how === 'pane') return `Report opened in the Browser pane: ${file}`;
+  if (how === 'pane') return 'Report opened beside the chat.';
   if (how === 'browser') return `Report opened in the default browser: ${file}`;
   return `Report written to ${file} (not opened: ${oneLine(why) || 'no browser could be opened'})`;
 }

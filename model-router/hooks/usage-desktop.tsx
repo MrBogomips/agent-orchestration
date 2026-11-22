@@ -26,15 +26,15 @@ export type UsageActions = {
 }
 
 const PLUGIN = 'model-router'
-const ACCENT = COLORS.accent
+export const ACCENT = COLORS.accent
 // Status tones as the theme's own colours, so they follow light and dark; the accent is the view's identity.
 const TONE_COLORS: Record<string, string> = { good: 'success', fair: 'warning', bad: 'error', warn: 'warning', accent: ACCENT, dim: 'inactive' }
-const toneColor = (tone: string | null | undefined) => TONE_COLORS[tone ?? 'dim'] ?? 'inactive'
-const MUTED = { color: 'inactive' as const }
+export const toneColor = (tone: string | null | undefined) => TONE_COLORS[tone ?? 'dim'] ?? 'inactive'
+export const MUTED = { color: 'inactive' as const }
 const segment = (isActive: boolean) => ({ variant: isActive ? ('primary' as const) : ('secondary' as const) })
 
 /** The small pieces every part is made of: a chip, a chart, a table cell, a card. */
-function kit({ Box, Text, Svg }: GraphicalElements) {
+export function kit({ Box, Text, Svg }: GraphicalElements) {
   const row = (children: RenderChildren) => <Box flexDirection="row" alignItems="center" gap="sm">{children}</Box>
   return {
     row,
@@ -100,7 +100,7 @@ function controls({ Box, Button }: GraphicalElements, model: CardsView, actions:
   )
 }
 
-function banner({ Box, Text }: GraphicalElements, model: CardsView) {
+export function banner({ Box, Text }: GraphicalElements, model: Pick<CardsView, 'banner'>) {
   if (!model.banner) return null
   return (
     <Box flexDirection="row" paddingX="md" paddingY="xs" borderStyle="round" borderColor="warning">
@@ -130,7 +130,7 @@ function kpiCard(els: GraphicalElements, k: Kpi, width: string) {
 }
 
 /** Rows of equal cards that shrink to share the row with its gaps: four across, or two by two when narrow. */
-function kpis(els: GraphicalElements, model: CardsView, columns: number) {
+export function kpis(els: GraphicalElements, model: Pick<CardsView, 'kpis'>, columns: number) {
   const perRow = columns >= TILES_ONE_ROW ? 4 : 2
   const rows = Array.from({ length: Math.ceil(model.kpis.length / perRow) }, (_, i) => model.kpis.slice(i * perRow, (i + 1) * perRow))
   return rows.map((group) => (
@@ -141,7 +141,7 @@ function kpis(els: GraphicalElements, model: CardsView, columns: number) {
 }
 
 /** The models of the window, one row each; `isDetailed` (the Models tab) adds tokens and cost. */
-function modelsTable(els: GraphicalElements, model: CardsView, isDetailed: boolean) {
+export function modelsTable(els: GraphicalElements, model: Pick<CardsView, 'models'>, isDetailed: boolean) {
   const s = model.models
   if (!s) return null
   const k = kit(els)

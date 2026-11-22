@@ -19,6 +19,15 @@ export type SessionHubPanel = {
   updatedAt?: string
 }
 
+/** The log pane: the children record as it was last read, its path, and whether a read is running. */
+export type SessionHubLog = {
+  record?: unknown
+  file?: string
+  readAt?: string
+  isLoading: boolean
+  error?: string
+}
+
 export type ScopeLine = {
   pending: boolean
   tokens?: number
@@ -35,6 +44,8 @@ declare module 'claude-code' {
       master: Shaped<SessionHubMaster>
       panel: Shaped<SessionHubPanel>
       scopeLine: Shaped<ScopeLine>
+      /** The log pane's record, read when the pane opens and by its Refresh. */
+      log: Shaped<SessionHubLog>
       /** The start lines of each Bash call, by its tool_use_id; null when the call started no child. */
       starts: StateFamily<SessionHubStarts | null>
     }

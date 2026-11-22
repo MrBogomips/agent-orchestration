@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { buildReportData, writeReport, openerFor } from './report.mjs';
 import { renderReport } from '../lib/report-html.mjs';
 
@@ -93,4 +95,18 @@ test('the opener is open on macOS and xdg-open on Linux', () => {
   assert.equal(openerFor('darwin'), 'open');
   assert.equal(openerFor('linux'), 'xdg-open');
   assert.equal(openerFor('win32'), null);
+});
+
+test('--json prints the report data after a compaction and writes no page', () => {
+  const configDir = fixture();
+  const script = fileURLToPath(new URL('./report.mjs', import.meta.url));
+  const run = spawnSync(process.execPath, [script, '--config-dir', configDir, '--json'], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  const data = JSON.parse(run.stdout);
+  assert.deepEqual(data.levels.map((l) => l.kind), ['user', 'project']);
+  assert.equal(data.usage.version, 1);
+  assert.equal(typeof data.halfLifeDays, 'number');
+  assert.ok(!existsSync(join(configDir, 'model-router', 'report.html')));
+  assert.ok(existsSync(join(configDir, 'model-router', 'quality', 'user.json')), 'compaction ran first');
+  assert.match(renderReport(data), /edit-specified/);
 });

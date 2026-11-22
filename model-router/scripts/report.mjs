@@ -2,8 +2,9 @@
 // The quality report: runs a compaction, then writes <config dir>/model-router/report.html and opens it.
 // See docs/design/model-router-quality-loop.md, "Report".
 //
-// Usage: node report.mjs [--config-dir <dir>] [--options '<json>'] [--no-open]
-// Prints the path of the page. Nothing leaves the machine.
+// Usage: node report.mjs [--config-dir <dir>] [--options '<json>'] [--no-open | --json]
+// Prints the path of the page. With --json it compacts and prints the report's data instead, and writes no page:
+// the mod draws that data as a native pane (lib/report-cards.mjs). Nothing leaves the machine.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -80,11 +81,12 @@ export function writeReport({ configDir = defaultConfigDir(), now = Date.now(), 
 }
 
 function parseArgs(argv) {
-  const args = { configDir: undefined, options: {}, open: true };
+  const args = { configDir: undefined, options: {}, open: true, json: false };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--config-dir') args.configDir = argv[++i];
     else if (argv[i] === '--options') args.options = JSON.parse(argv[++i] ?? '{}');
     else if (argv[i] === '--no-open') args.open = false;
+    else if (argv[i] === '--json') args.json = true;
   }
   return args;
 }
@@ -92,8 +94,12 @@ function parseArgs(argv) {
 if (isMainModule(import.meta.url)) {
   try {
     const args = parseArgs(process.argv.slice(2));
-    const file = writeReport({ configDir: args.configDir || defaultConfigDir(), options: args.options, open: args.open ? openFile : null });
-    process.stdout.write(`${file}\n`);
+    const configDir = args.configDir || defaultConfigDir();
+    if (args.json) {
+      process.stdout.write(`${JSON.stringify(buildReportData({ configDir, options: args.options }))}\n`);
+    } else {
+      process.stdout.write(`${writeReport({ configDir, options: args.options, open: args.open ? openFile : null })}\n`);
+    }
   } catch (err) {
     process.stderr.write(`[model-router] report failed: ${err?.message ?? err}\n`);
     process.exitCode = 1;

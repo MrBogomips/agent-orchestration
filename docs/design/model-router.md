@@ -272,9 +272,9 @@ failure) of the window; at the project level they count the project's tasks and 
 | ↓, ↑ | Next or previous window (24h, 7d, 30d, all), cycling |
 | `d` `w` `m` `a` | Window: last 24 hours, 7 days, 30 days, all |
 | `p` | Level: the user's data or this project's |
-| `o` | Write and open the HTML report (`scripts/report.mjs`); where it opened and its path are written as a line in the session (*Opening the report*) |
+| `o` | Open the report: the HTML page in the terminal (`scripts/report.mjs`), the report pane on a graphical surface; where it opened is written as a line in the session (*Opening the report*) |
 | `r` | Refresh: run compaction and read again |
-| `l` | Open the event log in the system's default app; its path is written as a line in the session (*Opening the log*) |
+| `l` | Open the event log: the file in the system's default app in the terminal (*Opening the log*), the log dashboard on a graphical surface (*The log dashboard*) |
 | Page Up, Page Down, wheel | Scroll the content |
 | Esc | Close |
 
@@ -294,7 +294,7 @@ pane (spike S15 in `spikes.md`). How the other keys are wired, in `lib/usage-nav
   a press within 500 ms of a wrap undoes the wrap, which a click off the row from an end tab would cause.
 
 **Arguments.** `/model-router models 30d` opens on that tab and window; tab, window (`24h`, `7d`, `30d`, `all`)
-and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` writes and opens the report page and answers where it opened and its path (*Opening the report*). `help`, and any argument the
+and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` opens the report, as a page from a terminal and as a native pane on a graphical surface, and answers where it opened (*Opening the report*). `help`, and any argument the
 command does not know, print the list of arguments and keys.
 
 **Text fallback.** Where no pane can be placed (headless or `claude -p`, a terminal narrower than 60 columns, or
@@ -377,6 +377,17 @@ from the same data. The terminal's rendering is unchanged.
   marks. If the view model cannot be built the hook logs why and draws the terminal's rows; if those cannot be
   built either it draws one line (`Could not draw the usage view: …`). The pane is never left empty.
 
+**A session whose app has not attached yet.** The Claude desktop app attaches its surface to the session only at
+its first draw. A `/model-router` typed as the first command of a session therefore finds `$.session.surfaces()`
+empty and gets `isPlaced: false` from `$.ui.open`, exactly as a `claude -p` run does. The mod tells the two apart
+by `hostKind` (`lib/open-report.mjs`): a terminal when one is attached; a graphical host when only graphical
+surfaces are, or when none is and `CLAUDE_CODE_ENTRYPOINT` names an app (anything but unset, `cli` or `sdk…`);
+headless otherwise. On a graphical host the pane is kept open, whatever the width the command reports, the data is
+read, and the answer is one line (`Usage view opening beside the chat.`): the pane is drawn when the app attaches.
+The text view is for a terminal too narrow for the pane and for a headless run, where the pane is closed again.
+The API has no call that says an app hosts the session, hence the environment variable; its value in the desktop
+app is to be confirmed there.
+
 **Failure.** The command fails open like the rest of the mod: a hook error, a script that fails or times out,
 or unreadable output answers one short line (`Could not read the usage data: …`; the engine shows it under the
 plugin's name) and never throws to the engine. `report` that fails or takes more than 60 seconds answers
@@ -384,8 +395,9 @@ plugin's name) and never throws to the engine. `report` that fails or takes more
 refresh the earlier rows stay, with a warning under them. A second `r` while a read runs is ignored.
 
 **Opening the log.** Every pane offers its plugin's own log (`ui-design.md`); model-router's is the event log,
-`<config dir>/model-router/events.jsonl`. The `l` key, the Log button and `/model-router log` do the same thing,
-decided in `lib/open-log.mjs`:
+`<config dir>/model-router/events.jsonl`. In a terminal, and in a headless run, the `l` key and `/model-router log`
+open the file; on a graphical host they and the Log button open *The log dashboard*, below, whose *Open file*
+button does what follows. It is decided in `lib/open-log.mjs`:
 
 - The API has no call that opens a file, and a `Link` opens what the surface chooses (on a remote surface only
   `https:`), so the mod runs the system's opener with `$.process.run`, the path as one argument and no shell:
@@ -404,24 +416,64 @@ decided in `lib/open-log.mjs`:
 Only these two paths are ever passed to an opener. `/model-router log` used to be an alias of
 `/model-router decisions`; from 0.3.13 it opens the log.
 
-**Opening the report.** `/model-router report`, the `o` key and the Report button write the page with
-`scripts/report.mjs --no-open` and then show it, by the first of three ways that works (`lib/open-report.mjs`):
+**The log dashboard.** On a graphical host (`hostKind`, above) the log is a third pane, `model-router-log`
+(`$.ui.open({ id, title: 'model-router log', focus: true })`), a pane like the report's and kept the same way when
+the app has not attached yet. `ui-design.md` asks for it: a rich view is a mod pane, and a JSON log is a dashboard.
 
-1. **The Browser pane of the Claude desktop app**, when the session draws on `desktop` (`$.session.surfaces()`, or
-   the usage pane last drew there). The app's browser is the MCP server `Claude_Browser`: the mod calls
-   `$.mcp.connect('Claude_Browser')` and then its `preview_start` tool with the page's `file://` URL. A server that
-   is not connected, a call a hook denies (a managed mod may hold browser tools back), a result with `isError` and
-   a call that throws all count as a refusal: its reason goes to the debug log and the next way is tried.
-2. **The system's default browser**: `open <page>` on macOS, `xdg-open <page>` on Linux, through `$.process.run`.
-   Not on a hosted session or a platform with no known opener.
-3. **Nowhere**: the line gives the path and why nothing was opened.
+- **A bounded read.** `scripts/log.mjs --window <w> --type <t> --page <n>` makes one pass over the log with
+  `scanLog`, archive included, and holds nothing of it itself: every record goes to the collector of
+  `lib/log-data.mjs`, which counts the records of the window by type, the matching ones by day, and keeps the newest
+  1,000 matching records, each cut to the fields of its type (`slimRecord`). It prints one page of twenty, newest
+  first, with the counts, the page count and whether older matching records exist beyond the 1,000. Memory and
+  output are the same for a log of any length; the pass itself is read-only and takes at most 20 seconds. A prompt's
+  text and a task's description are not among the kept fields, so they never reach the pane.
+- **What it shows** (`logView` of `lib/log-cards.mjs`, drawn by `hooks/log-desktop.tsx`): the title and
+  `<n> records · <window> · archive included`; the windows 24h, 7d, 30d and all as native Buttons; *Records by
+  type*, a row per type with a Button that filters on it, a share bar and the count (`all` first); *By day (UTC)*,
+  an SVG column chart of the matching records over the window's days (the last thirty for `all`), with a tooltip
+  per day; *Latest records*, a table of when (UTC), type, the first eight characters of the session, a chip (a
+  decision's action, an outcome's result, a signal's kind) and the type's fields (a decision's models, subagent
+  type and reason; a spawn's type, class, model and route; an outcome's class, tier, cost and why; a report's
+  status, model, tokens and cost; a signal's file); the page and *Newer* and *Older* Buttons, each drawn only where
+  there is a page; then the log's path and size, the archive's file count, size and newest names, and when the log
+  was read.
+- **Controls.** A window or a type reads again from the newest page; *Refresh* (`refresh`, `r`) reads the same
+  query again; *Open file* (`file`, `o`) opens the log as in the terminal and writes its line. The query (window,
+  type, page) and the data are kept in `$.state` (`log`). The app owns focus and scrolling.
+- **Failure.** A log that cannot be read is one line in place of the dashboard; a view or a tree that cannot be
+  built leaves one line and the file button; a terminal that draws this pane gets one line and the file button.
+  The answer of the command is `Event log opened beside the chat.`
 
-The line says which: `Report opened in the Browser pane: <path>`, `Report opened in the default browser: <path>`,
-or `Report written to <path> (not opened: <reason>)`. Off the desktop app no MCP call is made. Whether the pane
-takes a `file://` URL is not verified on the app: if it refuses, the result is an error and the default browser
-opens the page; if it accepts the call and shows nothing, the path in the line is the way out, and serving the
-page on `127.0.0.1` for the pane is the fix to make then. The skill and the script run from a shell keep opening
-the default browser themselves.
+The glue is `hooks/log-pane.tsx`; its `ui.render` hook is added in `hooks/model-router.tsx`, since a hook is added
+only by `on(...)` in the hooks module itself and `$` is not handed to a function held in a value.
+
+**Opening the report.** `/model-router report`, the `o` key and the Report button show the report where the
+session is shown (`showReport`; `hostKind` of `lib/open-report.mjs`, above):
+
+- **On a graphical host**, a second pane, `model-router-report` (`$.ui.open({ id, title: 'model-router report',
+  focus: true })`), drawn by `hooks/report-desktop.tsx` from `reportView` of `lib/report-cards.mjs`, the view model
+  the page is written from. Its data comes from `scripts/report.mjs --json`, which compacts and prints the report's
+  data without writing a page, and is kept in `$.state` (`report`). Top to bottom: the title and when the data was
+  read; the 30-day headline with the usage view's own notice, KPI cards and models table (the same functions of
+  `usage-desktop.tsx`); the weekly trend as two SVG charts, side by side from 70 body columns, and the weeks as a
+  table; the routing decisions as chips; one card per task class with a row per cell (tasks, FPY bar and figure,
+  rework, $/task, $/success, explored; ★ the recommended cell, ○ and muted text a row under five tasks; under 70
+  columns $/task and explored are left out, as on the narrow page); the projects, one line when the only project
+  repeats the user level, else a heading and its cards per project; the footnotes and where the data was read.
+  The footer has two native Buttons: **Open as page** (`page`, `o`), which writes the HTML page and opens it as in
+  the terminal, and **Refresh** (`refresh`, `r`). The app owns focus and scrolling. A pane not placed yet is kept
+  (a session whose app has not attached). Data that cannot be read is one line in place of the content; a model
+  or a tree that cannot be built leaves one line and the page button. The answer is `Report opened beside the chat.`
+- **In a terminal, and in a headless run**, the HTML page: written with `scripts/report.mjs --no-open`, then opened
+  in the system's default browser with `open <page>` on macOS or `xdg-open <page>` on Linux, through
+  `$.process.run`. Not on a hosted session or a platform with no known opener. The answer is `Report opened in the
+  default browser: <path>`, or `Report written to <path> (not opened: <reason>)`.
+
+A press of Report in a pane drawn on a graphical surface opens the report pane whatever else is attached. The
+desktop app's Browser pane is not used: tried on the app, it drew the page, which lies outside the project folder,
+as a still image in the light theme, and its tool needed a permission. The skill and the script run from a shell
+open the default browser themselves. A terminal that draws the report pane (one attached beside the app) gets one
+line and the page button.
 
 **With mods off** there is no command; the `model-router:report` skill builds the same page from the same code.
 
@@ -434,7 +486,8 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.1 | `choose-model`, `setup`. |
 | 0.2 | The mod, the decision log, the command, the options; the quality loop measuring only, and `report`. |
 | 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. From 0.3.4, the 🔀 identity and the coloured choose-model line under `Agent` rows. |
-| 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. The report opens in the desktop app's Browser pane and is redrawn after `ui-design.md`. |
+| 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. The report page is redrawn after `ui-design.md`. |
+| 0.3.14 | The report and the event log as native panes on graphical surfaces; the usage pane kept open in a session whose app has not attached yet. |
 | 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
 
 ## Open points

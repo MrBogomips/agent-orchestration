@@ -1,7 +1,7 @@
 // A fixed data set for the usage view's tests: records and aggregates at a fixed time, built through the same
 // code the scripts use. Not loaded by the mod or the scripts.
 import { applyOutcome, emptyLevel } from './aggregate.mjs';
-import { buildUsageData } from './usage-data.mjs';
+import { agedCells, buildUsageData, classesOf, decisionsOf, latestOutcomes, trendOf } from './usage-data.mjs';
 
 export const T0 = Date.parse('2026-11-20T12:00:00Z');
 export const SESSION = 'sess-now';
@@ -87,6 +87,20 @@ export function usageData() {
     events: events(), user: level(list, 'user'), projectLevel: level(list.filter((o) => o.project?.id === PROJECT.id), 'project', PROJECT),
     project: PROJECT, grid: GRID, now: T0, halfLifeDays: 30, session: SESSION, live: LIVE, note: null,
   });
+}
+
+/** The report's data for the fixture, built as scripts/report.mjs builds it: the user level and one project. */
+export function reportData() {
+  const list = latestOutcomes(events());
+  const own = outcomes().filter((o) => o.project?.id === PROJECT.id);
+  return {
+    generatedAt: new Date(T0).toISOString(), configDir: '/home/u/.claude', events: events().length, outcomes: list.length, halfLifeDays: 30,
+    levels: [
+      { kind: 'user', title: 'user', classes: classesOf(agedCells(level(outcomes(), 'user'), T0, 30), GRID, { outcomes: list }) },
+      { kind: 'project', title: PROJECT.root, classes: classesOf(agedCells(level(own, 'project', PROJECT), T0, 30), GRID, { outcomes: list, projectId: PROJECT.id }) },
+    ],
+    trend: trendOf(list), decisions: decisionsOf(events()), usage: usageData(),
+  };
 }
 
 export const STATUS = { routing: true, routeSubagents: true, measuring: true, adapt: false };

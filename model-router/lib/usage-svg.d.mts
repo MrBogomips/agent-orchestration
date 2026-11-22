@@ -8,3 +8,5 @@ export declare function sparklineSvg(values: unknown, options?: SvgOptions & { d
 export declare function barSvg(share: unknown, options?: SvgOptions): string
 export declare const SPARK_SIZE: Readonly<{ width: number; height: number }>
 export declare const BAR_SIZE: Readonly<{ width: number; height: number }>
+export declare const COLUMNS_SIZE: Readonly<{ width: number; height: number }>
+export declare function columnsSvg(values: unknown, options?: SvgOptions & { labels?: readonly string[] }): string

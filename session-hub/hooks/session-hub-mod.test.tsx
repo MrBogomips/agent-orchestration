@@ -384,16 +384,24 @@ const PANEL = {
 } as const
 const ran = (stdout: string, exitCode = 0, stderr = '') => ({ value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false } })
 
-type Opening = { exists?: boolean; platform?: string; open?: { exitCode: number; stderr: string }; pathFails?: boolean }
+type Opening = {
+  exists?: boolean; platform?: string; open?: { exitCode: number; stderr: string }; pathFails?: boolean
+  surfaces?: string[]; entrypoint?: string; isPlaced?: boolean; record?: unknown; readFails?: string
+}
 
 // A master in /hub whose record is at the default path: the registry script, the file system and the opener.
 function master(on: On, opening: Opening = {}) {
-  const world = { opened: [] as (readonly string[])[], logs: [] as string[] }
-  engine(on, {}, '/hub')
+  const world = { opened: [] as (readonly string[])[], logs: [] as string[], debug: [] as string[], panes: [] as { id: string }[], reads: [] as (readonly string[])[] }
+  engine(on, opening.entrypoint ? { CLAUDE_CODE_ENTRYPOINT: opening.entrypoint } : {}, '/hub')
+  on('session.surfaces', () => ({ value: (opening.surfaces ?? ['terminal']) as never }))
   on('session.info', () => ({ value: { platform: opening.platform ?? 'macos', isHosted: false } as never }))
   on('fs.exists', () => ({ value: opening.exists ?? true }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('ui.log', (_, e, next) => (world.logs.push(String((e as { text?: unknown }).text ?? '')), next(e)))
+  on('ui.open', (_, e) => (world.panes.push(e as { id: string }), { value: opening.isPlaced === false ? { isPlaced: false, reason: 'no-surface' } : { isPlaced: true } }))
+  on('ui.log', (_, e, next) => {
+    const line = String((e as { text?: unknown }).text ?? '')
+    ;((e as { to?: string }).to === 'debug' ? world.debug : world.logs).push(line)
+    return next(e)
+  })
   on('tool.call', () => ({ result: {} }))
   on('process.run', (_, e) => {
     if (e.argv[0] === 'open' || e.argv[0] === 'xdg-open') {
@@ -401,7 +409,11 @@ function master(on: On, opening: Opening = {}) {
       return ran('', opening.open?.exitCode ?? 0, opening.open?.stderr ?? '')
     }
     if (e.argv[2] === 'path') return opening.pathFails ? ran('', 1, '[session-hub] the record may not live inside the hub') : ran(`${DEFAULT_RECORD}\n`)
-    return ran(JSON.stringify(RECORD))
+    if (e.argv[2] === 'read' && e.argv[3] === '--file') {
+      world.reads.push(e.argv.slice(3))
+      if (opening.readFails) return ran('', 1, opening.readFails)
+    }
+    return ran(JSON.stringify(opening.record ?? RECORD))
   })
   return world
 }
@@ -448,9 +460,11 @@ test('a child started without a record is told to open it from its master', asyn
   expect((await $.command.run({ ...RUN, args: 'log' })).text).toMatch(/started without SESSION_HUB_REGISTRY/)
 })
 
-test('the panel offers the record: a key hint in the terminal, a native button on a graphical surface', async ($, on) => {
+const UPSERT = 'node "/p/scripts/registry.mjs" upsert --hub /hub --entry \'{}\''
+
+test('in the terminal the panel offers the record as a key, and it opens the file', async ($, on) => {
   const world = master(on)
-  await $.tool.call({ tool: 'Bash', command: 'node "/p/scripts/registry.mjs" upsert --hub /hub --entry \'{}\'' })
+  await $.tool.call({ tool: 'Bash', command: UPSERT })
   const terminal = await $.ui.mount({ ...PANEL, surface: 'terminal' })
   const hint = JSON.stringify(await terminal.find({ type: 'Button', key: 'log' }))
   expect(hint).toContain('"hotkey":"l"')
@@ -458,30 +472,144 @@ test('the panel offers the record: a key hint in the terminal, a native button o
   expect(hint).toContain('"label":"log (the children record)"')
   await terminal.press({ key: 'log' })
   await terminal.unmount()
+  expect(world.opened).toEqual([['open', DEFAULT_RECORD]])
+  expect(world.logs).toContain(`[session-hub] Children record opened: ${DEFAULT_RECORD}`)
+  expect(world.panes.map((p) => p.id)).toEqual([])
+})
+
+test('a failed open is one line in the transcript and the panel stays drawn', async ($, on) => {
+  const world = master(on, { open: { exitCode: 1, stderr: 'No application knows how to open it.\nSecond line' } })
+  await $.tool.call({ tool: 'Bash', command: UPSERT })
+  const ui = await $.ui.mount({ ...PANEL, surface: 'terminal' })
+  await ui.press({ key: 'log' })
+  expect(await ui.find({ type: 'Text', text: /t42-product/ })).toBeDefined()
+  await ui.unmount()
+  expect(world.logs.filter((l) => l.includes('Could not open'))).toEqual([`[session-hub] Could not open ${DEFAULT_RECORD}: No application knows how to open it.`])
+})
+
+const LOG_PANE = {
+  plugin: 'session-hub',
+  component: 'Pane',
+  requestId: 'session-hub-log',
+  props: { title: 'session-hub log', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
+} as const
+const FULL_RECORD = {
+  version: 1,
+  hub: '/hub',
+  children: [
+    {
+      name: 't42-product', repo: 'product', task: 'T-42', status: 'running', model: 'sonnet', effort: 'medium', started: '2026-11-20T09:00:00.000Z',
+      lastMessage: { type: 'question', at: '2026-11-20T10:30:00.000Z', text: 'which branch?' },
+      requests: [{ at: '2026-11-20T10:00:00.000Z', text: 'edit the design tokens', outcome: 'sent to t42-design' }],
+    },
+    { name: 't42-design', repo: 'design', status: 'lost', reason: 'not in the session list', started: '2026-11-20T09:05:00.000Z', requests: [] },
+  ],
+}
+const DESKTOP: Opening = { surfaces: ['desktop'], record: FULL_RECORD }
+
+test('on a graphical surface the panel button opens the log pane, not the file', async ($, on) => {
+  const world = master(on, DESKTOP)
+  await $.tool.call({ tool: 'Bash', command: UPSERT })
   for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...PANEL, surface })
     const button = JSON.stringify(await ui.find({ type: 'Button', key: 'log' }))
     expect(button).toContain('"label":"Log"')
     expect(button).toContain('"variant":"secondary"')
     expect(button.includes('"plain":true')).toBe(false)
-    expect((await ui.find({ type: 'Text', text: /t42-product/ }))?.text).toMatch(/running/)
     await ui.press({ key: 'log' })
     await ui.unmount()
   }
-  expect(world.opened).toEqual(Array(4).fill(['open', DEFAULT_RECORD]))
-  expect(world.logs.filter((l) => l.startsWith('[session-hub] Children record opened'))).toEqual(Array(4).fill(`[session-hub] Children record opened: ${DEFAULT_RECORD}`))
+  expect(world.panes.map((p) => p.id)).toEqual(['session-hub-log', 'session-hub-log', 'session-hub-log'])
+  expect(world.logs.filter((l) => l === '[session-hub] Children record opened beside the chat.').length).toBe(3)
+  expect(world.opened).toEqual([])
 })
 
-test('a failed open is one line in the transcript and the panel stays drawn', async ($, on) => {
-  const world = master(on, { open: { exitCode: 1, stderr: 'No application knows how to open it.\nSecond line' } })
-  await $.tool.call({ tool: 'Bash', command: 'node "/p/scripts/registry.mjs" upsert --hub /hub --entry \'{}\'' })
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ ...PANEL, surface })
-    await ui.press({ key: 'log' })
-    expect(await ui.find({ type: 'Text', text: /t42-product/ })).toBeDefined()
+test('/session-hub log on a graphical surface opens the log pane and reads the record at its path', async ($, on) => {
+  const world = master(on, DESKTOP)
+  const out = await $.command.run({ ...RUN, args: 'log' })
+  expect(out.text).toBe('Children record opened beside the chat.')
+  expect(out.isTextDisplayOnly).toBe(true)
+  expect(world.panes).toEqual([{ id: 'session-hub-log', title: 'session-hub log', focus: true }] as never)
+  expect(world.reads).toEqual([['--file', DEFAULT_RECORD]])
+  expect(world.opened).toEqual([])
+})
+
+test('the log pane draws the record natively: a card per child and the timeline of starts, messages and requests', async ($, on) => {
+  const world = master(on, DESKTOP)
+  await $.command.run({ ...RUN, args: 'log' })
+  for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+    const ui = await $.ui.mount({ ...LOG_PANE, surface })
+    expect(await ui.find({ type: 'Text', text: '2 children · 1 live · hub /hub' })).toBeDefined()
+    for (const text of ['Children', 'Timeline', 't42-design', 'not in the session list', 'when (UTC)']) expect(await ui.find({ type: 'Text', text })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'started 2026-11-20 09:00 UTC · 1 request' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'last message: question · 2026-11-20 10:30 · which branch?' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'edit the design tokens → sent to t42-design' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: `Record: ${DEFAULT_RECORD}` })).toBeDefined()
+    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['file', 'refresh'])
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn).toContain('"color":"success"')
+    expect(drawn).toContain('"color":"error"')
+    expect(drawn).toContain('sonnet · medium')
+    expect(/[╭╰│▰▱]/.test(drawn)).toBe(false)
+    expect(drawn.includes('"plain":true')).toBe(false)
     await ui.unmount()
   }
-  expect(world.logs.filter((l) => l.includes('Could not open'))).toEqual(Array(2).fill(`[session-hub] Could not open ${DEFAULT_RECORD}: No application knows how to open it.`))
+  expect(world.debug.filter((l) => l.includes('log pane'))).toEqual([])
+})
+
+test('Open file is the way out of the log pane, and Refresh reads the record again', async ($, on) => {
+  const world = master(on, { ...DESKTOP, platform: 'linux' })
+  await $.command.run({ ...RUN, args: 'log' })
+  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+  const button = JSON.stringify(await ui.find({ type: 'Button', key: 'file' }))
+  expect(button).toContain('"label":"Open file"')
+  expect(button).toContain('"variant":"secondary"')
+  await ui.press({ key: 'file' })
+  expect(world.opened).toEqual([['xdg-open', DEFAULT_RECORD]])
+  expect(world.logs).toContain(`[session-hub] Children record opened: ${DEFAULT_RECORD}`)
+  await ui.press({ key: 'refresh' })
+  expect(world.reads.length).toBe(2)
+  await ui.unmount()
+})
+
+test('a record that cannot be read is one line in the log pane, with its buttons', async ($, on) => {
+  master(on, { ...DESKTOP, readFails: '[session-hub] the record is not valid JSON' })
+  await $.command.run({ ...RUN, args: 'log' })
+  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: 'Cannot read the children record: [session-hub] the record is not valid JSON' })).toBeDefined()
+  expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['file', 'refresh'])
+  await ui.unmount()
+})
+
+test('a record with no child says what will appear', async ($, on) => {
+  master(on, { ...DESKTOP, record: { version: 1, hub: '/hub', children: [] } })
+  await $.command.run({ ...RUN, args: 'log' })
+  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /^No child in the record yet/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Timeline' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('in a session whose app has not attached yet the log pane is kept', async ($, on) => {
+  const world = master(on, { surfaces: [], entrypoint: 'claude-desktop', isPlaced: false })
+  expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe('Children record opened beside the chat.')
+  expect(world.panes.map((p) => p.id)).toEqual(['session-hub-log'])
+  expect(world.opened).toEqual([])
+})
+
+test('a -p run, where nothing is drawn, opens the file as a terminal does', async ($, on) => {
+  const world = master(on, { surfaces: [], entrypoint: 'sdk-cli' })
+  expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe(`Children record opened: ${DEFAULT_RECORD}`)
+  expect(world.panes).toEqual([])
+})
+
+test('a terminal attached beside the app is told that the record is a file there', async ($, on) => {
+  master(on, DESKTOP)
+  await $.command.run({ ...RUN, args: 'log' })
+  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
+  expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['file'])
+  await ui.unmount()
 })
 
 const START_SESSION = 'mcp__ccd_session__start_session'
