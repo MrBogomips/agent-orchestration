@@ -3,6 +3,16 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.4.1
+
+2026-11-22 · pull request #77
+
+### Fixed
+
+- The start line now shows in the Claude desktop app too. There, `session-hub:spawn` starts a child with the app's
+  `start_session` tool instead of a launch command, so no line was drawn: the line is now read from that call's
+  input (its `name` and `model`; the tool takes no effort, so the line says `default`) and drawn under its row.
+
 ## model-router 0.3.11
 
 2026-11-21 · pull request #76
