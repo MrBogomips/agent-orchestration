@@ -1,6 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { TREE_BOUNDS, TREE_BUDGET, treeSize } from './mod/tree-bounds.mjs'
+
 // Each hook a test adds stands for the engine beneath the mod.
 
 const CHILD_ENV: Record<string, string> = {
@@ -610,6 +612,90 @@ test('a terminal attached beside the app is told that the record is a file there
   expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
   expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['file'])
   await ui.unmount()
+})
+
+// A tree past the engine's bounds (100,000 characters) is refused whole and the app shows its own empty state: both
+// panes measure what they draw and draw less.
+const manyChildren = (n: number) => ({
+  version: 1,
+  hub: '/hub',
+  children: Array.from({ length: n }, (_, i) => ({
+    name: `t${i}-product`, repo: 'product', task: `T-${i}`, status: i % 3 ? 'running' : 'done', model: 'sonnet', effort: 'medium',
+    started: new Date(Date.UTC(2026, 10, 20, 9, i % 60)).toISOString(),
+    lastMessage: { type: 'done', at: new Date(Date.UTC(2026, 10, 20, 11, i % 60)).toISOString(), text: `https://example.com/pr/${i}` },
+    requests: [{ at: new Date(Date.UTC(2026, 10, 20, 10, i % 60)).toISOString(), text: `request ${i}`, outcome: 'done' }],
+  })),
+})
+
+async function drawLog($: any, on: On, children: number) {
+  const world = master(on, { surfaces: ['desktop'], record: manyChildren(children) })
+  await $.command.run({ ...RUN, args: 'log' })
+  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+  const size = treeSize(await ui.drawn())
+  const texts: string[] = (await ui.findAll({ type: 'Text' })).map((t: { text?: unknown }) => String(t.text))
+  const keys: string[] = (await ui.findAll({ type: 'Button' })).map((b: { key?: unknown }) => String(b.key))
+  await ui.unmount()
+  return { world, size, texts, keys, skipped: world.debug.filter((l) => l.startsWith('[session-hub] log pane: ')) }
+}
+
+test('a record of a few children is drawn whole in the log pane, within the bounds', async ($, on) => {
+  const { size, texts, skipped } = await drawLog($, on, 8)
+  expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
+  expect(skipped).toEqual([])
+  expect(texts.some((t) => t.startsWith('The record is too large'))).toBe(false)
+  expect(texts.includes('Timeline')).toBe(true)
+})
+
+test('a record too large for one tree draws each child as one line, with the latest events', async ($, on) => {
+  const { size, texts, keys, skipped } = await drawLog($, on, 70)
+  expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
+  expect(size.chars).toBeLessThan(TREE_BOUNDS.chars)
+  expect(skipped.length).toBe(1)
+  expect(skipped[0]).toMatch(/^\[session-hub\] log pane: full: chars \d+ > 80000$/)
+  expect(texts.some((t) => t.startsWith('The record is too large to draw whole here: each child is one line'))).toBe(true)
+  expect(texts.includes('t69-product')).toBe(true)
+  expect(texts.includes('Timeline')).toBe(true)
+  expect(texts.some((t) => t.startsWith('started 2026-11-20'))).toBe(false)
+  expect(keys).toEqual(['file', 'refresh'])
+})
+
+test('a very large record draws its first children and counts the rest', async ($, on) => {
+  const { size, texts, keys, skipped } = await drawLog($, on, 600)
+  expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
+  expect(skipped.map((l) => l.split(': ')[1])).toEqual(['full', 'brief'])
+  expect(texts.some((t) => t.startsWith('The record is too large to draw here: these are its first children'))).toBe(true)
+  expect(texts.includes('540 more in the file.')).toBe(true)
+  expect(texts.includes('Timeline')).toBe(false)
+  expect(keys).toEqual(['file', 'refresh'])
+})
+
+test('a children panel with very many children draws as many rows as fit and counts the rest', async ($, on) => {
+  const world = master(on, { record: manyChildren(400) })
+  await $.tool.call({ tool: 'Bash', command: UPSERT })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANEL, surface })
+    const size = treeSize(await ui.drawn())
+    expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
+    const texts: string[] = (await ui.findAll({ type: 'Text' })).map((t: { text?: unknown }) => String(t.text))
+    const more = texts.find((t) => /^\d+ more children are in the record\.$/.test(t))
+    expect(more).toBeDefined()
+    expect(texts.some((t) => t.startsWith('t0-product'))).toBe(true)
+    expect(await ui.find({ type: 'Button', key: 'log' })).toBeDefined()
+    await ui.unmount()
+  }
+  expect(world.debug.some((l) => /^\[session-hub\] children panel: Infinity rows: chars \d+ > 80000$/.test(l))).toBe(true)
+})
+
+test('a children panel of a few children is drawn whole', async ($, on) => {
+  const world = master(on, { record: manyChildren(12) })
+  await $.tool.call({ tool: 'Bash', command: UPSERT })
+  const ui = await $.ui.mount({ ...PANEL, surface: 'desktop' })
+  const texts: string[] = (await ui.findAll({ type: 'Text' })).map((t: { text?: unknown }) => String(t.text))
+  expect(texts.some((t) => t.includes('more children are in the record'))).toBe(false)
+  expect(texts.some((t) => t.startsWith('t11-product'))).toBe(true)
+  expect(texts.some((t) => t.startsWith('t12-product'))).toBe(false)
+  await ui.unmount()
+  expect(world.debug.filter((l) => l.includes('children panel'))).toEqual([])
 })
 
 const START_SESSION = 'mcp__ccd_session__start_session'

@@ -428,9 +428,9 @@ export const register: Register = (on) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const panel = await read($, panelState)
     const width = Math.max(20, e.props.bodyColumns ?? 80)
-    return childrenPane($.ui.resolve(e), e.surface, panel, width, {
-      openRecord: async () => $.ui.log(`[session-hub] ${await showRecord($, isGraphical(e.surface))}`),
-    })
+    const actions = { openRecord: async () => $.ui.log(`[session-hub] ${await showRecord($, isGraphical(e.surface))}`) }
+    return childrenPane($.ui.resolve(e), e.surface, panel, width, actions, (reason) =>
+      $.ui.log(`[session-hub] children panel: ${reason.slice(0, 200)}`, { to: 'debug' }))
   })
 
   // The log pane (hooks/record-pane.tsx): the children record as a dashboard. Its file button opens the record

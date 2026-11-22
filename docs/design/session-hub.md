@@ -285,7 +285,14 @@ pane, and for a dashboard where the content is JSON. The panel's Log button and 
   child, a chip (`started`, the message type, `request`) and the text; a request shows its outcome after `→`, or
   that none is recorded, in the warning colour;
 - the footer names the record's path and when it was read, with two native Buttons: **Open file** (`file`, `o`),
-  which opens the record as in the terminal, and **Refresh** (`refresh`, `r`).
+  which opens the record as in the terminal, and **Refresh** (`refresh`, `r`);
+- **size**: a tree past the engine's bounds is refused whole and the app shows its own empty state (`ui-design.md`,
+  *The size of a tree*), and this pane grows with the children. `recordPane` builds the tree at three levels and
+  returns the first within the budget of `hooks/mod/tree-bounds.mjs`: `full`; `brief`, each child as one line (name,
+  status chip, model and effort) with the latest 15 events; `names`, the first 60 children as lines with the rest
+  counted, and no timeline. A level in brief says so in one line and names *Open file*; past every level the pane
+  is one line and the file button. The children panel does the same with its rows: all of them, else the first
+  60, 30 or 10, with `<n> more children are in the record.` Each level passed over is one debug line.
 
 Which host it is comes from `hostKind` (`hooks/mod/host.mjs`, the rule of `model-router`'s `lib/open-report.mjs`,
 copied because a plugin uses nothing outside its folder): a terminal when one is attached, a graphical host when
@@ -333,6 +340,7 @@ Constraints:
 | 0.3.2 | A child may not write the repository's `.claude/settings*.json`. The children record never lands inside the hub, the registry script refuses options a command does not take and takes a stale lock over atomically, and a finished child's name gets a fresh entry. tmux children get their command as arguments and are named by the pane option `@session_hub_child`. |
 | 0.4.2 | The children panel and `/session-hub log` open the children record in the system's default app. |
 | 0.4.3 | On graphical surfaces the children record opens as the log pane, a dashboard of the children and a timeline of their requests. |
+| 0.4.4 | The log pane and the children panel measure their trees against the engine's bounds and draw a large record in brief. |
 | 0.4.0 | Launch identity: `scripts/launch.mjs` reads how the master was started, the keys `Permissions` and `Carry`, the identity check after a start and the child's own notice. |
 
 ## Open points

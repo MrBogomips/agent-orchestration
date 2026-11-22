@@ -86,9 +86,13 @@ Each surface gets a rendering made for it. A graphical surface never gets the te
   by default: a report, a log, a record is a pane of the mod, drawn with native elements in the app's theme, beside
   the chat. Opening the file or the page outside the app is an explicit, secondary button of that pane (*Open
   file*, *Open as page*), never what a primary action does.
+- **No machine paths.** A pane names a file by its base name, or by its path inside the project: a full path shows
+  the machine's folders, and a temporary one the user's name, in every screenshot. Where the full path matters it
+  is the plugin's own (a log, a record) and is given once, in the footer.
 - **A JSON log is a log dashboard.** A log or a record kept as JSON is not shown raw: its pane counts the records by
   kind and over time (bars as `Svg`), offers the window and the kind as buttons, and lists the latest records in a
-  table with the fields that matter for each kind, in pages. It names the file, its size and its archive. It reads
+  table with the fields that matter for each kind, in pages. A chart over time takes the unit that gives it several
+  bars: hours for a day, days for longer, and its title names the unit. It names the file, its size and its archive. It reads
   a bounded part: a pass that counts everything and holds only the newest records it can page through, cut to the
   fields it shows; a field that may hold a person's words (a prompt, a task description) is not shown.
 - A pane opened before the app has attached its surface is kept, not replaced by text: `$.ui.open` answers
@@ -108,7 +112,9 @@ eight cells about a thousand, an SVG bar about three hundred: a hundred table ro
 
 - A pane whose content grows with the data **measures its tree** before returning it (`treeSize` and
   `firstThatFits` of `model-router/lib/tree-bounds.mjs`) and keeps to a budget of four fifths of the bounds
-  (80,000 characters, 16,000 elements), since the engine serializes a tree its own way.
+  (80,000 characters, 16,000 elements), since the engine serializes a tree its own way. `session-hub` keeps its
+  own copy (`hooks/mod/tree-bounds.mjs`), as it does of the host rule; `tests/shared-copies.mjs`, run by
+  `tests/validate.sh`, checks that the copies answer alike.
 - When the whole content does not fit, the pane **degrades in steps**, richest first: it draws a section in brief
   (a line per item in place of a table), then more sections in brief, and says in one line what it left out and
   where the whole is (a page, a file). The last step is one readable line and the button that opens the whole.
