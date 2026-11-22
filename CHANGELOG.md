@@ -5,7 +5,7 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
 
 ## session-hub 0.4.1
 
-2026-11-22 · pull request #TBD
+2026-11-22 · pull request #77
 
 ### Fixed
 
