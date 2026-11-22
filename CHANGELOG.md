@@ -14,6 +14,13 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
   the weekly trend, the routing decisions, a card per task class and the projects, drawn with the app's own
   elements in its light or dark theme. Its footer has *Open as page*, which writes the HTML page and opens it in
   the default browser, and *Refresh*. In the terminal nothing changes: the page is written and opened.
+- In the Claude desktop app the event log is a dashboard pane too, not a file opened in another app: Log in the usage
+  view, `l` and `/model-router log` open *model-router log*, with the records counted by type and by day, buttons
+  for the window (24h, 7d, 30d, all) and the record type, the latest records in a table that pages twenty at a time
+  (time, type, session, and what each type records: a decision's action, models and reason; an outcome's class,
+  tier and cost), the size of the log and its archive files. It reads the log and its archive in one bounded pass
+  and never shows prompt text or task descriptions. *Open file* in its footer opens the log in the default app; in
+  the terminal `l` and `/model-router log` still do that.
 - The report no longer goes through the desktop app's Browser pane, which showed a page outside the project folder
   as a still image in the light theme and asked for a permission.
 
@@ -23,6 +30,19 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
   view, its text art broken by the app's font. The app attaches its surface only at its first draw, so the pane
   looked impossible to place. The pane is now kept and drawn when the app attaches, and the answer is one line;
   the text view stays for a terminal too narrow for the pane and for `claude -p`.
+
+## session-hub 0.4.3
+
+2026-11-22 · pull request #TBD
+
+### Changed
+
+- In the Claude desktop app (and in VS Code and the mobile apps) the children record opens as a pane beside the
+  chat, *session-hub log*, not as a file in another app: the Log button of the children panel and
+  `/session-hub log` show one card per child (status, model and effort, when it started, its last message, its
+  requests) and a timeline of starts, messages and requests with their outcomes, newest first. Its footer has
+  *Open file*, which opens the record in the default app, and *Refresh*. In the terminal nothing changes: the key
+  and the command open the file.
 
 ## model-router 0.3.13
 

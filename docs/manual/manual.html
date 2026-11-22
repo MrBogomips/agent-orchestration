@@ -587,7 +587,7 @@ session.</p>
 <table>
   <thead><tr><th style="width:24%">Command</th><th>Does</th></tr></thead>
   <tr><td><code>/session-hub</code></td><td>In a child: its role, write root, handoff, record and whether the guards are on. In a master: the record and the children table (status in the record, live status, model and effort as a four-cell bar and a word, <code>▰▰▰▱ high</code>, last message), sized to the terminal, and the children panel opened beside the chat. In any other session: that it has no role.</td></tr>
-  <tr><td><code>/session-hub log</code></td><td>Opens the children record, <code>session-hub</code>'s log, in the system's default app and prints its path. With no record yet it says so and opens nothing. In a child it opens the record of its master. <code>record</code> works too.</td></tr>
+  <tr><td><code>/session-hub log</code></td><td>Opens the children record, <code>session-hub</code>'s log. From a terminal: in the system's default app, printing its path. In the Claude desktop app: as a pane beside the chat (below). With no record yet it says so and opens nothing. In a child it opens the record of its master. <code>record</code> works too.</td></tr>
   <tr><td><code>/session-hub help</code></td><td>What the command does. Any other argument prints <code>Unknown argument "…"</code> and the same help.</td></tr>
 </table>
 <figure>
@@ -604,6 +604,12 @@ session.</p>
   lost. Under the rows the panel offers the children record: <code>l</code> in the terminal, a Log button in the
   Claude desktop app (not in this screenshot).</figcaption>
 </figure>
+<p>In the Claude desktop app (and in VS Code and the mobile apps) the Log button and <code>/session-hub log</code> do
+not open the file in another app: they open a second pane, <em>session-hub log</em>. It shows one card per child (its
+status, model and effort, repository and task, when it started, its last message and how many requests it made) and,
+under them, a timeline of every start, message and request, newest first; a request shows what was decided about it
+after an arrow, or that nothing is recorded yet. The footer names the record's file and has two buttons: <em>Open
+file</em> opens it in the system's default app, <em>Refresh</em> reads it again.</p>
 <p>In the master, a <code>Bash</code> call that starts children gets one line per child under its row, in the same
 colours: the model, the effort and the child's name, for example
 <code>⎿  🔀 opus   ▰▰▰▱ high   -&gt; t123-product</code>. The mod reads them from the launch command that
@@ -874,7 +880,7 @@ into the aggregates. It is safe to repeat: a task is never counted twice.</p>
   <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens it on that tab, window and level, in any order (<code>stats</code> works as <code>classes</code>)</td></tr>
   <tr><td><code>/model-router on</code>, <code>/model-router off</code></td><td>Turns routing on or off for this session</td></tr>
   <tr><td><code>/model-router report</code></td><td>Writes and opens the report page, and prints its path</td></tr>
-  <tr><td><code>/model-router log</code></td><td>Opens the event log (<code>events.jsonl</code>) in the system's default app, and prints its path</td></tr>
+  <tr><td><code>/model-router log</code></td><td>Opens the event log (<code>events.jsonl</code>): from a terminal in the system's default app, printing its path; in the Claude desktop app as the log dashboard, a pane beside the chat</td></tr>
   <tr><td><code>/model-router help</code></td><td>Lists the arguments and the keys; any unknown argument does the same</td></tr>
 </table>
 <p>For example, <code>/model-router classes 30d project</code> opens Classes over the last 30 days for this project.</p>
@@ -888,7 +894,7 @@ instead of text art: the tabs, the windows and the level are segmented buttons, 
 figure, a status chip and a small chart of the window, the Models and Classes rows have bars, and each routing decision
 has a coloured chip. When fewer than five tasks back the figures, one notice says so instead of <code>weak</code> on
 every tile. Report, Refresh and Log are buttons in the footer; Report opens the report as a second pane (section
-3.7). The letter keys (<code>d</code>, <code>w</code>,
+3.7) and Log opens the log dashboard (below). The letter keys (<code>d</code>, <code>w</code>,
 <code>m</code>, <code>a</code>, <code>p</code>, <code>o</code>, <code>r</code>, <code>l</code>) still work. If
 <code>/model-router</code> is the first thing you type in a new session, the view may take a moment to appear: the
 command answers <code>Usage view opening beside the chat.</code> and the pane is drawn as soon as the app is ready.</p>
@@ -901,11 +907,21 @@ command answers <code>Usage view opening beside the chat.</code> and the pane is
   <tr><td><code>p</code></td><td>Switches between your data across projects (user) and this project's</td></tr>
   <tr><td><code>o</code></td><td>Opens the report (section 3.7): the page in your browser from a terminal, the report pane in the Claude desktop app</td></tr>
   <tr><td><code>r</code></td><td>Refreshes: runs compaction and reads again</td></tr>
-  <tr><td><code>l</code></td><td>Opens the event log in the system's default app; its path is written as a line in the session, with the <code>archive/</code> folder when there is one</td></tr>
+  <tr><td><code>l</code></td><td>Opens the event log: from a terminal in the system's default app, its path written as a line in the session, with the <code>archive/</code> folder when there is one; in the Claude desktop app as the log dashboard</td></tr>
   <tr><td>Page Up, Page Down</td><td>Scroll a long tab</td></tr>
   <tr><td>Esc</td><td>Closes the view</td></tr>
 </table>
-<p>The log is opened with <code>open</code> on macOS and <code>xdg-open</code> on Linux. With no log yet, on another
+<p><strong>The log dashboard.</strong> In the Claude desktop app the event log is not opened as a file: Log,
+<code>l</code> and <code>/model-router log</code> open a pane, <em>model-router log</em>. It counts the records of the
+log and of its archive by type (routing decisions, subagent starts, reports, outcomes, signals) and by day, as bars.
+Buttons choose the window (24h, 7d, 30d, all) and the record type. Under them a table lists the latest records, twenty
+to a page, newest first: the time (UTC), the type, the start of the session id and what that type records, for example
+a decision's action, the model before and after and the reason, or an outcome's class, tier and cost.
+<em>Newer</em> and <em>Older</em> turn the pages; up to the latest 1,000 matching records can be paged. The prompt text
+and the task descriptions the log holds are never shown. The footer gives the log's path and size and the archive's
+files, with two buttons: <em>Open file</em> opens the log itself in the system's default app, <em>Refresh</em> reads it
+again.</p>
+<p>From a terminal the log is opened with <code>open</code> on macOS and <code>xdg-open</code> on Linux. With no log yet, on another
 system or in a hosted session nothing is opened: the line says why and gives the path. A log that compaction has just
 rotated away opens its <code>archive/</code> folder instead.</p>
 <p>← and → do not switch tabs, as they do in Claude Code's own dialog: Claude Code does not pass them to a plugin's
@@ -1184,7 +1200,7 @@ trimmed).</p>
 <table>
   <thead><tr><th style="width:46%">Command or key</th><th>Does</th></tr></thead>
   <tr><td><code>/session-hub</code></td><td>role and scope; in a master the children table and panel</td></tr>
-  <tr><td><code>/session-hub log</code></td><td>opens the children record</td></tr>
+  <tr><td><code>/session-hub log</code></td><td>opens the children record (a file from a terminal, a pane in the desktop app)</td></tr>
   <tr><td><code>/session-hub help</code></td><td>help</td></tr>
   <tr><td><code>/model-router [tab] [24h|7d|30d|all] [user|project]</code></td><td>usage view; tabs <code>overview</code>, <code>models</code>, <code>classes</code> (<code>stats</code>), <code>decisions</code></td></tr>
   <tr><td><code>/model-router on</code> | <code>off</code> | <code>report</code> | <code>log</code> | <code>help</code></td><td>routing for this session; report page; event log; help</td></tr>
