@@ -3,6 +3,19 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.11
+
+2026-11-21 · pull request #76
+
+### Fixed
+
+- The event log no longer only grows (#50). Compaction rotates `events.jsonl` into `<config dir>/model-router/archive/`
+  once it reaches 32 MB, without rewriting a log another session may be appending to: the log is renamed, and the
+  rotation is finished two minutes later, when the records of tasks still open are carried into the new log and the
+  rotated one is slimmed to outcomes, decisions and starts (the stored prompt text is dropped). After 90 days a
+  rotated log keeps its outcomes only. The report and `/model-router` read the archive too: every outcome stays in
+  the all-time window and the weekly trend.
+
 ## session-hub 0.4.0
 
 2026-11-21 · pull request #74

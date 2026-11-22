@@ -9,7 +9,7 @@
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, scanEvents } from './compact.mjs';
+import { defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, scanLog } from './compact.mjs';
 import { readJson } from './report.mjs';
 import { buildUsageData } from '../lib/usage-data.mjs';
 
@@ -89,7 +89,7 @@ export async function readUsage({ configDir = defaultConfigDir(), now = Date.now
   const opts = effectiveOptions(configDir, options);
   const p = paths(configDir);
   return buildUsageData({
-    events: scanEvents(p.events, { keep: usageRecords({ session, project }) }).records,
+    events: scanLog(p, { keep: usageRecords({ session, project }) }).records,
     user: readJson(p.user) ?? { cells: {} },
     projectLevel: project ? readJson(p.project(project.id)) : null,
     project, grid: loadGrid(), now, halfLifeDays: opts.halfLifeDays, session, live, note,
