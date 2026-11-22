@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { EFFORT_COLORS, MODEL_COLORS, effortBar, lineParts, modelName, plainLine, routeReason } from './route-line.mjs';
+import { EFFORT_COLORS, MODEL_COLORS, effortBar, lineParts, modelName, plainLine, quietLine, routeReason } from './route-line.mjs';
 
 test('the effort bar fills one cell per level, low to xhigh; max reads as xhigh; unknown is empty', () => {
   assert.equal(effortBar('low'), '▰▱▱▱');
@@ -52,4 +52,10 @@ test('the reason says which case applied and what the router changed', () => {
   assert.equal(routeReason({ ...judged, action: 'keep', after: 'claude-opus-5', effortSet: true }), 'judge: edit-specified; kept opus, effort set');
   assert.equal(routeReason({ ...judged, cls: null, action: 'keep', after: 'opus' }), 'judge: balanced; kept opus');
   assert.equal(routeReason({ route: 'judge', action: 'error', reason: 'judge: timeout' }), 'keep: judge: timeout');
+});
+
+test('the desktop line is quiet and in words: the model and effort, then the reason without its keyword', () => {
+  assert.deepEqual(quietLine({ model: 'claude-haiku-5-5', effort: 'low', reason: 'judge: read-search; lowered from opus' }), { model: 'Haiku · low', reason: 'read-search; lowered from opus' });
+  assert.deepEqual(quietLine({ model: 'opus', effort: null, reason: 'explicit: the call names the model' }), { model: 'Opus · default', reason: 'the call names the model' });
+  assert.equal(quietLine({ model: 'sonnet', effort: 'high', reason: 'keep: routing off' }).reason, 'kept: routing off');
 });

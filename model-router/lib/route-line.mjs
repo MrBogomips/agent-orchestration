@@ -80,3 +80,13 @@ export function plainLine(line, options) {
   const p = lineParts(line, options);
   return `${p.icon} ${p.model} ${p.filled}${p.empty} ${p.effort} ${ARROW} ${p.reason}`;
 }
+
+/**
+ * The line as the desktop app draws it, quiet and in words: `{ model: 'Haiku · low', reason }`. The model and
+ * effort are the bright words; the reason loses its leading keyword (`explicit:`, `judge:`, `fixed:`).
+ */
+export function quietLine({ model, effort, reason }) {
+  const name = modelName(model);
+  const text = String(reason ?? '').replace(/^(explicit|judge|fixed): /, '').replace(/^keep: /, 'kept: ');
+  return { model: `${name[0].toUpperCase()}${name.slice(1)} · ${effortOf(effort) ?? NO_EFFORT}`, reason: text };
+}

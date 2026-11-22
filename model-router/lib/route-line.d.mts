@@ -33,3 +33,4 @@ export declare function routeReason(input: {
 }): string
 export declare function lineParts(line: RouteLine, options?: { pad?: boolean }): LineParts
 export declare function plainLine(line: RouteLine, options?: { pad?: boolean }): string
+export declare function quietLine(line: RouteLine): { model: string; reason: string }

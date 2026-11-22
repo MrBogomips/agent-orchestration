@@ -180,11 +180,14 @@ export function kpisOf(outcomes, decisions) {
   const cell = tally(outcomes.filter((o) => CLOSED.includes(o.outcome)), () => 'all').all;
   const m = cell ? metrics(cell) : { n: 0, fpy: null, reworkRate: null, costPerSuccess: null };
   const routed = { total: 0, downgrade: 0, upgrade: 0, keep: 0 };
+  // Every action counted, for the card's Decisions view; `routed` keeps the three the tiles name.
+  const actions = {};
   for (const d of decisions) {
     routed.total += 1;
     if (d.action in routed) routed[d.action] += 1;
+    if (typeof d.action === 'string') actions[d.action] = (actions[d.action] ?? 0) + 1;
   }
-  return { closed: m.n, fpy: m.fpy, reworkRate: m.reworkRate, costPerSuccess: m.costPerSuccess, routed };
+  return { closed: m.n, fpy: m.fpy, reworkRate: m.reworkRate, costPerSuccess: m.costPerSuccess, routed, actions };
 }
 
 /** How each window is cut for its sparklines: bucket count and size. `all` goes by week. */
@@ -307,6 +310,29 @@ export function sessionAgents(live, events, session) {
   };
 }
 
+/** The days the card's heatmap and its chart per day reach back: 22 weeks. */
+export const DAYS_KEPT = 154;
+
+/**
+ * Closed tasks per day (UTC) over the last DAYS_KEPT days ending at `now`, oldest first, only the days that have
+ * one: `{ day: 'YYYY-MM-DD', n, tiers: { <tier>: n } }`.
+ */
+export function dailyOf(outcomes, now) {
+  const days = new Map();
+  const from = now - DAYS_KEPT * DAY_MS;
+  for (const o of outcomes) {
+    const t = outcomeTime(o);
+    if (!CLOSED.includes(o.outcome) || !Number.isFinite(t) || t <= from || t > now) continue;
+    const day = new Date(t).toISOString().slice(0, 10);
+    const d = days.get(day) ?? { day, n: 0, tiers: {} };
+    const tier = typeof o.tier === 'string' && o.tier ? o.tier : 'other';
+    d.n += 1;
+    d.tiers[tier] = (d.tiers[tier] ?? 0) + 1;
+    days.set(day, d);
+  }
+  return [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
+
 function slimDecision(d, session) {
   return {
     ts: d.ts, action: d.action, before: d.before ?? null, after: d.after ?? null, effort: d.effort ?? null,
@@ -350,6 +376,8 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
           : null,
       },
       models: modelRows(closed),
+      // The same rows for the session's project alone, for the card at the project level.
+      projectModels: projectId ? modelRows(closed.filter((o) => o.project?.id === projectId)) : null,
       classes: {
         user: levelClasses(recent, user, null),
         project: projectId ? levelClasses(own, projectLevel, projectId) : null,
@@ -364,6 +392,7 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
     session: { id: session, ...sessionAgents(live, events, session) },
     routing: decisionsOf(events, session ?? '\u0000'),
     decisions: { total: decisionsOf(events).total, latest: decisions },
+    daily: { user: dailyOf(outcomes, now), project: projectId ? dailyOf(outcomes.filter((o) => o.project?.id === projectId), now) : null },
     windows,
   };
 }
