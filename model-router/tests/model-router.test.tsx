@@ -30,14 +30,14 @@ const GRID = {
 
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
 
-type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
+type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; mcp: any[]; connects: string[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean; surfaces?: string[]; connect?: Record<string, unknown>; pane?: Record<string, unknown> }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
 function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, text: FAST_ANSWER, usage: {} } }), answers: Answers = {}): World {
-  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [], logs: [], debug: [] }
+  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], mcp: [], connects: [], opens: [], closes: [], toasts: [], logs: [], debug: [] }
   on('ui.open', ($, e) => {
     w.opens.push(e)
     return { value: answers.isPlaced === false ? { isPlaced: false, reason: 'no surface' } : { isPlaced: true } }
@@ -61,6 +61,15 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
   on('session.info', () => {
     if (answers.infoFails) throw new Error('no info')
     return { value: (answers.info ?? { platform: 'macos', isHosted: false }) as any }
+  })
+  on('session.surfaces', () => ({ value: (answers.surfaces ?? ['terminal']) as any }))
+  on('mcp.connect', ($, e: any) => {
+    w.connects.push(e.server)
+    return { value: (answers.connect ?? { isConnected: true, server: 'Claude_Browser' }) as any }
+  })
+  on('mcp.call', ($, e) => {
+    w.mcp.push(e)
+    return (answers.pane ?? { value: { content: [{ type: 'text', text: 'opened' }], isError: false } }) as any
   })
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.cwd', () => ({ value: '/repo' }))
@@ -641,7 +650,7 @@ describe('/model-router usage view', () => {
     expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(2)
     await ui.press({ key: 'report' })
     expect(w.runs.some((r) => String(r.argv[1]).endsWith('report.mjs'))).toBe(true)
-    expect(w.logs).toContain('🔀 Report written to /home/u/.claude/model-router/report.html')
+    expect(w.logs).toContain('🔀 Report opened in the default browser: /home/u/.claude/model-router/report.html')
     expect(w.toasts.some((t) => t.includes('report'))).toBe(false)
     await ui.unmount()
   })
@@ -686,7 +695,7 @@ describe('/model-router usage view', () => {
   test('report writes the page and answers its path', async ($, on) => {
     world(on)
     const out = await run($, 'report')
-    expect(out.text).toBe('🔀 Report written to /home/u/.claude/model-router/report.html')
+    expect(out.text).toBe('🔀 Report opened in the default browser: /home/u/.claude/model-router/report.html')
     expect(out.isTextDisplayOnly).toBe(true)
   })
 
@@ -737,6 +746,65 @@ describe('/model-router usage view', () => {
 const LOG_FILE = '/home/u/.claude/model-router/events.jsonl'
 const ARCHIVE_DIR = '/home/u/.claude/model-router/archive'
 const openRuns = (w: World) => w.runs.filter((r) => r.argv[0] === 'open' || r.argv[0] === 'xdg-open').map((r) => r.argv)
+
+const REPORT_FILE = '/home/u/.claude/model-router/report.html'
+const reportRuns = (w: World) => w.runs.filter((r) => String(r.argv[1]).endsWith('report.mjs')).map((r) => r.argv.slice(2))
+
+describe('opening the report', () => {
+  test('on the desktop app the page opens in the Browser pane, and the system browser is not used', async ($, on) => {
+    const w = world(on, undefined, { surfaces: ['desktop'] })
+    const out = await run($, 'report')
+    expect(out.text).toBe(`🔀 Report opened in the Browser pane: ${REPORT_FILE}`)
+    expect(reportRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--no-open']])
+    expect(w.connects).toEqual(['Claude_Browser'])
+    expect(w.mcp).toEqual([{ server: 'Claude_Browser', tool: 'preview_start', args: { url: `file://${REPORT_FILE}` } }])
+    expect(openRuns(w)).toEqual([])
+  })
+
+  test('the Report button of a pane drawn on the desktop app opens it there too', async ($, on) => {
+    const w = world(on)
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    await ui.press({ key: 'report' })
+    await ui.unmount()
+    expect(w.mcp.map((c) => c.tool)).toEqual(['preview_start'])
+    expect(w.logs).toContain(`🔀 Report opened in the Browser pane: ${REPORT_FILE}`)
+  })
+
+  const REFUSALS: Record<string, Answers> = {
+    'is denied by a hook': { pane: { value: { deny: 'A browser tool must be loaded by the model first.' } } },
+    'fails on the URL': { pane: { value: { content: [{ type: 'text', text: 'file URLs are not allowed' }], isError: true } } },
+    'is not connected': { connect: { isConnected: false, reason: 'unlisted', message: 'No server of that name.' } },
+  }
+  for (const [name, refusal] of Object.entries(REFUSALS)) {
+    test(`a pane that ${name} falls back to the default browser, and the reason is logged for debugging`, async ($, on) => {
+      const w = world(on, undefined, { surfaces: ['desktop'], ...refusal })
+      expect((await run($, 'report')).text).toBe(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
+      expect(openRuns(w)).toEqual([['open', REPORT_FILE]])
+      expect(w.debug.some((l) => l.startsWith('[model-router] Browser pane: '))).toBe(true)
+    })
+  }
+
+  test('off the desktop app no MCP call is made: the default browser opens the page', async ($, on) => {
+    const w = world(on, undefined, { info: { platform: 'linux', isHosted: false } })
+    expect((await run($, 'report')).text).toBe(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
+    expect(w.connects).toEqual([])
+    expect(w.mcp).toEqual([])
+    expect(openRuns(w)).toEqual([['xdg-open', REPORT_FILE]])
+  })
+
+  test('with neither a pane nor a browser the line gives the path and why', async ($, on) => {
+    const w = world(on, undefined, { surfaces: ['desktop'], connect: { isConnected: false, reason: 'policy', message: 'Blocked.' }, open: { exitCode: 1, stdout: '', stderr: 'no display' } })
+    expect((await run($, 'report')).text).toBe(`🔀 Report written to ${REPORT_FILE} (not opened: no display)`)
+    expect(w.mcp).toEqual([])
+  })
+
+  test('on a hosted session nothing is opened and the line says so', async ($, on) => {
+    const w = world(on, undefined, { info: { platform: 'linux', isHosted: true } })
+    expect((await run($, 'report')).text).toBe(`🔀 Report written to ${REPORT_FILE} (not opened: this session runs on a hosted machine)`)
+    expect(openRuns(w)).toEqual([])
+  })
+})
 
 describe('opening the event log', () => {
   test('in the terminal the l key opens the log and logs its path; the footer lists the key', async ($, on) => {
@@ -930,7 +998,7 @@ describe('/model-router usage view on graphical surfaces', () => {
     await ui.press({ key: 'refresh' })
     expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(2)
     await ui.press({ key: 'report' })
-    expect(w.logs).toContain('🔀 Report written to /home/u/.claude/model-router/report.html')
+    expect(w.logs).toContain('🔀 Report opened in the Browser pane: /home/u/.claude/model-router/report.html')
     await ui.unmount()
   })
 

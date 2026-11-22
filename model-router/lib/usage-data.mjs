@@ -96,11 +96,11 @@ function combined(cells) {
   return { ...sum, costMean: costW ? cost / costW : null, tokensMean: tokensW ? tokens / tokensW : null };
 }
 
-function exploreShare(outcomes, cell, projectId) {
-  const mine = outcomes.filter((o) => o.learn && o.class === cell.class && o.tier === cell.tier && o.effort === cell.effort &&
-    (!projectId || o.project?.id === projectId));
-  return mine.length ? mine.filter((o) => o.explore).length / mine.length : 0;
-}
+/** The learned outcomes of one cell (class, tier and effort), of one project when `projectId` is given. */
+const learnedOf = (outcomes, cell, projectId) => outcomes.filter((o) => o.learn && o.class === cell.class && o.tier === cell.tier &&
+  o.effort === cell.effort && (!projectId || o.project?.id === projectId));
+
+const exploreShare = (mine) => (mine.length ? mine.filter((o) => o.explore).length / mine.length : 0);
 
 function flagsOf(cls, n) {
   const flags = [];
@@ -112,7 +112,8 @@ function flagsOf(cls, n) {
 /**
  * The classes of one level that have cells, in the grid's order: each with its cells (metrics, flags, whether
  * it is the recommended one), its recommendation, whether that differs from the grid, and a summary over its
- * cells. `cells` are already aged (or folded from a window).
+ * cells. `cells` are already aged (or folded from a window), so their `n` may be fractional: `tasks` is the whole
+ * number of learned outcomes behind a cell, counted from `outcomes`.
  */
 export function classesOf(cells, grid, { outcomes = [], projectId = null } = {}) {
   const all = Object.values(cells);
@@ -121,17 +122,20 @@ export function classesOf(cells, grid, { outcomes = [], projectId = null } = {})
     .map((spec) => {
       const recommendation = recommend(cells, spec.name, grid);
       const mine = all.filter((c) => c.class === spec.name).sort((a, b) => b.n - a.n);
-      const rows = mine.map((c) => ({
-        tier: c.tier, effort: c.effort, model: c.model, ...metrics(c), exploreShare: exploreShare(outcomes, c, projectId),
-        flags: flagsOf(c.class, c.n),
-        recommended: recommendation?.source === 'data' && recommendation.tier === c.tier && recommendation.effort === c.effort,
-      }));
+      const rows = mine.map((c) => {
+        const learned = learnedOf(outcomes, c, projectId);
+        return {
+          tier: c.tier, effort: c.effort, model: c.model, ...metrics(c), tasks: learned.length, exploreShare: exploreShare(learned),
+          flags: flagsOf(c.class, c.n),
+          recommended: recommendation?.source === 'data' && recommendation.tier === c.tier && recommendation.effort === c.effort,
+        };
+      });
       const differs = recommendation?.source === 'data' &&
         (recommendation.tier !== spec.default.tier || recommendation.effort !== spec.default.effort);
       const summary = metrics(combined(mine));
       return {
         cls: spec.name, covers: spec.covers, default: spec.default, recommendation, differs, cells: rows,
-        summary: { ...summary, flags: flagsOf(spec.name, summary.n) },
+        summary: { ...summary, tasks: rows.reduce((n, r) => n + r.tasks, 0), flags: flagsOf(spec.name, summary.n) },
       };
     });
 }

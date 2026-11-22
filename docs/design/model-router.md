@@ -272,7 +272,7 @@ failure) of the window; at the project level they count the project's tasks and 
 | ↓, ↑ | Next or previous window (24h, 7d, 30d, all), cycling |
 | `d` `w` `m` `a` | Window: last 24 hours, 7 days, 30 days, all |
 | `p` | Level: the user's data or this project's |
-| `o` | Write and open the HTML report (`scripts/report.mjs`); its path is written as a line in the session |
+| `o` | Write and open the HTML report (`scripts/report.mjs`); where it opened and its path are written as a line in the session (*Opening the report*) |
 | `r` | Refresh: run compaction and read again |
 | `l` | Open the event log in the system's default app; its path is written as a line in the session (*Opening the log*) |
 | Page Up, Page Down, wheel | Scroll the content |
@@ -294,7 +294,7 @@ pane (spike S15 in `spikes.md`). How the other keys are wired, in `lib/usage-nav
   a press within 500 ms of a wrap undoes the wrap, which a click off the row from an end tab would cause.
 
 **Arguments.** `/model-router models 30d` opens on that tab and window; tab, window (`24h`, `7d`, `30d`, `all`)
-and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` writes and opens the report page and answers with its path. `help`, and any argument the
+and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` writes and opens the report page and answers where it opened and its path (*Opening the report*). `help`, and any argument the
 command does not know, print the list of arguments and keys.
 
 **Text fallback.** Where no pane can be placed (headless or `claude -p`, a terminal narrower than 60 columns, or
@@ -404,6 +404,25 @@ decided in `lib/open-log.mjs`:
 Only these two paths are ever passed to an opener. `/model-router log` used to be an alias of
 `/model-router decisions`; from 0.3.13 it opens the log.
 
+**Opening the report.** `/model-router report`, the `o` key and the Report button write the page with
+`scripts/report.mjs --no-open` and then show it, by the first of three ways that works (`lib/open-report.mjs`):
+
+1. **The Browser pane of the Claude desktop app**, when the session draws on `desktop` (`$.session.surfaces()`, or
+   the usage pane last drew there). The app's browser is the MCP server `Claude_Browser`: the mod calls
+   `$.mcp.connect('Claude_Browser')` and then its `preview_start` tool with the page's `file://` URL. A server that
+   is not connected, a call a hook denies (a managed mod may hold browser tools back), a result with `isError` and
+   a call that throws all count as a refusal: its reason goes to the debug log and the next way is tried.
+2. **The system's default browser**: `open <page>` on macOS, `xdg-open <page>` on Linux, through `$.process.run`.
+   Not on a hosted session or a platform with no known opener.
+3. **Nowhere**: the line gives the path and why nothing was opened.
+
+The line says which: `Report opened in the Browser pane: <path>`, `Report opened in the default browser: <path>`,
+or `Report written to <path> (not opened: <reason>)`. Off the desktop app no MCP call is made. Whether the pane
+takes a `file://` URL is not verified on the app: if it refuses, the result is an error and the default browser
+opens the page; if it accepts the call and shows nothing, the path in the line is the way out, and serving the
+page on `127.0.0.1` for the pane is the fix to make then. The skill and the script run from a shell keep opening
+the default browser themselves.
+
 **With mods off** there is no command; the `model-router:report` skill builds the same page from the same code.
 
 Routing the main session's effort per prompt is out of scope: a change mid-chat can discard the prompt cache.
@@ -415,7 +434,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.1 | `choose-model`, `setup`. |
 | 0.2 | The mod, the decision log, the command, the options; the quality loop measuring only, and `report`. |
 | 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. From 0.3.4, the 🔀 identity and the coloured choose-model line under `Agent` rows. |
-| 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. |
+| 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. The report opens in the desktop app's Browser pane and is redrawn after `ui-design.md`. |
 | 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
 
 ## Open points

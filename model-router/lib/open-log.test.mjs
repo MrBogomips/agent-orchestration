@@ -12,18 +12,18 @@ test('the log and its archive folder are under the config folder', () => {
 });
 
 test('the opener is the platform\'s own, with the path as one argument', () => {
-  assert.deepEqual(openerArgv('macos', LOG, 'file'), ['open', '-t', LOG]);
-  assert.deepEqual(openerArgv('macos', ARCHIVE, 'folder'), ['open', ARCHIVE]);
-  assert.deepEqual(openerArgv('linux', LOG, 'file'), ['xdg-open', LOG]);
-  assert.deepEqual(openerArgv('linux', ARCHIVE, 'folder'), ['xdg-open', ARCHIVE]);
-  assert.deepEqual(openerArgv('macos', '/a b/$(x);y.jsonl', 'file'), ['open', '-t', '/a b/$(x);y.jsonl']);
+  assert.deepEqual(openerArgv('macos', LOG, 'text'), ['open', '-t', LOG]);
+  assert.deepEqual(openerArgv('macos', ARCHIVE, 'default'), ['open', ARCHIVE]);
+  assert.deepEqual(openerArgv('linux', LOG, 'text'), ['xdg-open', LOG]);
+  assert.deepEqual(openerArgv('linux', ARCHIVE, 'default'), ['xdg-open', ARCHIVE]);
+  assert.deepEqual(openerArgv('macos', '/a b/$(x);y.jsonl', 'text'), ['open', '-t', '/a b/$(x);y.jsonl']);
 });
 
 test('no opener for another platform, or for a path that is not absolute', () => {
-  for (const platform of ['windows', 'wsl', 'unknown', undefined, 'constructor']) assert.equal(openerArgv(platform, LOG, 'file'), null);
-  assert.equal(openerArgv('macos', '-R', 'file'), null);
-  assert.equal(openerArgv('macos', '~/.claude/x', 'file'), null);
-  assert.equal(openerArgv('macos', undefined, 'file'), null);
+  for (const platform of ['windows', 'wsl', 'unknown', undefined, 'constructor']) assert.equal(openerArgv(platform, LOG, 'text'), null);
+  assert.equal(openerArgv('macos', '-R', 'text'), null);
+  assert.equal(openerArgv('macos', '~/.claude/x', 'text'), null);
+  assert.equal(openerArgv('macos', undefined, 'text'), null);
 });
 
 test('the log is opened, and the line names it', () => {
