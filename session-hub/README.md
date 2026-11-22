@@ -26,7 +26,7 @@ important one, the write scope, with a hook.
 | `scripts/launch.mjs` | script | Reads how this session was started (identity variables, configuration flags, permission mode), so that `spawn` starts children the same way. Prints named variables only, never the environment. |
 | `scripts/registry.mjs` | script | Reads and writes the children record, atomically. Used by the skills and, read only, by the mod. |
 | `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel and the start line under each child launch. See *The mod* below. |
-| `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel. See [Commands](#commands). |
+| `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel; `log` opens the children record. See [Commands](#commands). |
 
 ### Roles
 
@@ -53,7 +53,7 @@ Code 2.1.329 or later (`engines` in `plugin.json`). With mods off, everything ab
 | Shell check | child | **Best effort.** Denies a `Bash` command whose redirections or file-writing commands (`tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install`, `sed -i`, and `find`'s `-delete` and `-fprint` family) target a path outside the write root, and judges the command `find -exec` (and `-execdir`, `-ok`, `-okdir`) runs. The command is read as bash or zsh (the shell of the `Bash` tool on macOS): zsh's `>!` and `>>!`, `noglob`, `repeat` and `=command` are read, and so are the commands inside substitutions (`$(…)`, backticks, `<(…)`, in double quotes and in here-documents with an unquoted delimiter) and the literal line given to `eval` or `sh -c`. A hard link to a file outside the root is denied, and so is a write through a symbolic link the same command makes to a place outside. A command it cannot read is denied with the reason. `/dev` and the system temporary folders are allowed. |
 | Origin marking | child | A message from another session, the master included, carries a line: information, not authorization. A prompt typed by the person carries none. |
 | Scope line | child, master | The role and the scope in the system prompt and, after the start and after each compaction, as context on the next prompt. |
-| Children panel | master | One row per child: status in the record, live status from the session list, model and effort, last message. Refreshed every 30 s and on `/session-hub`. Drawn with `model-router`'s look: the model bold in its tier's colour, the effort as a four-cell bar (`▰▰▰▱ high`) in its level's colour, the statuses green, yellow or red (running; waiting, abandoned or not listed; lost). |
+| Children panel | master | One row per child: status in the record, live status from the session list, model and effort, last message. Refreshed every 30 s and on `/session-hub`. Drawn with `model-router`'s look: the model bold in its tier's colour, the effort as a four-cell bar (`▰▰▰▱ high`) in its level's colour, the statuses green, yellow or red (running; waiting, abandoned or not listed; lost). Under the rows, the action that opens the children record: the `l` key in the terminal, a Log button in the Claude desktop app. |
 | Start line | master | Under a `Bash` call that starts children, or the desktop app's `start_session` call, one line per child with its model and effort: `⎿  🔀 opus   ▰▰▰▱ high   -> t42-product`. Read from the launch command (`claude` after `SESSION_HUB_ROLE=child`, also in `tmux send-keys`, or `herdr agent start`) or from the desktop tool's input; a start that states neither model nor effort gets no line. |
 
 Guards fail closed: a send guard or shell check that fails refuses and says why. `SESSION_HUB_GUARDS=off` turns
@@ -69,6 +69,7 @@ answer is for you only: the model has the scope in its own scope line and reads 
 | Command | Does |
 |---|---|
 | `/session-hub` | In a child: its role, write root, handoff, record and whether the guards are on. In a master: the record's path and the children table (status, live status, model and effort as `▰▰▰▱ high`, last message), sized to the terminal, and the children panel opened beside the chat. In any other session: that it has no role. |
+| `/session-hub log` | Opens the children record, session-hub's log, in the system's default app (`open` on macOS, `xdg-open` on Linux) and prints its path. With no record yet it says so and opens nothing. In a child it opens the record of its master. `record` works too. |
 | `/session-hub help` | What the command does. Any other argument prints the same. |
 
 In a session with no role (a real run of `claude -p "/session-hub"`):

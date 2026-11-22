@@ -1,7 +1,8 @@
 // The session-hub mod: the engine glue around the pure modules in ./mod.
 //
 // In a child: the send guard (session.send), the best-effort shell check (tool.call on Bash and Monitor), origin
-// marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel, the
+// marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel
+// (drawn by ./children-pane.tsx, with the action that opens the children record), the
 // start line under a Bash call that starts children (ui.render ToolUse), and the scope line. In every session: the
 // /session-hub command. A child that runs under another configuration folder than its master says so (./mod/identity.mjs). The panel and the start line use the look shared with model-router (./mod/look.mjs). Guards
 // fail closed; the panel, the start line and the marking never block anything. The classic scope guard in
@@ -14,6 +15,7 @@ import type { ScopeLine, SessionHubMaster, SessionHubPanel, SessionHubStarts } f
 import { helpText, parseCommand } from './mod/command.mjs'
 import { identityMismatch, mismatchText } from './mod/identity.mjs'
 import { markContext, markText } from './mod/origin.mjs'
+import { failText, recordPlan, recordSource } from './mod/open-record.mjs'
 import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
 import { childStarts, isSessionStartTool, startLineSegments, toolStarts } from './mod/start-line.mjs'
 import type { ChildStart } from './mod/start-line.mjs'
@@ -21,6 +23,8 @@ import { readRole } from './mod/role.mjs'
 import { SECTION_ID, roleSummary, scopeSection } from './mod/scope-line.mjs'
 import { judgeSend } from './mod/send-guard.mjs'
 import { judgeShell } from './mod/shell-guard.mjs'
+import { childrenPane, segmentProps } from './children-pane'
+import type { Segment } from './children-pane'
 
 type Role = ReturnType<typeof readRole>
 type $ = EngineInterface
@@ -31,6 +35,8 @@ const REFRESH_MS = 30_000
 const MIN_TABLE_COLUMNS = 60
 const SKILLS = /^(session-hub:)?(spawn|dispatch)$/
 const SHELL_TOOLS = ['Bash', 'Monitor'] as const
+const REGISTRY_TIMEOUT_MS = 10_000
+const OPEN_TIMEOUT_MS = 10_000
 
 const masterState = atom({ plugin: 'session-hub', key: 'master' } as const, { isMaster: false } as SessionHubMaster, {
   shape: 'master-1',
@@ -48,20 +54,6 @@ const panelState = atom({ plugin: 'session-hub', key: 'panel' } as const, { rows
 })
 // The start lines of each Bash call that started children, by the call's tool_use_id.
 const startLines = atom({ plugin: 'session-hub', key: 'starts' } as const, null as SessionHubStarts | null)
-
-// The look shared with model-router (docs/design/shared-contract.md): a segment's tone is a theme colour.
-type Segment = { text: string; color?: string; bold?: boolean; tone?: 'dim' | 'good' | 'fair' | 'bad' }
-const TONES = {
-  dim: { dimColor: true },
-  good: { color: 'success' },
-  fair: { color: 'warning' },
-  bad: { color: 'error' },
-} as const
-const segmentProps = (segment: Segment) => ({
-  ...(segment.tone ? TONES[segment.tone] : {}),
-  ...(segment.color ? { color: segment.color } : {}),
-  ...(segment.bold ? { weight: 'bold' as const } : {}),
-})
 
 // Keeps the lines of the children a call started (a launch command, or the desktop app's session tool), for its
 // row. Never throws: the line is only a view.
@@ -160,9 +152,42 @@ async function fileKind($: $, path: string): Promise<'dir' | 'other' | 'missing'
 async function readRecord($: $, master: SessionHubMaster, cwd: string): Promise<unknown> {
   const where = master.record ? ['--file', master.record] : ['--hub', master.hub ?? cwd]
   const script = `${$.plugin.root}/scripts/registry.mjs`
-  const { exitCode, stdout, stderr } = await $.process.run(['node', script, 'read', ...where], { timeoutMs: 10_000 })
+  const { exitCode, stdout, stderr } = await $.process.run(['node', script, 'read', ...where], { timeoutMs: REGISTRY_TIMEOUT_MS })
   if (exitCode !== 0) throw new Error(stderr.trim() || `registry.mjs exited with ${exitCode}`)
   return JSON.parse(stdout)
+}
+
+const reasonOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+// The path of the record this session reads, or the line that says why there is none.
+async function recordFile($: $): Promise<{ file: string } | { none: string }> {
+  const source = recordSource({ role: await loadRole($), master: await read($, masterState), cwd: await $.session.cwd() })
+  if (source.none !== undefined) return { none: source.none }
+  if (source.file !== undefined) return { file: source.file }
+  const argv = ['node', `${$.plugin.root}/scripts/registry.mjs`, 'path', '--hub', source.hub]
+  const { exitCode, stdout, stderr } = await $.process.run(argv, { timeoutMs: REGISTRY_TIMEOUT_MS })
+  if (exitCode !== 0 || stdout.trim() === '') throw new Error(stderr.trim() || `registry.mjs exited with ${exitCode}`)
+  return { file: stdout.trim() }
+}
+
+// Opens the children record in the system's default app and answers the one line the person reads: what was
+// opened, that there is no record yet, or why it could not be opened. Never throws: the action is a convenience.
+async function openRecord($: $): Promise<string> {
+  try {
+    const found = await recordFile($)
+    if ('none' in found) return found.none
+    const info = await $.session.info().catch(() => undefined)
+    const plan = recordPlan({ file: found.file, exists: await $.fs.exists(found.file), platform: info?.platform, isHosted: info?.isHosted === true })
+    if (!plan.argv) return plan.text
+    try {
+      const run = await $.process.run(plan.argv, { timeoutMs: OPEN_TIMEOUT_MS })
+      return run.exitCode === 0 ? plan.text : failText(plan, run.stderr || `${plan.argv[0]} exited with ${run.exitCode}`)
+    } catch (error) {
+      return failText(plan, reasonOf(error))
+    }
+  } catch (error) {
+    return `Could not open the children record: ${reasonOf(error).slice(0, 200)}`
+  }
 }
 
 async function readLive($: $) {
@@ -236,7 +261,7 @@ export const register: Register = (on) => {
     })
     // Last, and alone in its try: a clash with another mod's command throws (spike S6) and must cost only the command.
     try {
-      await $.command.register({ name: COMMAND, description: 'session-hub: this session role and scope, and the children panel', argumentHint: '[help]' })
+      await $.command.register({ name: COMMAND, description: 'session-hub: this session role and scope, and the children panel', argumentHint: '[log | help]' })
     } catch (error) {
       $.ui.log(`[session-hub] /${COMMAND} not registered: ${error instanceof Error ? error.message : error}`)
     }
@@ -339,6 +364,7 @@ export const register: Register = (on) => {
     const asked = parseCommand(e.args)
     if (asked.kind === 'help') return { text: helpText(), isTextDisplayOnly: true as const }
     if (asked.kind === 'unknown') return { text: `Unknown argument "${asked.word}".\n\n${helpText()}`, isTextDisplayOnly: true as const }
+    if (asked.kind === 'log') return { text: await openRecord($), isTextDisplayOnly: true as const }
     const width = Math.max(MIN_TABLE_COLUMNS, e.presentation?.columns ?? 80)
     const role = await loadRole($)
     if (role.kind === 'none' && !(await read($, masterState)).isMaster) await detectMaster($, await $.session.cwd())
@@ -357,21 +383,11 @@ export const register: Register = (on) => {
   }))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
     const panel = await read($, panelState)
     const width = Math.max(20, e.props.bodyColumns ?? 80)
-    return (
-      <Box flexDirection="column">
-        <Text dimColor>{headerRow(width)}</Text>
-        {panel.rows.map((row) => (
-          <Text wrap="truncate">
-            {(formatRow(row, width) as Segment[]).map((segment) => <Text {...segmentProps(segment)}>{segment.text}</Text>)}
-          </Text>
-        ))}
-        {panel.note && <Text dimColor>{panel.note}</Text>}
-        {panel.updatedAt && <Text dimColor>{`updated ${panel.updatedAt.slice(11, 19)} UTC; live status from ListAgents`}</Text>}
-      </Box>
-    )
+    return childrenPane($.ui.resolve(e), e.surface, panel, width, {
+      openRecord: async () => $.ui.log(`[session-hub] ${await openRecord($)}`),
+    })
   })
 
   // In the desktop app a child starts with the app's session tool, not a launch command: its line comes from the
