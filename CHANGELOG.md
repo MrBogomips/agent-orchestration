@@ -5,7 +5,7 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
 
 ## model-router 0.3.13
 
-2026-11-22 · pull request #TBD
+2026-11-22 · pull request #80
 
 ### Added
 
@@ -30,7 +30,7 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
 
 ## session-hub 0.4.2
 
-2026-11-22 · pull request #TBD
+2026-11-22 · pull request #80
 
 ### Added
 
