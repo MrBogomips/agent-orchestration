@@ -20,7 +20,7 @@ task cost, so the grid can be checked against real work.
 | `model-router:setup` | skill | Writes or updates a *Model routing* section in the project's instruction file, `AGENTS.md` or else `CLAUDE.md`, with defaults and exceptions per kind of work or task class, only after the user says yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs`: compacts the quality data, writes a self-contained page and opens it. |
 | `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model. Draws under each `Agent` call the model and effort the subagent actually got, in colour (see [The choose-model line](#the-choose-model-line)). Records decisions, starts, signals and reports. Fails open. |
-| `/model-router` | command | The usage view: a dialog with four tabs (Overview, Models, Classes, Decisions), or the same rows as text where no pane fits; `on` and `off` switch routing for the session. See [Commands](#commands). |
+| `/model-router` | command | In a terminal, the usage view: a dialog with four tabs (Overview, Models, Classes, Decisions), or the same rows as text where no pane fits. In the Claude desktop app, the Model routing card in the conversation. `on` and `off` switch routing for the session. See [Commands](#commands). |
 | `grid.json` | data | The grid in machine-readable form, with each class's usual choice. The judge's prompt is generated from it; `grid.test.mjs` fails when it and the skills drift apart. |
 | `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes the outcome of each task and keeps aggregates per user and per project; the report renders them; `usage.mjs` gives `/model-router` its data. The page and the command share one aggregation (`lib/usage-data.mjs`), so their numbers agree. |
 
@@ -99,8 +99,8 @@ does not read it.
 | `/model-router` | Opens the usage view on Overview, last 7 days, user level |
 | `/model-router [overview\|models\|classes\|decisions] [24h\|7d\|30d\|all] [user\|project]` | Opens it on that tab, window and level, in any order (`stats` works as `classes`) |
 | `/model-router on`, `/model-router off` | Turns routing on or off for this session |
-| `/model-router report` | Opens the report: in a terminal it writes the report page and opens it in the system's default browser; in the Claude desktop app it opens the report as a pane beside the chat. Prints where it opened |
-| `/model-router log` | Opens the event log (`events.jsonl`): in a terminal, the file in the system's default app, printing its path; in the Claude desktop app, the log dashboard as a pane beside the chat |
+| `/model-router report` | Opens the report: in a terminal it writes the report page and opens it in the system's default browser, printing where it opened; in the Claude desktop app it opens the card on Trend, whose last line links the page |
+| `/model-router log` | Opens the event log (`events.jsonl`): in a terminal, the file in the system's default app, printing its path; in the Claude desktop app, the card on Log, whose last line links the file |
 | `/model-router help` | Lists the arguments and the keys; any unknown argument does the same |
 
 ### The usage view
@@ -109,16 +109,8 @@ A dialog pane laid out like Claude Code's own Settings dialog (`/usage`, `/stats
 four tabs, a second row with the window (24h, 7d, 30d, all) and the level (user or project), the content, and a
 footer of key hints. The active tab and window are drawn as a teal block; the KPI tile borders share the teal.
 
-That is the terminal's rendering. In Claude Desktop, the editor and the mobile apps the same data is drawn with
-native elements: buttons for the tabs, windows and level, four KPI cards with a status chip and an SVG sparkline,
-tables with aligned columns and SVG bars, and Report, Refresh and Log buttons. Under five scored tasks one banner says
-the figures are indicative, in place of a mark on every card. Report opens a second pane there, the report drawn
-with the same elements; its *Open as page* button writes the HTML page and opens it in the default browser. A report too large for the
-pane (many classes and projects) is drawn in brief there, each project and then each class as one line: the page
-has all of it. Log
-opens a third pane, the log dashboard: the records of the event log and its archive counted by type and by day (by hour for the last 24 hours),
-filters for the window and the type, and the latest records in pages of twenty, without any prompt text; its
-*Open file* button opens the file itself.
+That is the terminal's rendering. In the Claude desktop app (and the editor and mobile apps) see
+[The card in the Claude desktop app](#the-card-in-the-claude-desktop-app) below.
 
 ```text
 🔀 model-router [Overview]  Models   Classes   Decisions
@@ -140,9 +132,9 @@ The keys work as soon as the view opens, with no click:
 | ↓, ↑ | Next or previous window: last 24 hours, 7 days, 30 days, all time |
 | `d`, `w`, `m`, `a` | That window directly |
 | `p` | Switches between your data across projects (user) and this project's |
-| `o` | Opens the report: the page in the default browser from a terminal, the report pane in the Claude desktop app; where it opened is written as a line in the session |
+| `o` | Opens the report: the page in the default browser; where it opened is written as a line in the session |
 | `r` | Refreshes: runs compaction and reads again |
-| `l` | Opens the event log: from a terminal in the system's default app, its path written as a line in the session, with the `archive/` folder when there is one; in the Claude desktop app as the log dashboard |
+| `l` | Opens the event log: from a terminal in the system's default app, its path written as a line in the session, with the `archive/` folder when there is one |
 | Page Up, Page Down | Scroll a long tab |
 | Esc | Closes the view |
 
@@ -155,6 +147,27 @@ plugin's pane, and Left at the prompt opens the agents view.
 The `all` window of Classes shows the aged aggregates, the very numbers of the report page; shorter windows count
 the tasks whose report fell inside them. Opening the view runs compaction for at most 3 seconds; if it takes
 longer, the view shows the numbers as of the last compaction and says so.
+
+### The card in the Claude desktop app
+
+In the Claude desktop app `/model-router` draws one card in the conversation, laid out like the app's own `/stats`
+and `/context` cards; no pane opens beside the chat and no page or file opens by itself.
+
+- **Header**: the title, which folds the card to its header and one bar of the window's tasks by model, and the
+  window's right first time and cost per success.
+- **Dropdowns**: the view at the left (Overview, Models, Task classes, Projects, Decisions, Trend, Log); the scope
+  (all projects or this one) and the window (last 24 hours, 7 days, 30 days, all time) at the right. The arguments
+  of the command open the card on a view, window and scope; `report` opens it on Trend, `log` on Log.
+- **Views**: Overview, a heatmap of tasks per day, the key figures and the routing decisions by kind; Models, a row
+  per model with each effort level's count and right-first-time rate, and tasks per day by model; Task classes and
+  Projects, a row each; Decisions, the decisions by kind with the latest of each; Trend, the weekly quality and cost
+  as bar charts, with the HTML report page linked in its last line; Log, the event log by kind and over time, with
+  the latest records of each kind and `events.jsonl` linked in its last line.
+- **Live**: the newest card redraws as subagents report; the few before it keep their header and bar.
+- The line under an Agent call is one quiet line in words: `Routed to Haiku · low read-search; lowered from opus`.
+
+The card uses the app's own colours, with Desktop's blue shades per model; the 🔀 icon, the teal accent and the
+model and effort colours are the terminal's.
 
 Where no pane can be placed (`claude -p`, a headless run, a terminal under 60 columns), the command prints the same
 rows as text, without colours and with the status dots: the tab you named, or all four. A real run of

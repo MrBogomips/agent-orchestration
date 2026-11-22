@@ -815,9 +815,9 @@ the report skill still work then. Every answer is for the person (`isTextDisplay
 
 | Command | Arguments | Shows or does | With mods off |
 |---|---|---|---|
-| `/session-hub` | none | The session's role and scope; in a master, the children table (sized to the terminal) and the children panel opened beside the chat. | No command; the scope guard hook still guards writes in a child. |
+| `/session-hub` | none | The session's role and scope; in a master, the children table (sized to the terminal) and the children panel opened beside the chat. In the Claude desktop app, the Session hub card in the transcript instead (Children, Record). | No command; the scope guard hook still guards writes in a child. |
 | `/session-hub help` | | What the command does. Any other argument prints the same. | |
-| `/model-router` | `[overview\|models\|classes\|decisions] [24h\|7d\|30d\|all] [user\|project]` | The usage view: a dialog pane with four tabs, or the same rows as text where no pane can be placed (headless, `-p`, under 60 columns). Defaults: Overview, 7 days, user level. | No command; ask for the *model-router report* (skill) for the same numbers on a page. |
+| `/model-router` | `[overview\|models\|classes\|decisions] [24h\|7d\|30d\|all] [user\|project]` | The usage view: a dialog pane with four tabs, or the same rows as text where no pane can be placed (headless, `-p`, under 60 columns). Defaults: Overview, 7 days, user level. In the Claude desktop app, the Model routing card in the transcript instead, whose views include the report (Trend) and the event log (Log). | No command; ask for the *model-router report* (skill) for the same numbers on a page. |
 | `/model-router on`, `off` | | Routing on or off for this session. | |
 | `/model-router report` | | Writes and opens the report page; answers its path. | The `model-router:report` skill does the same. |
 | `/model-router help` | | The arguments and the keys. Any unknown argument prints the same. | |
