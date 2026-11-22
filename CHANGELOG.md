@@ -3,6 +3,41 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.13
+
+2026-11-22 · pull request #80
+
+### Added
+
+- The usage view opens the event log: the `l` key in the terminal (listed in the footer), a Log button beside
+  Report and Refresh in the Claude desktop app, and `/model-router log`. It opens
+  `<config dir>/model-router/events.jsonl` in the system's default app and writes its path as a line in the session,
+  with the `archive/` folder when there is one; a log just rotated away opens that folder. With no log yet, or
+  where nothing can be opened (a hosted session, a system with no known opener), the line says so and gives the path.
+
+### Changed
+
+- `/model-router log` no longer opens the Decisions tab: use `/model-router decisions`.
+- In the Claude desktop app, `/model-router report` and the Report button open the report page in the app's Browser
+  pane. Where the pane is not there or refuses the page, the system's default browser opens it, and failing that the
+  answer gives the path: the line says which of the three happened.
+- The report page is redrawn in the Claude desktop app's look, in light and dark after the system's setting. It opens
+  with the headline of the last 30 days, the same KPI cards, chips and sparklines as the usage view; the weekly trend
+  is two charts that draw bars for up to three weeks; task counts are whole numbers, with the age-weighted count in a
+  tooltip; one notice replaces the `n < 5` flag on every row; a project that only repeats the user level is one line,
+  and several projects are folded under their paths; the date is readable and the config path is in the footnote. It
+  reads at the width of a side pane.
+
+## session-hub 0.4.2
+
+2026-11-22 · pull request #80
+
+### Added
+
+- The children panel and `/session-hub log` open the children record, session-hub's log, in the system's default
+  app: the `l` key in the terminal, a Log button in the Claude desktop app. The path is written as a line in the
+  session; with no record yet the line says so and nothing is opened. A child opens the record of its master.
+
 ## model-router 0.3.12
 
 2026-11-22 · pull request #78

@@ -8,7 +8,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { compact, defaultConfigDir, effectiveOptions, isMainModule, loadGrid, paths, scanLog, writeWhole } from './compact.mjs';
-import { agedCells, classesOf, decisionsOf, latestOutcomes, trendOf } from '../lib/usage-data.mjs';
+import { agedCells, buildUsageData, classesOf, decisionsOf, latestOutcomes, trendOf } from '../lib/usage-data.mjs';
 import { renderReport } from '../lib/report-html.mjs';
 
 /** A JSON file's value, or null when it is missing or unreadable. */
@@ -46,9 +46,12 @@ export function buildReportData({ configDir = defaultConfigDir(), now = Date.now
       classes: classesOf(agedCells(lv, now, opts.halfLifeDays), grid, { outcomes, projectId: lv.project?.id ?? null }),
     })),
   ];
+  // The headline, the models and the banner are the usage view's own data (lib/usage-data.mjs), so the page and the
+  // pane show the same figures for the same window.
+  const usage = buildUsageData({ events, user, grid, now, halfLifeDays: opts.halfLifeDays });
   return {
     generatedAt: new Date(now).toISOString(), configDir, events: total, outcomes: outcomes.length,
-    levels, trend: trendOf(outcomes), decisions: decisionsOf(events),
+    levels, trend: trendOf(outcomes), decisions: decisionsOf(events), usage, halfLifeDays: opts.halfLifeDays,
   };
 }
 

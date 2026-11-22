@@ -6,6 +6,7 @@ export type Parsed =
   | { kind: 'toggle'; on: boolean }
   | { kind: 'help' }
   | { kind: 'report' }
+  | { kind: 'log' }
   | { kind: 'view'; tab: string | null; window: string | null; level: string | null }
   | { kind: 'unknown'; word: string }
 

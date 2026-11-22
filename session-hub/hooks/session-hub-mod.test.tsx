@@ -356,7 +356,7 @@ test('an unknown context size after a known one counts as a compaction, twice in
 test('/session-hub help and an unknown argument print the help; every answer is for the person only', async ($, on) => {
   engine(on, CHILD_ENV)
   const help = await $.command.run({ ...RUN, args: 'help' })
-  expect(help.text).toMatch(/^Usage: \/session-hub \[help\]/)
+  expect(help.text).toMatch(/^Usage: \/session-hub \[log \| help\]/)
   expect(help.isTextDisplayOnly).toBe(true)
   const unknown = await $.command.run({ ...RUN, args: 'children' })
   expect(unknown.text).toMatch(/Unknown argument "children"/)
@@ -373,6 +373,115 @@ test('/session-hub sizes the children table to the terminal', async ($, on) => {
   const { text } = await $.command.run({ ...RUN, presentation: { isFullscreen: false, columns: 70 } })
   expect((text ?? '').split('\n').every((l: string) => l.length <= 70)).toBe(true)
   expect(text).toMatch(/t42-product/)
+})
+
+const DEFAULT_RECORD = '/home/u/.claude/session-hub/children-0123456789abcdef.json'
+const PANEL = {
+  plugin: 'session-hub',
+  component: 'Pane',
+  requestId: 'session-hub-children',
+  props: { title: 'x', isFocused: false, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+} as const
+const ran = (stdout: string, exitCode = 0, stderr = '') => ({ value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false } })
+
+type Opening = { exists?: boolean; platform?: string; open?: { exitCode: number; stderr: string }; pathFails?: boolean }
+
+// A master in /hub whose record is at the default path: the registry script, the file system and the opener.
+function master(on: On, opening: Opening = {}) {
+  const world = { opened: [] as (readonly string[])[], logs: [] as string[] }
+  engine(on, {}, '/hub')
+  on('session.info', () => ({ value: { platform: opening.platform ?? 'macos', isHosted: false } as never }))
+  on('fs.exists', () => ({ value: opening.exists ?? true }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.log', (_, e, next) => (world.logs.push(String((e as { text?: unknown }).text ?? '')), next(e)))
+  on('tool.call', () => ({ result: {} }))
+  on('process.run', (_, e) => {
+    if (e.argv[0] === 'open' || e.argv[0] === 'xdg-open') {
+      world.opened.push(e.argv)
+      return ran('', opening.open?.exitCode ?? 0, opening.open?.stderr ?? '')
+    }
+    if (e.argv[2] === 'path') return opening.pathFails ? ran('', 1, '[session-hub] the record may not live inside the hub') : ran(`${DEFAULT_RECORD}\n`)
+    return ran(JSON.stringify(RECORD))
+  })
+  return world
+}
+
+test('/session-hub log opens the children record at the default path of the hub and answers its path', async ($, on) => {
+  const world = master(on)
+  const out = await $.command.run({ ...RUN, args: 'log' })
+  expect(out.text).toBe(`Children record opened: ${DEFAULT_RECORD}`)
+  expect(out.isTextDisplayOnly).toBe(true)
+  expect(world.opened).toEqual([['open', DEFAULT_RECORD]])
+})
+
+test('a master that named its record with --file opens that file; on Linux with xdg-open', async ($, on) => {
+  const world = master(on, { platform: 'linux' })
+  await $.tool.call({ tool: 'Bash', command: 'node "/p/scripts/registry.mjs" upsert --hub /hub --file /records/hub.json --entry \'{}\'' })
+  expect((await $.command.run({ ...RUN, args: 'record' })).text).toBe('Children record opened: /records/hub.json')
+  expect(world.opened).toEqual([['xdg-open', '/records/hub.json']])
+})
+
+test('with no record yet /session-hub log says so and opens nothing', async ($, on) => {
+  const world = master(on, { exists: false })
+  expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe(`No children record yet: ${DEFAULT_RECORD} is written when the first child starts.`)
+  expect(world.opened).toEqual([])
+})
+
+test('a path the registry script refuses is one line, never a throw', async ($, on) => {
+  const world = master(on, { pathFails: true })
+  expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe('Could not open the children record: [session-hub] the record may not live inside the hub')
+  expect(world.opened).toEqual([])
+})
+
+test('a child opens the record of its master', async ($, on) => {
+  const opened: (readonly string[])[] = []
+  engine(on, { ...CHILD_ENV, SESSION_HUB_REGISTRY: MASTER_RECORD })
+  on('session.info', () => ({ value: { platform: 'macos', isHosted: false } as never }))
+  on('fs.exists', () => ({ value: true }))
+  on('process.run', (_, e) => (opened.push(e.argv), ran('')))
+  expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe(`Children record opened: ${MASTER_RECORD}`)
+  expect(opened).toEqual([['open', MASTER_RECORD]])
+})
+
+test('a child started without a record is told to open it from its master', async ($, on) => {
+  engine(on, CHILD_ENV)
+  expect((await $.command.run({ ...RUN, args: 'log' })).text).toMatch(/started without SESSION_HUB_REGISTRY/)
+})
+
+test('the panel offers the record: a key hint in the terminal, a native button on a graphical surface', async ($, on) => {
+  const world = master(on)
+  await $.tool.call({ tool: 'Bash', command: 'node "/p/scripts/registry.mjs" upsert --hub /hub --entry \'{}\'' })
+  const terminal = await $.ui.mount({ ...PANEL, surface: 'terminal' })
+  const hint = JSON.stringify(await terminal.find({ type: 'Button', key: 'log' }))
+  expect(hint).toContain('"hotkey":"l"')
+  expect(hint).toContain('"plain":true')
+  expect(hint).toContain('"label":"log (the children record)"')
+  await terminal.press({ key: 'log' })
+  await terminal.unmount()
+  for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+    const ui = await $.ui.mount({ ...PANEL, surface })
+    const button = JSON.stringify(await ui.find({ type: 'Button', key: 'log' }))
+    expect(button).toContain('"label":"Log"')
+    expect(button).toContain('"variant":"secondary"')
+    expect(button.includes('"plain":true')).toBe(false)
+    expect((await ui.find({ type: 'Text', text: /t42-product/ }))?.text).toMatch(/running/)
+    await ui.press({ key: 'log' })
+    await ui.unmount()
+  }
+  expect(world.opened).toEqual(Array(4).fill(['open', DEFAULT_RECORD]))
+  expect(world.logs.filter((l) => l.startsWith('[session-hub] Children record opened'))).toEqual(Array(4).fill(`[session-hub] Children record opened: ${DEFAULT_RECORD}`))
+})
+
+test('a failed open is one line in the transcript and the panel stays drawn', async ($, on) => {
+  const world = master(on, { open: { exitCode: 1, stderr: 'No application knows how to open it.\nSecond line' } })
+  await $.tool.call({ tool: 'Bash', command: 'node "/p/scripts/registry.mjs" upsert --hub /hub --entry \'{}\'' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANEL, surface })
+    await ui.press({ key: 'log' })
+    expect(await ui.find({ type: 'Text', text: /t42-product/ })).toBeDefined()
+    await ui.unmount()
+  }
+  expect(world.logs.filter((l) => l.includes('Could not open'))).toEqual(Array(2).fill(`[session-hub] Could not open ${DEFAULT_RECORD}: No application knows how to open it.`))
 })
 
 const START_SESSION = 'mcp__ccd_session__start_session'

@@ -4,6 +4,7 @@
 // See docs/design/model-router.md, "Graphical surfaces".
 import type { Elements, RenderChildren } from 'claude-code'
 
+import { LOG_HOTKEY, LOG_KEY, LOG_LABEL } from '../lib/open-log.mjs'
 import { ROUTE_ICON } from '../lib/route-line.mjs'
 import type { CardsView, Chip, ClassItem, ClassMetrics, DecisionItem, Kpi, ModelItem, Picture } from '../lib/usage-cards.mjs'
 import { tabKey, windowKey } from '../lib/usage-nav.mjs'
@@ -21,6 +22,7 @@ export type UsageActions = {
   setLevel: (level: string) => unknown
   report: () => unknown
   refresh: () => unknown
+  openLog: () => unknown
 }
 
 const PLUGIN = 'model-router'
@@ -248,6 +250,7 @@ function footer({ Box, Text, Button }: GraphicalElements, model: CardsView, acti
       <Box flexDirection="row" gap="xs">
         <Button key="report" label="Report" hotkey="o" variant="secondary" onPress={() => actions.report()} />
         <Button key="refresh" label="Refresh" hotkey="r" variant="secondary" onPress={() => actions.refresh()} />
+        <Button key={LOG_KEY} label={LOG_LABEL} hotkey={LOG_HOTKEY} variant="secondary" onPress={() => actions.openLog()} />
       </Box>
     </Box>
   )

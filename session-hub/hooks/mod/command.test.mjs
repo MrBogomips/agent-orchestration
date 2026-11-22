@@ -7,10 +7,13 @@ test('no argument shows; help asks for the list; anything else is unknown', () =
   assert.deepEqual(parseCommand(undefined), { kind: 'show' });
   assert.deepEqual(parseCommand(' HELP '), { kind: 'help' });
   assert.deepEqual(parseCommand('--help'), { kind: 'help' });
+  assert.deepEqual(parseCommand('log'), { kind: 'log' });
+  assert.deepEqual(parseCommand(' Record '), { kind: 'log' });
+  assert.deepEqual(parseCommand('log now'), { kind: 'unknown', word: 'log' });
   assert.deepEqual(parseCommand('children'), { kind: 'unknown', word: 'children' });
   assert.deepEqual(parseCommand('help me'), { kind: 'unknown', word: 'help' });
 });
 
 test('the help starts with the usage line', () => {
-  assert.match(helpText(), /^Usage: \/session-hub \[help\]/);
+  assert.match(helpText(), /^Usage: \/session-hub \[log \| help\]/);
 });

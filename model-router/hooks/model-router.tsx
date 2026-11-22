@@ -13,6 +13,8 @@ import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky
 import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
+import { failText, logPaths, openPlan, openerArgv, whyNot } from '../lib/open-log.mjs'
+import { BROWSER_SERVER, BROWSER_TOOL, connectRefusal, fileUrl, hasBrowserPane, paneRefusal, reportLine } from '../lib/open-report.mjs'
 import { promptGate } from '../lib/prompt-gate.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, helpText, parseArgs, textView } from '../lib/usage-view.mjs'
 import { isArrowScroll, ringTarget, stepWindow, tabKey, tabOfKey } from '../lib/usage-nav.mjs'
@@ -27,6 +29,7 @@ const PANE_ROWS = 24
 const CLICK_MS = 500
 const USAGE_TIMEOUT_MS = 15000
 const REPORT_TIMEOUT_MS = 60000
+const OPEN_TIMEOUT_MS = 10000
 const WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit']
 
 const enabled = atom({ plugin: 'model-router', key: 'enabled' } as const, true)
@@ -255,14 +258,78 @@ async function refreshUsage($: any, ctx: Ctx, force = false) {
   }
 }
 
-/** Writes the report page with scripts/report.mjs, which opens it, and returns its path. */
+/** Writes the report page with scripts/report.mjs and returns its path; `showReport` opens it. */
 async function writeReport($: any, ctx: Ctx): Promise<string> {
-  const argv = ['node', `${$.plugin.root}/scripts/report.mjs`, '--config-dir', await configDirOf($, ctx)]
+  const argv = ['node', `${$.plugin.root}/scripts/report.mjs`, '--config-dir', await configDirOf($, ctx), '--no-open']
   const run = await $.process.run(argv, { timeoutMs: REPORT_TIMEOUT_MS })
   if (run.exitCode !== 0) throw new Error(run.stderr.trim() || `report.mjs exited with ${run.exitCode}`)
   const file = run.stdout.trim()
   if (!file) throw new Error('report.mjs gave no path: the page was not written')
   return file
+}
+
+/**
+ * Opens the event log in the system's default app (its archive folder when the log was just rotated away) and
+ * answers the one line the person reads: what was opened, that there is no log yet, or why it could not be opened.
+ * Never throws: the action is a convenience of the view.
+ */
+async function openLog($: any, ctx: Ctx): Promise<string> {
+  try {
+    const configDir = await configDirOf($, ctx)
+    const { log, archive } = logPaths(configDir)
+    const info = await $.session.info().catch(() => ({}))
+    const plan = openPlan({ configDir, platform: info?.platform, isHosted: info?.isHosted === true, hasLog: await $.fs.exists(log), hasArchive: await $.fs.exists(archive) })
+    if (!plan.argv) return plan.text
+    try {
+      const run = await $.process.run(plan.argv, { timeoutMs: OPEN_TIMEOUT_MS })
+      return run.exitCode === 0 ? plan.text : failText(plan, run.stderr || `${plan.argv[0]} exited with ${run.exitCode}`)
+    } catch (err) {
+      return failText(plan, errorText(err))
+    }
+  } catch (err) {
+    return `Could not open the event log: ${errorText(err)}`
+  }
+}
+
+/** Opens the page in the desktop app's Browser pane. Answers null when it opened, else why not. Never throws. */
+async function openInPane($: any, file: string): Promise<string | null> {
+  try {
+    const url = fileUrl(file)
+    if (!url) return 'the page has no absolute path'
+    const browser = await $.mcp.connect(BROWSER_SERVER)
+    return connectRefusal(browser) ?? paneRefusal(await $.mcp.call(browser.server, BROWSER_TOOL, { url }))
+  } catch (err) {
+    return errorText(err)
+  }
+}
+
+/** Opens the page in the system's default browser. Answers null when it opened, else why not. Never throws. */
+async function openInBrowser($: any, file: string): Promise<string | null> {
+  try {
+    const info = await $.session.info().catch(() => ({}))
+    const argv = info?.isHosted === true ? null : openerArgv(info?.platform, file)
+    if (!argv) return whyNot(info?.platform, info?.isHosted === true)
+    const run = await $.process.run(argv, { timeoutMs: OPEN_TIMEOUT_MS })
+    return run.exitCode === 0 ? null : run.stderr.trim() || `${argv[0]} exited with ${run.exitCode}`
+  } catch (err) {
+    return errorText(err)
+  }
+}
+
+/**
+ * Writes the report and shows it: in the Browser pane where the session draws on the desktop app (`onDesktop`: the
+ * usage pane last drew there), else in the default browser, else nowhere. Answers the line that says which; a page
+ * that cannot be written throws.
+ */
+async function showReport($: any, ctx: Ctx, onDesktop = false): Promise<string> {
+  const file = await writeReport($, ctx)
+  if (onDesktop || hasBrowserPane(await $.session.surfaces().catch(() => []))) {
+    const refused = await openInPane($, file)
+    if (!refused) return reportLine('pane', file)
+    $.ui.log(`[model-router] Browser pane: ${refused}`, { to: 'debug' })
+  }
+  const failed = await openInBrowser($, file)
+  return failed ? reportLine('none', file, failed) : reportLine('browser', file)
 }
 
 const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
@@ -397,7 +464,7 @@ export const register: Register = (on, options) => {
       await $.command.register({
         name: 'model-router',
         description: 'Usage view: subagents, models, classes and routing decisions; routing on or off for this session',
-        argumentHint: '[overview|models|classes|decisions] [24h|7d|30d|all] [user|project] | on | off | report | help',
+        argumentHint: '[overview|models|classes|decisions] [24h|7d|30d|all] [user|project] | on | off | report | log | help',
       })
       $.ui.log(`[model-router] ready: routing ${opts.routeSubagents ? 'on' : 'off'}, measuring ${opts.measure ? 'on' : 'off'}`, { to: 'debug' })
       if (opts.measure) {
@@ -412,6 +479,9 @@ export const register: Register = (on, options) => {
     return started
   })
 
+  // The surface the usage pane last drew on: the desktop app has a Browser pane for the report.
+  let lastSurface: string | null = null
+
   on('command.run', { command: 'model-router' }, async ($, e) => {
     const asked = parseArgs(e.args)
     if (asked.kind === 'toggle') {
@@ -422,11 +492,12 @@ export const register: Register = (on, options) => {
     if (asked.kind === 'unknown') return display(`${ROUTE_ICON} Unknown argument "${asked.word}".\n\n${helpText()}`)
     if (asked.kind === 'report') {
       try {
-        return say(`Report written to ${await writeReport($, ctx)}`)
+        return say(await showReport($, ctx, lastSurface === 'desktop'))
       } catch (err) {
         return say(`Could not write the report: ${errorText(err)}`)
       }
     }
+    if (asked.kind === 'log') return say(await openLog($, ctx))
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
   }).catch(($, e, next) => ({ text: `${ROUTE_ICON} Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
 
@@ -488,15 +559,17 @@ export const register: Register = (on, options) => {
       setWindow: (window) => setView({ window }),
       setLevel: (level) => setView({ level }),
       refresh: () => refreshUsage($, ctx),
+      openLog: async () => $.ui.log(`${ROUTE_ICON} ${await openLog($, ctx)}`),
       report: async () => {
         try {
-          $.ui.log(`${ROUTE_ICON} Report written to ${await writeReport($, ctx)}`)
+          $.ui.log(`${ROUTE_ICON} ${await showReport($, ctx, e.surface === 'desktop')}`)
         } catch (err) {
           $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
         }
       },
     })
     isGraphical = drawn.isGraphical
+    lastSurface = e.surface
     return drawn.tree
   })
 
