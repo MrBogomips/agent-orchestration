@@ -4,7 +4,10 @@
 // marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel
 // (drawn by ./children-pane.tsx, with the action that opens the children record), the
 // start line under a Bash call that starts children (ui.render ToolUse), and the scope line. In every session: the
-// /session-hub command. A child that runs under another configuration folder than its master says so (./mod/identity.mjs). The panel and the start line use the look shared with model-router (./mod/look.mjs). Guards
+// /session-hub command: on the desktop app one card in the transcript (./hub-card.tsx), the children panel and the
+// table in a terminal. A child that runs under another configuration folder than its master says so
+// (./mod/identity.mjs). In the terminal the panel and the start line use the look shared with model-router
+// (./mod/look.mjs). Guards
 // fail closed; the panel, the start line and the marking never block anything. The classic scope guard in
 // hooks.json stays and covers file writes with mods off.
 
@@ -18,7 +21,6 @@ import { identityMismatch, mismatchText } from './mod/identity.mjs'
 import { markContext, markText } from './mod/origin.mjs'
 import { failText, recordPlan, recordSource } from './mod/open-record.mjs'
 import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
-import { LOG_PANE, LOG_PANE_TITLE } from './mod/record-cards.mjs'
 import { childStarts, isSessionStartTool, startLineSegments, startLogText, toolStarts } from './mod/start-line.mjs'
 import type { ChildStart } from './mod/start-line.mjs'
 import { readRole } from './mod/role.mjs'
@@ -26,8 +28,11 @@ import { SECTION_ID, roleSummary, scopeSection } from './mod/scope-line.mjs'
 import { judgeSend } from './mod/send-guard.mjs'
 import { judgeShell } from './mod/shell-guard.mjs'
 import { childrenPane, segmentProps } from './children-pane'
-import { recordPane } from './record-pane'
 import type { Segment } from './children-pane'
+import { hasHubCard, openHubCard, renderHubCard } from './hub-card'
+import type { HubDeps } from './hub-card'
+import { textOf } from './mod/card-parts.mjs'
+import { hubHelpCard } from './mod/hub-card.mjs'
 
 type Role = ReturnType<typeof readRole>
 type $ = EngineInterface
@@ -55,7 +60,7 @@ const scopeLineState = atom({ plugin: 'session-hub', key: 'scopeLine' } as const
 const panelState = atom({ plugin: 'session-hub', key: 'panel' } as const, { rows: [] } as SessionHubPanel, {
   shape: 'panel-1',
 })
-// The log pane: the children record as a dashboard, on graphical surfaces.
+// The children record as the card last read it, on graphical surfaces.
 const logState = atom({ plugin: 'session-hub', key: 'log' } as const, { isLoading: false } as SessionHubLog, { shape: 'log-1' })
 // The start lines of each Bash call that started children, by the call's tool_use_id.
 const startLines = atom({ plugin: 'session-hub', key: 'starts' } as const, null as SessionHubStarts | null)
@@ -90,6 +95,17 @@ async function withStarts($: $, e: RenderInputOf<'ToolUse', RenderSurface>, row:
   const lines = await read($, memberOf(startLines, e))
   if (!lines || lines.starts.length === 0) return row
   const { Box, Text } = $.ui.resolve(e)
+  // On the desktop app the look shared with model-router is not used: one quiet line per child, in words.
+  if (isGraphical(e.surface)) {
+    return (
+      <Box flexDirection="column">
+        {row}
+        {lines.starts.map((start) => (
+          <Text size="footnote" color="inactive" wrap="truncate-end">{quietStart(start)}</Text>
+        ))}
+      </Box>
+    )
+  }
   return (
     <Box flexDirection="column">
       {row}
@@ -100,6 +116,13 @@ async function withStarts($: $, e: RenderInputOf<'ToolUse', RenderSurface>, row:
       ))}
     </Box>
   )
+}
+
+// A child start in words, for the desktop app: `Started t42-product on Sonnet · medium`.
+function quietStart(start: ChildStart): string {
+  const family = /(opus|sonnet|fable|haiku)/i.exec(start.model ?? '')?.[1]?.toLowerCase() ?? start.model ?? ''
+  const runs = family ? `${family.charAt(0).toUpperCase()}${family.slice(1)} · ${start.effort ?? 'default'}` : `effort ${start.effort ?? 'default'}`
+  return `Started ${start.name} on ${runs}`
 }
 
 // The role comes from the launch environment, read at every use: no module state to go stale.
@@ -208,7 +231,7 @@ async function openRecord($: $): Promise<string> {
   }
 }
 
-// Reads the record this session's log is into the log pane's state. An error (no record to open, a file that
+// Reads the record this session's log is into the state the card draws from. An error (no record to open, a file that
 // cannot be read) is kept for the pane to show, never thrown.
 async function readLog($: $) {
   await update($, logState, (log) => ({ ...log, isLoading: true }))
@@ -230,20 +253,6 @@ async function hostOf($: $) {
   const surfaces = await $.session.surfaces().catch(() => [])
   const entrypoint = await $.env.get('CLAUDE_CODE_ENTRYPOINT').catch(() => undefined)
   return hostKind({ surfaces, entrypoint })
-}
-
-// Shows the children record: the log pane on a graphical host (`onGraphical`: the press came from a graphical
-// drawing), the file in the system's default app anywhere else. A pane that is not placed yet is kept: an app
-// attaches its surface at its first draw. Never throws.
-async function showRecord($: $, onGraphical = false): Promise<string> {
-  if (!onGraphical && (await hostOf($)) !== 'graphical') return openRecord($)
-  try {
-    await $.ui.open({ id: LOG_PANE, title: LOG_PANE_TITLE, focus: true })
-    await readLog($)
-    return 'Children record opened beside the chat.'
-  } catch (error) {
-    return `Could not open the children record pane: ${reasonOf(error).slice(0, 200)}`
-  }
 }
 
 async function readLive($: $) {
@@ -268,6 +277,31 @@ async function refreshPanel($: $): Promise<SessionHubPanel> {
   }
   await update($, panelState, () => next)
   return next
+}
+
+// What the card needs for one event (./hub-card.tsx): the values it draws, read from the mod's state, and the
+// reads that fill them. A failed read is kept in the state for the card to show; nothing here throws.
+async function hubDepsOf($: $): Promise<HubDeps> {
+  return {
+    role: await loadRole($),
+    master: () => read($, masterState),
+    panel: () => read($, panelState),
+    log: () => read($, logState),
+    readAll: async () => {
+      if ((await read($, masterState)).isMaster) await refreshPanel($)
+      await readLog($)
+    },
+  }
+}
+
+// What `/session-hub` answers where an app hosts the session: the card's text, which the render hook of the row
+// draws as the card. No pane is opened and no file: the record is the card's Record view.
+async function answerCard($: $, asked: ReturnType<typeof parseCommand>) {
+  if (asked.kind === 'help') return { text: textOf(hubHelpCard()), isTextDisplayOnly: true as const }
+  if (asked.kind === 'unknown') return { text: `Unknown argument "${asked.word}". Try /session-hub help.`, isTextDisplayOnly: true as const }
+  const role = await loadRole($)
+  if (role.kind === 'none' && !(await read($, masterState)).isMaster) await detectMaster($, await $.session.cwd())
+  return { text: await openHubCard($, await hubDepsOf($), asked.kind === 'log' ? 'record' : 'children'), isTextDisplayOnly: true as const }
 }
 
 async function becomeMaster($: $, found: { record?: string; hub?: string }) {
@@ -312,8 +346,10 @@ export const register: Register = (on) => {
     if (role.kind === 'none') await detectMaster($, e.cwd)
     const mismatch = await loadMismatch($, role)
     if (mismatch) $.ui.log(mismatchText(mismatch))
+    // The panel, and a card that follows its data, read again every 30 seconds; the write redraws them.
     $.clock.every(REFRESH_MS, async () => {
       if ((await read($, masterState)).isMaster) await refreshPanel($)
+      if (await hasHubCard($)) await readLog($)
     })
     // Last, and alone in its try: a clash with another mod's command throws (spike S6) and must cost only the command.
     try {
@@ -418,9 +454,10 @@ export const register: Register = (on) => {
   // reads the children from the record, so a copy in the transcript would only go stale in later requests.
   on('command.run', { command: COMMAND }, async ($, e) => {
     const asked = parseCommand(e.args)
+    if ((await hostOf($)) === 'graphical') return answerCard($, asked)
     if (asked.kind === 'help') return { text: helpText(), isTextDisplayOnly: true as const }
     if (asked.kind === 'unknown') return { text: `Unknown argument "${asked.word}".\n\n${helpText()}`, isTextDisplayOnly: true as const }
-    if (asked.kind === 'log') return { text: await showRecord($), isTextDisplayOnly: true as const }
+    if (asked.kind === 'log') return { text: await openRecord($), isTextDisplayOnly: true as const }
     const width = Math.max(MIN_TABLE_COLUMNS, e.presentation?.columns ?? 80)
     const role = await loadRole($)
     if (role.kind === 'none' && !(await read($, masterState)).isMaster) await detectMaster($, await $.session.cwd())
@@ -441,33 +478,32 @@ export const register: Register = (on) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const panel = await read($, panelState)
     const width = Math.max(20, e.props.bodyColumns ?? 80)
-    const actions = { openRecord: async () => $.ui.log(`[session-hub] ${await showRecord($, isGraphical(e.surface))}`) }
+    const actions = { openRecord: async () => $.ui.log(`[session-hub] ${await openRecord($)}`) }
     return childrenPane($.ui.resolve(e), e.surface, panel, width, actions, (reason) =>
       $.ui.log(`[session-hub] children panel: ${reason.slice(0, 200)}`, { to: 'debug' }))
   })
 
-  // The log pane (hooks/record-pane.tsx): the children record as a dashboard. Its file button opens the record
-  // in the system's default app, as the panel's key does in the terminal.
-  on('ui.render', { component: 'Pane', requestId: LOG_PANE }, async ($, e) => {
-    const width = Math.max(20, e.props.bodyColumns ?? 80)
-    const actions = {
-      refresh: () => readLog($),
-      openFile: async () => $.ui.log(`[session-hub] ${await openRecord($)}`),
-    }
-    return recordPane($.ui.resolve(e), e.surface, await read($, logState), actions, width, (reason) =>
-      $.ui.log(`[session-hub] log pane: ${reason.slice(0, 200)}`, { to: 'debug' }))
+  // The card of a `/session-hub` answer on a graphical surface (./hub-card.tsx). Where there is no card to draw,
+  // and on any failure, the row keeps its text.
+  on('ui.render', { component: 'CommandOutput', props: { command: COMMAND } }, async ($, e, next) => {
+    if (!isGraphical(e.surface)) return next(e)
+    return (await renderHubCard($, e, await hubDepsOf($))) ?? next(e)
+  }).catch(($, e, next) => {
+    $.ui.log(`[session-hub] card: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? 'unknown error'}`, { to: 'debug' })
+    return next(e)
   })
 
   // In the desktop app a child starts with the app's session tool, not a launch command, and the app draws that
-  // call as a session card of its own, not as a tool row: a line under the row would never show. The start line
-  // is therefore a notice in the transcript, one per child, written once the call has succeeded, from its input.
-  // Only a master (no role) writes it, as for Bash.
+  // call as a session card of its own: neither a line under its row nor a placed row shows there (spike S18), and
+  // the app's own card already names the child. So nothing is written while the app shows the session. A terminal
+  // attached to it gets the start line as a notice in the transcript, one per child, once the call has succeeded,
+  // from its input. Only a master (no role) writes it, as for Bash.
   // Nothing after next() throws (the role read and the notice are guarded), so the catch only sees next() fail.
   on('tool.call', async ($, e, next) => {
     const result = await next(e)
     if (!isSessionStartTool(e.tool) || startFailed(result)) return result
     const role = await loadRole($).catch(() => undefined)
-    if (role?.kind === 'none') logStarts($, toolStarts(String(e.tool), e))
+    if (role?.kind === 'none' && (await hostOf($)) !== 'graphical') logStarts($, toolStarts(String(e.tool), e))
     return result
   }).catch(($, e, next) => next(e))
 

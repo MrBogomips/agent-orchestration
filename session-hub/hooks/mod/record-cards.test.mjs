@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FILE_KEY, FILE_LABEL, LOG_PANE, TIMELINE_SHOWN, recordView } from './record-cards.mjs';
+import { TIMELINE_SHOWN, recordView } from './record-cards.mjs';
 
 const FILE = '/home/u/.claude/session-hub/children-0123456789abcdef.json';
 const RECORD = {
@@ -74,5 +74,4 @@ test('an empty or odd record says what will appear', () => {
   }
   assert.equal(recordView({ children: [{ name: 'c', status: 'running' }] }).subtitle, '1 child · 1 live');
   assert.equal(recordView({ children: [{ name: 'c', lastMessage: { type: 'done', at: 'x', text: 'y'.repeat(900) } }] }).children[0].last.length, 'last message: done · '.length + 200);
-  assert.deepEqual([LOG_PANE, FILE_KEY, FILE_LABEL], ['session-hub-log', 'file', 'Open file']);
 });

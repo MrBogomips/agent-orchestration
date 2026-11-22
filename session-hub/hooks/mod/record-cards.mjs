@@ -1,12 +1,8 @@
-// The children record as a dashboard: what the log pane of a graphical surface draws from the record the registry
-// script reads. Pure: texts already formatted. The record holds names, paths and URLs only, and so does the view.
-// See docs/design/session-hub.md, "The log dashboard".
+// The children record as children and a timeline: what the Record view of the Session hub card
+// (hooks/mod/hub-card.mjs) draws from the record the registry script reads. Pure: texts already formatted. The
+// record holds names, paths and URLs only, and so does the view.
+// See docs/design/session-hub.md, "The card on the desktop app".
 
-/** The log pane, and the keys and labels of its controls. */
-export const LOG_PANE = 'session-hub-log';
-export const LOG_PANE_TITLE = 'session-hub log';
-export const FILE_KEY = 'file';
-export const FILE_LABEL = 'Open file';
 /** The most timeline rows drawn; the rest are counted. */
 export const TIMELINE_SHOWN = 40;
 const TEXT_CHARS = 200;
@@ -58,9 +54,9 @@ function eventsOf(child) {
 }
 
 /**
- * Everything the log pane draws for a record: `{ subtitle, file, children, timeline, more, empty }`. `timeline` is
+ * The record as children and a timeline: `{ subtitle, file, children, timeline, more, empty }`. `timeline` is
  * newest first, at most TIMELINE_SHOWN rows, each `{ when, child, what, text }`; `more` says how many older ones
- * are left out, or null. `file` is the record's path.
+ * are left out, or null; `total` counts every event. `file` is the record's path.
  */
 export function recordView(record, { file } = {}) {
   const list = (Array.isArray(record?.children) ? record.children : []).filter((c) => c !== null && typeof c === 'object' && typeof c.name === 'string');
@@ -73,6 +69,7 @@ export function recordView(record, { file } = {}) {
     children: list.map(childCard),
     timeline: events.slice(0, TIMELINE_SHOWN).map((e) => ({ when: when(e.at), child: e.child, what: e.what, text: e.text })),
     more: events.length > TIMELINE_SHOWN ? `${events.length - TIMELINE_SHOWN} earlier events are in the file.` : null,
+    total: events.length,
     empty: list.length ? null : 'No child in the record yet. A child appears here when the master starts one.',
   };
 }
