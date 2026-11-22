@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PAGE_HOTKEY, PAGE_KEY, PAGE_LABEL, REPORT_PANE, hostKind, isGraphical, reportLine } from './open-report.mjs';
+import { hostKind, isGraphical, reportLine } from './open-report.mjs';
 
 const FILE = '/home/u/.claude/model-router/report.html';
 
@@ -30,12 +30,7 @@ test('with no surface attached yet, an app that hosts the session is graphical; 
 });
 
 test('the line says where the report was opened, or why the page was not', () => {
-  assert.equal(reportLine('pane'), 'Report opened beside the chat.');
   assert.equal(reportLine('browser', FILE), `Report opened in the default browser: ${FILE}`);
   assert.equal(reportLine('none', FILE, 'no opener known for windows\nmore'), `Report written to ${FILE} (not opened: no opener known for windows)`);
   assert.equal(reportLine('none', FILE), `Report written to ${FILE} (not opened: no browser could be opened)`);
-});
-
-test('the pane and its page control are named once', () => {
-  assert.deepEqual([REPORT_PANE, PAGE_KEY, PAGE_LABEL, PAGE_HOTKEY], ['model-router-report', 'page', 'Open as page', 'o']);
 });

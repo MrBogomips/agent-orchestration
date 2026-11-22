@@ -4,7 +4,7 @@
 //
 // Usage: node report.mjs [--config-dir <dir>] [--options '<json>'] [--no-open | --json]
 // Prints the path of the page. With --json it compacts and prints the report's data instead, and writes no page:
-// the mod draws that data as a native pane (lib/report-cards.mjs). Nothing leaves the machine.
+// the mod draws that data as the Trend and Projects views of its card (lib/card-view.mjs). Nothing leaves the machine.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';

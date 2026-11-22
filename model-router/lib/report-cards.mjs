@@ -1,6 +1,5 @@
-// The quality report as a view model: what its two renderings draw, the HTML page (lib/report-html.mjs) and the
-// native pane of a graphical surface (hooks/report-desktop.tsx). Pure: it takes the data scripts/report.mjs builds
-// and returns plain values, texts already formatted, so the two renderings cannot disagree.
+// The quality report as a view model: what the HTML page (lib/report-html.mjs) draws. Pure: it takes the data
+// scripts/report.mjs builds and returns plain values, texts already formatted.
 // The headline (KPI cards, chips, sparklines, the sample-size notice) and the models are the usage view's own model
 // (lib/usage-cards.mjs) for one window. See docs/design/model-router-quality-loop.md, "Report".
 // Plain ES module with no Node or engine imports, so the mod, the scripts and node tests load it.
@@ -128,25 +127,6 @@ function footnotes(data) {
       `${MARKS.few} marks a row with fewer than ${WEAK_N} tasks, to be read as indicative; ` +
       `${MARKS.recommended} the recommended cell.`,
   ];
-}
-
-/** How much of the class tables a drawing of the pane holds, richest first (hooks/report-desktop.tsx). */
-export const DETAILS = Object.freeze(['full', 'projects', 'classes']);
-/**
- * The most rows a level of detail may hold for its tree to be worth building: a row of a class table is about a
- * thousand characters of tree, so more than this is past the engine's bounds several times over.
- */
-export const MAX_ROWS = 400;
-
-/**
- * The rows the class tables take at a level of detail: every cell row at `full`; the user level's cell rows and a
- * line per project at `projects`; a line per class and per project at `classes`.
- */
-export function rowsAt(view, detail) {
-  const cells = (level) => level.cards.reduce((n, c) => n + Math.max(1, c.rows.length), 0);
-  const sections = view.projects?.sections ?? [];
-  if (detail === 'full') return cells(view.classes) + sections.reduce((n, s) => n + cells(s), 0);
-  return (detail === 'projects' ? cells(view.classes) : view.classes.cards.length) + sections.length;
 }
 
 /**

@@ -1,8 +1,9 @@
 // The parts of a card on the desktop app: its drawings as SVG markup, and the card as markdown text. A card is a
 // plain value (`{ title, summary, segments, nav, blocks }`, see `textOf`) that a plugin's view module builds and
 // hooks/card-kit.tsx lays out. Pure: no data is read here.
-// See docs/design/ui-design.md, "The card". session-hub keeps its own copy (hooks/mod/card-parts.mjs);
-// tests/shared-copies.mjs checks that the two answer alike.
+// See docs/design/ui-design.md, "Graphical surfaces: the card". Each plugin keeps a copy of this file
+// (model-router/lib/card-parts.mjs, session-hub/hooks/mod/card-parts.mjs): tests/shared-copies.mjs checks that the
+// two are the same text.
 // Plain ES module with no Node or engine imports, so the mod and node tests load it.
 
 /**

@@ -1,7 +1,7 @@
 // Renders the quality report as one self-contained HTML page: inline styles and SVG, no script, no external
 // resource. Pure: takes the data scripts/report.mjs builds and returns the page's text.
-// What the page shows is the report's view model (lib/report-cards.mjs), which the native pane of a graphical
-// surface draws too: this file only writes its markup, escaping every text.
+// What the page shows is the report's view model (lib/report-cards.mjs): this file only writes its markup, escaping
+// every text.
 // See docs/design/ui-design.md, "Graphical surfaces: HTML pages".
 import { MARKS, reportView } from './report-cards.mjs';
 import { STYLE } from './report-style.mjs';

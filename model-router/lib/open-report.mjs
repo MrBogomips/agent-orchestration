@@ -1,15 +1,9 @@
-// Where the quality report is shown: as a native pane on a graphical surface (the Claude desktop app, the editor,
-// the phones), as the HTML page in the system's default browser from a terminal. Pure: the mod asks the engine which
-// surfaces the session draws on, opens the pane or writes the page and runs the opener.
+// Where the session is shown, and where the quality report opens: from a terminal as the HTML page in the system's
+// default browser; on a graphical surface (the Claude desktop app, the editor, the phones) the report is the card's
+// Trend view instead. Pure: the mod asks the engine which surfaces the session draws on, writes the page and runs
+// the opener.
 // See docs/design/model-router.md, "Opening the report".
 // Plain ES module with no Node or engine imports, so both the mod and node tests load it.
-
-/** The report pane, and the keys and labels of its two controls, shared by its renderings. */
-export const REPORT_PANE = 'model-router-report';
-export const REPORT_PANE_TITLE = 'model-router report';
-export const PAGE_KEY = 'page';
-export const PAGE_LABEL = 'Open as page';
-export const PAGE_HOTKEY = 'o';
 
 const REASON_CHARS = 200;
 const oneLine = (text) => String(text ?? '').trim().split('\n')[0].slice(0, REASON_CHARS);
@@ -38,11 +32,10 @@ export function hostKind({ surfaces, entrypoint } = {}) {
 }
 
 /**
- * The one line the person reads: `how` is `pane` (the native report pane), `browser` (the page, in the default
- * browser) or `none` (the page, written and not opened: `why` says why).
+ * The one line the person reads: `how` is `browser` (the page, in the default browser) or `none` (the page,
+ * written and not opened: `why` says why).
  */
 export function reportLine(how, file, why) {
-  if (how === 'pane') return 'Report opened beside the chat.';
   if (how === 'browser') return `Report opened in the default browser: ${file}`;
   return `Report written to ${file} (not opened: ${oneLine(why) || 'no browser could be opened'})`;
 }
