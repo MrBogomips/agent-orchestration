@@ -981,20 +981,43 @@ choice stands. <code>design-open</code> has no cell with three tasks yet: <code>
 
 <h2 id="report">3.7 The report page</h2>
 <p>The same numbers on a page, for a longer look or to keep: ask for the <em>model-router report</em> (the
-<code>report</code> skill), type <code>/model-router report</code>, or press <code>o</code> in the view. The script
-compacts the event log, writes <code>&lt;config dir&gt;/model-router/report.html</code>, opens it with
-<code>open</code> (macOS) or <code>xdg-open</code> (Linux) and prints its path. From a shell:</p>
+<code>report</code> skill), type <code>/model-router report</code>, or press <code>o</code> in the view (the Report
+button in the Claude desktop app). The script compacts the event log and writes
+<code>&lt;config dir&gt;/model-router/report.html</code>. In the Claude desktop app the command and the button open the
+page in the app's Browser pane, beside the chat; anywhere else, or if the pane refuses it, the system's default browser
+opens it (<code>open</code> on macOS, <code>xdg-open</code> on Linux). The answer says where the page opened and gives
+its path; when nothing could open it, it says why. From a shell:</p>
 <pre><code>node "&lt;plugin folder&gt;/scripts/report.mjs"             # write and open
 node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote or headless)</code></pre>
 <figure>
   <img src="images/mr-report.png" alt="The model-router quality report page">
-  <figcaption>Figure 15. The top of the report page: a weekly trend of FPY and cost per successful task, the router's
-  decisions by action. Further down, the page has one card per class at the user level (tier, effort, n, FPY,
-  rework, cost per task, cost per success, explored share, flags) and the same per project. The page follows the
-  system's light or dark theme.</figcaption>
+  <figcaption>Figure 15. The top of the report page, with sample data: the headline of the last 30 days (the KPI cards
+  of the usage view), the models of that window and the weekly trend. Further down, the page has the routing decisions
+  by action, one card per class at the user level and the projects. The page follows the system's light or dark
+  theme.</figcaption>
 </figure>
-<p>The page and the usage view share one aggregation, so their numbers agree. The page is self-contained and is
-written locally; share it only if you mean to. The <em>Explored</em> column stays at 0% before release 0.4.</p>
+<p>The page reads top to bottom:</p>
+<ul>
+  <li><strong>Headline.</strong> The last 30 days: the same four KPI cards as the usage view on <code>30d</code>
+  (first-pass yield, cost per successful task, rework, routed starts) with their status, their change against the 30
+  days before and a small chart, then the models of the window. With fewer than five scored tasks one notice says the
+  figures are indicative.</li>
+  <li><strong>Trend by week.</strong> FPY and cost per successful task per week, as two charts and a table. With up to
+  three weeks the charts draw one bar per week.</li>
+  <li><strong>Routing decisions.</strong> Every decision logged, counted by action.</li>
+  <li><strong>Classes.</strong> One card per class, all projects together: the grid's choice, the recommendation, and
+  a row per tier and effort with tasks, FPY, rework, cost per task, cost per success and the explored share. ★ marks
+  the recommended cell; ○ and grey text mark a row with fewer than five tasks.</li>
+  <li><strong>Projects.</strong> The same cards per project, folded under the project's path: click a path to open it.
+  With a single project whose figures are the ones above, one line says so.</li>
+</ul>
+<p><em>Tasks</em> are whole counts. In the class cards FPY, rework and cost weigh a recent task more than an old one
+(<code>halfLifeDays</code>); hover a count to see the weighted count behind it. The footnote of the page names the
+folder the data was read from.</p>
+<p>The page and the usage view share one aggregation, so their numbers agree. The page is self-contained, with no
+script and nothing fetched, and is written locally; share it only if you mean to. It reads at the width of a side pane:
+under 560 pixels the tables drop the bars, the cost per task and the explored share. The <em>Explored</em> column stays
+at 0% before release 0.4.</p>
 
 <h2 id="options">3.8 Options</h2>
 <p>The mod's options (<code>userConfig</code> in its <code>plugin.json</code>). Set them in <code>/config</code>, or

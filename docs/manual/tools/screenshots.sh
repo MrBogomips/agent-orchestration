@@ -184,7 +184,8 @@ mkdir -p "$work/home/.claude"
 cp -R "$real" "$work/home/.claude/model-router"
 node "$plugin/scripts/report.mjs" --config-dir "$work/home/.claude" --no-open > /dev/null
 WORK_HOME="$work/home" perl -pi -e 's{\Q$ENV{WORK_HOME}\E}{~}g' "$work/home/.claude/model-router/report.html"
-"$chrome" --headless --hide-scrollbars --force-device-scale-factor=2 --force-dark-mode \
-  --blink-settings=preferredColorScheme=0 --window-size=750,844 \
+# preferredColorScheme=1 is the light theme (0, with --force-dark-mode, the dark one).
+"$chrome" --headless --hide-scrollbars --force-device-scale-factor=2 \
+  --blink-settings=preferredColorScheme=1 --window-size=750,1000 \
   --screenshot="$images/mr-report.png" "file://$work/home/.claude/model-router/report.html" > /dev/null 2>&1
 echo "$images/mr-report.png"

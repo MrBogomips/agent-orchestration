@@ -18,6 +18,15 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
 ### Changed
 
 - `/model-router log` no longer opens the Decisions tab: use `/model-router decisions`.
+- In the Claude desktop app, `/model-router report` and the Report button open the report page in the app's Browser
+  pane. Where the pane is not there or refuses the page, the system's default browser opens it, and failing that the
+  answer gives the path: the line says which of the three happened.
+- The report page is redrawn in the Claude desktop app's look, in light and dark after the system's setting. It opens
+  with the headline of the last 30 days, the same KPI cards, chips and sparklines as the usage view; the weekly trend
+  is two charts that draw bars for up to three weeks; task counts are whole numbers, with the age-weighted count in a
+  tooltip; one notice replaces the `n < 5` flag on every row; a project that only repeats the user level is one line,
+  and several projects are folded under their paths; the date is readable and the config path is in the footnote. It
+  reads at the width of a side pane.
 
 ## session-hub 0.4.2
 
