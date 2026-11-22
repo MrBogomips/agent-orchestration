@@ -108,6 +108,11 @@ A dialog pane laid out like Claude Code's own Settings dialog (`/usage`, `/stats
 four tabs, a second row with the window (24h, 7d, 30d, all) and the level (user or project), the content, and a
 footer of key hints. The active tab and window are drawn as a teal block; the KPI tile borders share the teal.
 
+That is the terminal's rendering. In Claude Desktop, the editor and the mobile apps the same data is drawn with
+native elements: buttons for the tabs, windows and level, four KPI cards with a status chip and an SVG sparkline,
+tables with aligned columns and SVG bars, and Report and Refresh buttons. Under five scored tasks one banner says
+the figures are indicative, in place of a mark on every card.
+
 ```text
 🔀 model-router [Overview]  Models   Classes   Decisions
 d:  24h  w: [7d] m:  30d  a:  all                p: user · project

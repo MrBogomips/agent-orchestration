@@ -157,6 +157,7 @@ test('the series cuts a window into equal buckets, oldest first, with gaps where
   assert.equal(week.unit, 'day');
   assert.deepEqual(week.points.map((p) => p?.n ?? null), [1, 1, 1, 1, 1, null, 2]);
   assert.equal(week.points[6].fpy, 0.5);
+  assert.equal(week.points[6].reworkRate, 0);
   assert.equal(seriesOf(list, '24h', T0).points.length, 8);
   assert.equal(seriesOf(list, '30d', T0).points.length, 10);
   const all = seriesOf(list, 'all', T0);

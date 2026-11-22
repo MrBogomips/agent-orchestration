@@ -325,6 +325,57 @@ dropped come from this session's `report` records, with total tokens only. The w
 with a minimum layout at 60 columns and 80 headless. Bars take what is left after the fixed columns, between 6
 and 20 cells. Lines that cannot fit are cut with `…`.
 
+**Graphical surfaces.** The rows above are text art for a monospace terminal: box characters, block sparklines
+and columns padded with spaces. Claude Desktop, the editor and the phones draw proportional type, where none of
+that lines up, so on any surface but `terminal` whose element table has `Svg` the same hook draws a native layout
+from the same data. The terminal's rendering is unchanged.
+
+- **Split.** `lib/usage-cards.mjs` builds the view model of a tab from the data (`cardsView`): pills, subtitle,
+  banner, KPI cards, table rows, chips, empty states. It takes every format and every status from
+  `lib/usage-view.mjs` and `lib/usage-tiles.mjs`, so a figure reads the same in both renderings.
+  `lib/usage-svg.mjs` draws the charts as SVG strings. The hooks module keeps the state and the actions;
+  `hooks/usage-pane.tsx` picks the rendering, `hooks/usage-desktop.tsx` lays the model out and
+  `hooks/usage-terminal.tsx` draws the rows.
+- **Keys.** The terminal's key handling (the ring that follows the tabs and wraps, the press that moves the ring
+  back, the arrows that step the window) is off while the pane is drawn graphically: the `ui.focus`, `ui.press`
+  and `ui.scroll` hooks hand the event on unchanged, so Tab reaches every control, a click presses what was
+  clicked and the body scrolls. These events do not name a surface, so the hooks go by the last drawing.
+- **Header.** The title in the accent at heading size, and the status as three pills (a dot in the accent when
+  on, muted when off). Under it the tabs, the windows and the level as native Buttons, the active one of each
+  group `variant: "primary"`; the level is two Buttons, `level-user` and `level-project`. The other Buttons keep
+  the terminal's element keys (`tab-…`, `window-…`, `report`, `refresh`) and hotkeys; `p` is on the level that is
+  not shown.
+- **Sample size.** Under five scored tasks one banner says so (`2 tasks scored — figures are indicative under
+  5`), and no card carries a `weak` mark. With five or more there is no banner. At the project level of a session
+  with no project id the banner says that instead, and there are no cards and no classes.
+- **KPI cards.** Four cards in a row from 70 body columns, two by two below: a caption label, the figure at
+  title size with tabular digits, a status chip (a coloured dot and the word; muted for a neutral status such as
+  the cost's `no prior`), the change against the window
+  before (`▼ 25 pts`, `▲ 12%`) and a sparkline. The routed card shows the count and `3 down · 0 up · 1 kept`.
+- **Sparklines.** One per rate and cost, over the window's buckets: a 2 px line on a soft area, the last point
+  dotted, a faint baseline. A bucket with no closed task breaks the line; a point with no neighbour is a dot.
+  A series of up to three values is drawn as one bar per value instead, since so few points make no line.
+  FPY and rework are drawn on a fixed 0 to 100% scale, the cost from zero to its highest bucket. Each bucket has
+  a `<title>` tooltip (`11-20: 50% · 2 tasks`), shown where the surface draws the SVG as interactive (the
+  desktop app). For this the series of `lib/usage-data.mjs` also carries each bucket's rework rate.
+- **Tables.** Models, classes, session and routing are rows of fixed-share columns with tabular digits, the
+  FPY as an SVG bar coloured by the same thresholds (grey under five tasks; a share above zero is at least one
+  pixel wide). Classes are one card per class with
+  its cells under it, the recommended cell starred, and the recommendations in a callout bordered in the accent.
+  Decisions are a compact table with one chip per action: downgrade green, upgrade in the accent, forced-risk
+  amber, error red, keep and explicit muted.
+- **Empty states.** A section with nothing to show says what will appear there and when, in one line.
+- **Footer.** The freshness note, and Report and Refresh as native Buttons. No key hints.
+- **Colours.** Text, chips and borders name the theme's own colours (`success`, `warning`, `error`,
+  `inactive`), so they follow light and dark. An SVG is drawn as an image and cannot read the app's colours, and
+  the API does not say which mode is on: the charts use fixed mid-tones that read on both grounds (line
+  `#0d9488`, good `#16a34a`, fair `#d97706`, bad `#dc2626`, grey `#8b8b8b`, tracks at 25% opacity).
+- **Minimized.** In the desktop app's `widget` seat the pane draws the title, the FPY figure and its sparkline,
+  with no controls.
+- **Limits.** An SVG source is capped at 131,072 characters: over it a sparkline drops its tooltips, then its
+  marks. If the view model cannot be built the hook logs why and draws the terminal's rows; if those cannot be
+  built either it draws one line (`Could not draw the usage view: …`). The pane is never left empty.
+
 **Failure.** The command fails open like the rest of the mod: a hook error, a script that fails or times out,
 or unreadable output answers one short line (`Could not read the usage data: …`; the engine shows it under the
 plugin's name) and never throws to the engine. `report` that fails or takes more than 60 seconds answers

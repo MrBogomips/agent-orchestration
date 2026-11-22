@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { words, jaccard, isSimilar, parseTag, mentionsFile } from './text.mjs';
+import { words, jaccard, isSimilar, parseTag, mentionsFile, errorText } from './text.mjs';
 
 test('words lowercases, drops stop words, punctuation and the class tag', () => {
   assert.deepEqual(words('[mr:read-search] Find THE config files, for the router!'), ['find', 'config', 'files', 'router']);
@@ -48,4 +48,11 @@ test('mentionsFile finds a written file by its path or its base name', () => {
   assert.equal(mentionsFile('look at /repo/src/auth.ts', ['/repo/src/auth.ts']), true);
   assert.equal(mentionsFile('thanks', ['/repo/src/auth.ts']), false);
   assert.equal(mentionsFile('authentication', ['/repo/src/auth.ts']), false);
+});
+
+test('errorText is the message of an error, or the value as text, cut to 200 characters', () => {
+  assert.equal(errorText(new Error('no node')), 'no node');
+  assert.equal(errorText('plain'), 'plain');
+  assert.equal(errorText(undefined), 'undefined');
+  assert.equal(errorText(new Error('x'.repeat(500))).length, 200);
 });

@@ -3,6 +3,17 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.12
+
+2026-11-22 · pull request #78
+
+### Changed
+
+- `/model-router` draws its usage view natively in the Claude desktop app (and in VS Code and the mobile apps):
+  a segmented header, four KPI cards with SVG sparklines and status chips, bars for models and classes, chips for
+  routing decisions, and one sample-size notice instead of "weak" on every tile. The terminal view is unchanged.
+  The text-art tiles and columns it drew there before broke in the app's proportional font.
+
 ## session-hub 0.4.1
 
 2026-11-22 · pull request #77

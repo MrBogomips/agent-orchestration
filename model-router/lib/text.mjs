@@ -63,3 +63,8 @@ export function mentionsFile(text, files) {
     return new RegExp(`(^|[^a-z0-9_.-])${escaped}($|[^a-z0-9_-])`).test(lower);
   });
 }
+
+/** What went wrong, for one line of a log or a view: an error's message, or the value as text, at most 200 characters. */
+export function errorText(err) {
+  return String(err?.message ?? err).slice(0, 200);
+}

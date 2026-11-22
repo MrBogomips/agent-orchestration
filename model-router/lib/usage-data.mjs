@@ -192,7 +192,7 @@ export const SERIES = Object.freeze({
 });
 
 /**
- * First-pass yield and cost per successful task in equal buckets across the window, oldest first, each null when
+ * First-pass yield, rework rate and cost per successful task in equal buckets across the window, oldest first, each null when
  * no task closed in it. `all` is cut into the last 12 weeks.
  */
 export function seriesOf(outcomes, window, now) {
@@ -207,7 +207,7 @@ export function seriesOf(outcomes, window, now) {
   const points = groups.map((g) => {
     if (!g.length) return null;
     const m = metrics(tally(g, () => 'all').all);
-    return { n: m.n, fpy: m.fpy, costPerSuccess: m.costPerSuccess };
+    return { n: m.n, fpy: m.fpy, reworkRate: m.reworkRate, costPerSuccess: m.costPerSuccess };
   });
   return { unit: spec.unit, points };
 }
