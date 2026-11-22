@@ -35,6 +35,11 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
   past which the Claude desktop app shows an empty pane. A record with many children is drawn in brief in the log
   pane, each child as one line with the latest events, then its first sixty children with the rest counted; the
   children panel draws as many rows as fit and counts the others. Each says that the file has everything.
+- The start line of a child started in the Claude desktop app shows again. The app draws its `start_session` call
+  as a session card of its own, not as a tool row, so the line drawn under that row since 0.4.1 was never seen.
+  The line is now a notice in the transcript, written when the start has succeeded: `🔀 sonnet · medium →
+  t-1-product-test`, in words, one per child. A start made with a launch command keeps its line under the `Bash`
+  row.
 
 ## model-router 0.3.14
 

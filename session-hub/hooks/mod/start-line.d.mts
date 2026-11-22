@@ -8,6 +8,8 @@ export function startLineSegments(start: ChildStart): Segment[]
 
 export function startLineText(start: ChildStart): string
 
+export function startLogText(start: ChildStart): string
+
 export function isSessionStartTool(tool: unknown): boolean
 
 export function toolStarts(tool: string, input: unknown): ChildStart[]

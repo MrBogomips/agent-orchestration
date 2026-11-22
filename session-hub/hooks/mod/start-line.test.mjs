@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { childStarts, isSessionStartTool, startLineSegments, startLineText, toolStarts } from './start-line.mjs';
+import { childStarts, isSessionStartTool, startLineSegments, startLineText, startLogText, toolStarts } from './start-line.mjs';
 
 const ENV = 'SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub SESSION_HUB_SCOPE_ROOT=/h/product SESSION_HUB_HANDOFF=/h/t.md ' +
   'SESSION_HUB_REGISTRY=/r.json SESSION_HUB_GUARDS=on';
@@ -84,4 +84,13 @@ test('no desktop line for another tool, a start with neither model nor effort, o
   assert.deepEqual(toolStarts('mcp__ccd_session__start_session', { name: 'a' }), []);
   assert.deepEqual(toolStarts('mcp__ccd_session__start_session', null), []);
   assert.deepEqual(toolStarts('mcp__ccd_session__start_session', { name: 'a', model: 42 }), []);
+});
+
+test('the transcript notice of a start is words only: the model, the effort and the child', () => {
+  assert.equal(startLogText({ name: 't-1-product-test', model: 'claude-sonnet-5-5', effort: 'medium' }), '🔀 sonnet · medium → t-1-product-test');
+  assert.equal(startLogText({ name: 'c', model: 'claude-opus-5-5', effort: 'max' }), '🔀 opus · xhigh → c');
+  assert.equal(startLogText({ name: 'review-seed', model: 'claude-sonnet-5-5' }), '🔀 sonnet · default effort → review-seed');
+  assert.equal(startLogText({ name: 'c', effort: 'high' }), '🔀 default model · high → c');
+  assert.equal(startLogText({ name: 'c', model: 'gpt-x', effort: 'odd' }), '🔀 gpt-x · default effort → c');
+  for (const start of [{ name: 'c', model: 'opus', effort: 'low' }, { name: 'c', model: 'haiku' }]) assert.ok(!/[▰▱]/.test(startLogText(start)));
 });

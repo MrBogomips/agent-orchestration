@@ -707,24 +707,50 @@ const startRow = (id: string) => ({
   props: { tool_use_id: id, tool: START_SESSION, input: startInput, isRunning: false, isErrored: false, isInterrupted: false },
 }) as const
 
-test("a child started with the desktop app's session tool gets the start line under that tool's row", async ($, on) => {
+test("a child started with the desktop app's session tool gets its start line as a notice in the transcript", async ($, on) => {
+  const logs: string[] = []
   engine(on, {}, '/hub')
+  on('ui.log', (_, e, next) => (logs.push(String((e as { text?: unknown }).text ?? '')), next(e)))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu4' } as never)
+  await $.tool.call({ tool: START_SESSION, name: 't-1-product-test', model: 'claude-sonnet-5-5', effort: 'medium', prompt: 'x', tool_use_id: 'tu6' } as never)
+  expect(logs).toEqual(['🔀 sonnet · default effort → review-seed', '🔀 sonnet · medium → t-1-product-test'])
+})
+
+test('the row of the session tool is left as the host draws it: the line is not written twice', async ($, on) => {
+  engine(on, {}, '/hub')
+  on('ui.log', (_, e, next) => next(e))
   on('tool.call', () => ({ result: {} }))
   await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu4' } as never)
   for (const surface of ['desktop', 'terminal'] as const) {
     const ui = await $.ui.mount({ ...startRow('tu4'), surface } as never)
-    expect((await ui.find({ type: 'Text', text: /^ {2}⎿ {2}🔀 / }))?.text).toBe('  ⎿  🔀 sonnet ▱▱▱▱ default -> review-seed')
-    const drawn = JSON.stringify(await ui.drawn())
-    expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
-    expect(drawn).toContain('"color":"#7dd3fc"')
+    expect(await ui.find({ type: 'Text', text: /🔀/ })).toBeUndefined()
+    expect(JSON.stringify(await ui.drawn())).toMatch(/^\{"type":"engine","ref":\d+\}$/)
     await ui.unmount()
   }
 })
 
-test('a desktop session start in a child session draws only its row', async ($, on) => {
+test('a session start that was denied or failed, or that states no model and no effort, writes no line', async ($, on) => {
+  const logs: string[] = []
+  let answer: Record<string, unknown> = { deny: 'not allowed' }
+  engine(on, {}, '/hub')
+  on('ui.log', (_, e, next) => (logs.push(String((e as { text?: unknown }).text ?? '')), next(e)))
+  on('tool.call', () => answer as never)
+  await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu7' } as never)
+  answer = { result: {}, isError: true }
+  await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu8' } as never)
+  answer = { result: {} }
+  await $.tool.call({ tool: START_SESSION, name: 'plain', prompt: 'x', tool_use_id: 'tu9' } as never)
+  expect(logs).toEqual([])
+})
+
+test('a desktop session start in a child session writes no line and draws only its row', async ($, on) => {
+  const logs: string[] = []
   engine(on, CHILD_ENV)
+  on('ui.log', (_, e, next) => (logs.push(String((e as { text?: unknown }).text ?? '')), next(e)))
   on('tool.call', () => ({ result: {} }))
   await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu5' } as never)
   const ui = await $.ui.mount({ ...startRow('tu5'), surface: 'desktop' } as never)
   expect(await ui.find({ type: 'Text', text: /🔀/ })).toBeUndefined()
+  expect(logs.filter((l) => l.includes('🔀'))).toEqual([])
 })
