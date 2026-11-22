@@ -120,7 +120,8 @@ export function heatmapSvg({ weeks, months = [], less = 'Less', more = 'More' })
     });
   });
   const bottom = top + 7 * step + 14;
-  let x = CARD_WIDTH - 44;
+  // Room for the "more" word: about 0.6 em per character at the label size, plus a gap.
+  let x = CARD_WIDTH - Math.ceil(String(more).length * 7.5) - 8;
   body += label(CARD_WIDTH, bottom + 9, more, 'end');
   for (let level = 4; level >= 0; level -= 1) {
     x -= 14;
