@@ -274,7 +274,7 @@ failure) of the window; at the project level they count the project's tasks and 
 | `p` | Level: the user's data or this project's |
 | `o` | Open the report: the HTML page in the terminal (`scripts/report.mjs`), the report pane on a graphical surface; where it opened is written as a line in the session (*Opening the report*) |
 | `r` | Refresh: run compaction and read again |
-| `l` | Open the event log in the system's default app; its path is written as a line in the session (*Opening the log*) |
+| `l` | Open the event log: the file in the system's default app in the terminal (*Opening the log*), the log dashboard on a graphical surface (*The log dashboard*) |
 | Page Up, Page Down, wheel | Scroll the content |
 | Esc | Close |
 
@@ -395,8 +395,9 @@ plugin's name) and never throws to the engine. `report` that fails or takes more
 refresh the earlier rows stay, with a warning under them. A second `r` while a read runs is ignored.
 
 **Opening the log.** Every pane offers its plugin's own log (`ui-design.md`); model-router's is the event log,
-`<config dir>/model-router/events.jsonl`. The `l` key, the Log button and `/model-router log` do the same thing,
-decided in `lib/open-log.mjs`:
+`<config dir>/model-router/events.jsonl`. In a terminal, and in a headless run, the `l` key and `/model-router log`
+open the file; on a graphical host they and the Log button open *The log dashboard*, below, whose *Open file*
+button does what follows. It is decided in `lib/open-log.mjs`:
 
 - The API has no call that opens a file, and a `Link` opens what the surface chooses (on a remote surface only
   `https:`), so the mod runs the system's opener with `$.process.run`, the path as one argument and no shell:
@@ -414,6 +415,37 @@ decided in `lib/open-log.mjs`:
 
 Only these two paths are ever passed to an opener. `/model-router log` used to be an alias of
 `/model-router decisions`; from 0.3.13 it opens the log.
+
+**The log dashboard.** On a graphical host (`hostKind`, above) the log is a third pane, `model-router-log`
+(`$.ui.open({ id, title: 'model-router log', focus: true })`), a pane like the report's and kept the same way when
+the app has not attached yet. `ui-design.md` asks for it: a rich view is a mod pane, and a JSON log is a dashboard.
+
+- **A bounded read.** `scripts/log.mjs --window <w> --type <t> --page <n>` makes one pass over the log with
+  `scanLog`, archive included, and holds nothing of it itself: every record goes to the collector of
+  `lib/log-data.mjs`, which counts the records of the window by type, the matching ones by day, and keeps the newest
+  1,000 matching records, each cut to the fields of its type (`slimRecord`). It prints one page of twenty, newest
+  first, with the counts, the page count and whether older matching records exist beyond the 1,000. Memory and
+  output are the same for a log of any length; the pass itself is read-only and takes at most 20 seconds. A prompt's
+  text and a task's description are not among the kept fields, so they never reach the pane.
+- **What it shows** (`logView` of `lib/log-cards.mjs`, drawn by `hooks/log-desktop.tsx`): the title and
+  `<n> records · <window> · archive included`; the windows 24h, 7d, 30d and all as native Buttons; *Records by
+  type*, a row per type with a Button that filters on it, a share bar and the count (`all` first); *By day (UTC)*,
+  an SVG column chart of the matching records over the window's days (the last thirty for `all`), with a tooltip
+  per day; *Latest records*, a table of when (UTC), type, the first eight characters of the session, a chip (a
+  decision's action, an outcome's result, a signal's kind) and the type's fields (a decision's models, subagent
+  type and reason; a spawn's type, class, model and route; an outcome's class, tier, cost and why; a report's
+  status, model, tokens and cost; a signal's file); the page and *Newer* and *Older* Buttons, each drawn only where
+  there is a page; then the log's path and size, the archive's file count, size and newest names, and when the log
+  was read.
+- **Controls.** A window or a type reads again from the newest page; *Refresh* (`refresh`, `r`) reads the same
+  query again; *Open file* (`file`, `o`) opens the log as in the terminal and writes its line. The query (window,
+  type, page) and the data are kept in `$.state` (`log`). The app owns focus and scrolling.
+- **Failure.** A log that cannot be read is one line in place of the dashboard; a view or a tree that cannot be
+  built leaves one line and the file button; a terminal that draws this pane gets one line and the file button.
+  The answer of the command is `Event log opened beside the chat.`
+
+The glue is `hooks/log-pane.tsx`; its `ui.render` hook is added in `hooks/model-router.tsx`, since a hook is added
+only by `on(...)` in the hooks module itself and `$` is not handed to a function held in a value.
 
 **Opening the report.** `/model-router report`, the `o` key and the Report button show the report where the
 session is shown (`showReport`; `hostKind` of `lib/open-report.mjs`, above):
@@ -455,7 +487,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.2 | The mod, the decision log, the command, the options; the quality loop measuring only, and `report`. |
 | 0.3 | The usage view: `/model-router` as a tabbed dialog with a text fallback, numbers shared with the report page. From 0.3.4, the 🔀 identity and the coloured choose-model line under `Agent` rows. |
 | 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. The report page is redrawn after `ui-design.md`. |
-| 0.3.14 | The report as a native pane on graphical surfaces; the usage pane kept open in a session whose app has not attached yet. |
+| 0.3.14 | The report and the event log as native panes on graphical surfaces; the usage pane kept open in a session whose app has not attached yet. |
 | 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
 
 ## Open points

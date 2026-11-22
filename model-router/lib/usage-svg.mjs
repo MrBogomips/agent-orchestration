@@ -148,3 +148,37 @@ export function barSvg(share, { width, height, color } = {}) {
   const bar = filled > 0 ? `<rect width="${filled}" height="${h}" rx="${Math.min(r, filled / 2)}" fill="${fill}"/>` : '';
   return `${open(w, h)}${track}${bar}</svg>`;
 }
+
+/** The size a column chart is drawn at when none is asked for, in CSS pixels. */
+export const COLUMNS_SIZE = Object.freeze({ width: 320, height: 72 });
+
+/**
+ * A column chart of `values` (counts, oldest first): one column per value on a faint baseline, scaled from zero
+ * to the highest. A value above zero is at least two pixels tall; zero, or no number, draws no column. `labels`
+ * gives one tooltip per value. Over SVG_MAX characters the tooltips go first, then the columns.
+ */
+export function columnsSvg(values, { width, height, color, labels = [] } = {}) {
+  const w = size(width, COLUMNS_SIZE.width);
+  const h = size(height, COLUMNS_SIZE.height);
+  const fill = colour(color, COLORS.line);
+  const list = Array.isArray(values) ? values : [];
+  const base = h - PAD;
+  const frame = `${open(w, h)}<line class="base" x1="${PAD}" y1="${base}" x2="${w - PAD}" y2="${base}" stroke="${COLORS.dim}" stroke-opacity="0.35" stroke-width="1"/>`;
+  const bare = `${frame}</svg>`;
+  const top = Math.max(0, ...list.filter(isNum));
+  if (!list.length || top <= 0) return bare;
+  const step = (w - 2 * PAD) / list.length;
+  const column = Math.max(1, Math.min(24, step * 0.7));
+  const marks = list.map((v, i) => {
+    if (!isNum(v) || v <= 0) return '';
+    const tall = round(Math.max(2, (v / top) * (h - 2 * PAD)));
+    return `<rect class="col" x="${round(PAD + i * step + (step - column) / 2)}" y="${round(base - tall)}" width="${round(column)}" height="${tall}" rx="1.5" fill="${fill}"/>`;
+  }).join('');
+  const titles = (Array.isArray(labels) ? labels : []).slice(0, list.length).map((label, i) => (typeof label === 'string' && label
+    ? `<rect x="${round(PAD + i * step)}" y="0" width="${round(step)}" height="${h}" fill="#000000" fill-opacity="0"><title>${escapeXml(label)}</title></rect>`
+    : '')).join('');
+  const full = `${frame}${marks}${titles}</svg>`;
+  if (full.length <= SVG_MAX) return full;
+  const plain = `${frame}${marks}</svg>`;
+  return plain.length <= SVG_MAX ? plain : bare;
+}

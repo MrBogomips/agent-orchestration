@@ -13,11 +13,14 @@ import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky
 import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
+import { LOG_PANE } from '../lib/log-cards.mjs'
 import { failText, logPaths, openPlan, openerArgv, whyNot } from '../lib/open-log.mjs'
 import { REPORT_PANE, REPORT_PANE_TITLE, hostKind, isGraphical as isGraphicalSurface, reportLine } from '../lib/open-report.mjs'
 import { promptGate } from '../lib/prompt-gate.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, helpText, parseArgs, textView } from '../lib/usage-view.mjs'
 import { isArrowScroll, ringTarget, stepWindow, tabKey, tabOfKey } from '../lib/usage-nav.mjs'
+import { renderLogPane, showLogPane } from './log-pane'
+import type { LogDeps } from './log-pane'
 import { drawReportPane } from './report-desktop'
 import { drawUsagePane } from './usage-pane'
 
@@ -354,6 +357,24 @@ async function showReport($: any, ctx: Ctx, onGraphical = false): Promise<string
   return reportLine('pane')
 }
 
+/** What the log pane needs for one event: the config folder and the action that opens the log file. */
+async function logDepsOf($: any, ctx: Ctx): Promise<LogDeps> {
+  return { configDir: await configDirOf($, ctx), openFile: () => openLog($, ctx) }
+}
+
+/**
+ * Shows the log: a dashboard pane on a graphical host (`onGraphical`: the press came from a graphical drawing),
+ * the file in the system's default app anywhere else. Never throws.
+ */
+async function showLog($: any, ctx: Ctx, onGraphical = false): Promise<string> {
+  if (!onGraphical && (await hostOf($)) !== 'graphical') return openLog($, ctx)
+  try {
+    return await showLogPane($, await logDepsOf($, ctx))
+  } catch (err) {
+    return `Could not open the event log pane: ${errorText(err)}`
+  }
+}
+
 const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
 // A one-line answer to the person carries the identity, after the plugin name the engine puts first: `🔀 …`.
 const say = (text: string) => display(`${ROUTE_ICON} ${text}`)
@@ -506,6 +527,9 @@ export const register: Register = (on, options) => {
     return started
   })
 
+  // The log dashboard (hooks/log-pane.tsx, drawn by hooks/log-desktop.tsx).
+  on('ui.render', { component: 'Pane', requestId: LOG_PANE }, async ($, e) => renderLogPane($, e, await logDepsOf($, ctx)))
+
   on('command.run', { command: 'model-router' }, async ($, e) => {
     const asked = parseArgs(e.args)
     if (asked.kind === 'toggle') {
@@ -521,7 +545,7 @@ export const register: Register = (on, options) => {
         return say(`Could not write the report: ${errorText(err)}`)
       }
     }
-    if (asked.kind === 'log') return say(await openLog($, ctx))
+    if (asked.kind === 'log') return say(await showLog($, ctx))
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
   }).catch(($, e, next) => ({ text: `${ROUTE_ICON} Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
 
@@ -583,7 +607,7 @@ export const register: Register = (on, options) => {
       setWindow: (window) => setView({ window }),
       setLevel: (level) => setView({ level }),
       refresh: () => refreshUsage($, ctx),
-      openLog: async () => $.ui.log(`${ROUTE_ICON} ${await openLog($, ctx)}`),
+      openLog: async () => $.ui.log(`${ROUTE_ICON} ${await showLog($, ctx, isGraphicalSurface(e.surface))}`),
       report: async () => {
         try {
           $.ui.log(`${ROUTE_ICON} ${await showReport($, ctx, isGraphicalSurface(e.surface))}`)

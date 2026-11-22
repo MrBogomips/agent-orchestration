@@ -131,3 +131,18 @@ test('the default sizes are exported for the layout', () => {
 test('an unknown share draws the track alone', () => {
   for (const share of [null, undefined, Number.NaN, 0]) assert.equal(count(barSvg(share), '<rect'), 1);
 });
+
+test('a column chart draws one column per count above zero, the tallest at full height', async () => {
+  const { COLUMNS_SIZE, columnsSvg } = await import('./usage-svg.mjs');
+  const svg = columnsSvg([0, 2, 4, null, 1], { width: 108, height: 48, labels: ['a', 'b <i>', 'c'] });
+  assert.equal(svg.match(/<rect class="col"/g).length, 3);
+  assert.match(svg, /height="40"/);
+  assert.match(svg, /<title>b &lt;i&gt;<\/title>/);
+  assert.equal(svg.match(/<title>/g).length, 3);
+  assert.ok(!svg.includes('<i>'));
+  for (const empty of [[], [0, 0], [null], 'x', undefined]) assert.ok(!columnsSvg(empty).includes('class="col"'));
+  assert.match(columnsSvg([1]), new RegExp(`width="${COLUMNS_SIZE.width}" height="${COLUMNS_SIZE.height}"`));
+  assert.match(columnsSvg([1000, 1]), /height="2"/, 'a small count is still visible');
+  const many = columnsSvg(Array.from({ length: 4000 }, () => 1), { labels: Array.from({ length: 4000 }, () => 'x'.repeat(40)) });
+  assert.ok(many.length <= SVG_MAX);
+});

@@ -33,6 +33,8 @@ Each surface gets a rendering made for it. A graphical surface never gets the te
   dots, padded columns. Columns are measured with `lib/width.mjs`, which counts wide characters and emoji as two.
 - Keys are the interface: the footer lists them, and the focus ring and scroll handling may be shaped to the view.
 - Golden files fix the output of a terminal view; a change to it updates them on purpose.
+- A log, a record or a report opens as the thing itself: the file in the system's default app, the HTML page in the
+  default browser. A pane offers them as keys.
 
 ## Graphical surfaces: the Claude desktop app's design system
 
@@ -79,7 +81,16 @@ Each surface gets a rendering made for it. A graphical surface never gets the te
 - The app owns focus, Tab and scrolling. The terminal's key handling (`ui.focus`, `ui.press`, `ui.scroll`) stands
   aside on a graphical surface and passes the event on.
 - Letter hotkeys may stay as accelerators; the footer shows no key hints.
-- Every pane offers its plugin's own log: a button that opens it in the system's default app.
+- Every pane offers its plugin's own log: a button that opens it.
+- **Rich views are mod panes.** On a graphical surface nothing a plugin shows opens in another app or in a web page
+  by default: a report, a log, a record is a pane of the mod, drawn with native elements in the app's theme, beside
+  the chat. Opening the file or the page outside the app is an explicit, secondary button of that pane (*Open
+  file*, *Open as page*), never what a primary action does.
+- **A JSON log is a log dashboard.** A log or a record kept as JSON is not shown raw: its pane counts the records by
+  kind and over time (bars as `Svg`), offers the window and the kind as buttons, and lists the latest records in a
+  table with the fields that matter for each kind, in pages. It names the file, its size and its archive. It reads
+  a bounded part: a pass that counts everything and holds only the newest records it can page through, cut to the
+  fields it shows; a field that may hold a person's words (a prompt, a task description) is not shown.
 - A pane opened before the app has attached its surface is kept, not replaced by text: `$.ui.open` answers
   `isPlaced: false` there, the app attaches at its first draw and the pane is drawn then. The command answers one
   short line. Text in place of a pane is for a terminal too narrow for it and for a run that draws nowhere (`-p`).

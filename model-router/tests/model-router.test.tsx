@@ -1,7 +1,8 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { STATUS, reportData, usageData } from '../lib/usage-fixture.mjs'
+import { logCollector } from '../lib/log-data.mjs'
+import { STATUS, T0, events, reportData, usageData } from '../lib/usage-fixture.mjs'
 
 // A grid with what the mod reads: tiers for the judge prompt, effort questions, classes, the judge mapping.
 const GRID = {
@@ -32,9 +33,18 @@ const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confiden
 
 type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean; surfaces?: string[]; env?: Record<string, string>; reportData?: Run }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean; surfaces?: string[]; env?: Record<string, string>; reportData?: Run; logData?: Run; logRecords?: Record<string, unknown>[] }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
+
+/** What scripts/log.mjs prints for its arguments, from the fixture's records (or the test's own). */
+function logOutput(argv: readonly string[], records: Record<string, unknown>[] = events()): Run {
+  const arg = (name: string) => argv[argv.indexOf(name) + 1]
+  const collector = logCollector({ query: { window: arg('--window'), type: arg('--type'), page: Number(arg('--page')) }, now: T0 })
+  for (const r of records) collector.add(r)
+  const files = { log: { path: '/home/u/.claude/model-router/events.jsonl', bytes: 48200 }, archive: { path: '/home/u/.claude/model-router/archive', count: 1, bytes: 9100, files: [{ name: 'outcomes.jsonl', bytes: 9100 }] } }
+  return { exitCode: 0, stdout: JSON.stringify({ version: 1, generatedAt: new Date(T0).toISOString(), files, ...collector.result() }) }
+}
 
 function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, text: FAST_ANSWER, usage: {} } }), answers: Answers = {}): World {
   const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [], logs: [], debug: [] }
@@ -88,6 +98,8 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     const script = String(e.argv[1] ?? '')
     const answer = script.endsWith('usage.mjs')
       ? answers.usage ?? USAGE
+      : script.endsWith('log.mjs')
+        ? answers.logData ?? logOutput(e.argv, answers.logRecords)
       : script.endsWith('report.mjs') && e.argv.includes('--json')
         ? answers.reportData ?? { exitCode: 0, stdout: JSON.stringify(reportData()) }
       : script.endsWith('report.mjs')
@@ -963,7 +975,7 @@ describe('a session whose app has not attached its surface yet', () => {
   })
 })
 
-describe('opening the event log', () => {
+describe('the event log in the terminal', () => {
   test('in the terminal the l key opens the log and logs its path; the footer lists the key', async ($, on) => {
     const w = world(on, undefined, { files: { [LOG_FILE]: '' } })
     await run($, '')
@@ -975,22 +987,6 @@ describe('opening the event log', () => {
     expect(openRuns(w)).toEqual([['open', LOG_FILE]])
     expect(w.logs).toContain(`🔀 Event log opened: ${LOG_FILE}`)
     await ui.unmount()
-  })
-
-  test('on a graphical surface a native button beside Report and Refresh opens it', async ($, on) => {
-    const w = world(on, undefined, { files: { [LOG_FILE]: '', [ARCHIVE_DIR]: '' }, info: { platform: 'linux', isHosted: false } })
-    await run($, '')
-    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
-      const ui = await $.ui.mount({ ...PANE, surface })
-      const button = JSON.stringify(await ui.find({ type: 'Button', key: 'log' }))
-      expect(button).toContain('"label":"Log"')
-      expect(button).toContain('"variant":"secondary"')
-      expect(button.includes('"plain":true')).toBe(false)
-      await ui.press({ key: 'log' })
-      await ui.unmount()
-    }
-    expect(openRuns(w)).toEqual([['xdg-open', LOG_FILE], ['xdg-open', LOG_FILE], ['xdg-open', LOG_FILE]])
-    expect(w.logs).toContain(`🔀 Event log opened: ${LOG_FILE} · rotated logs: ${ARCHIVE_DIR}`)
   })
 
   test('/model-router log opens it and answers its path, for the person only', async ($, on) => {
@@ -1017,13 +1013,11 @@ describe('opening the event log', () => {
   test('a failed open is one line in the transcript and the pane stays drawn', async ($, on) => {
     const w = world(on, undefined, { files: { [LOG_FILE]: '' }, open: { exitCode: 1, stdout: '', stderr: 'No application knows how to open it.\nSecond line' } })
     await run($, '')
-    for (const surface of ['terminal', 'desktop'] as const) {
-      const ui = await $.ui.mount({ ...PANE, surface })
-      await ui.press({ key: 'log' })
-      expect(await ui.find({ type: 'Button', key: 'log' })).toBeDefined()
-      await ui.unmount()
-    }
-    expect(w.logs.filter((l) => l.includes('Could not open'))).toEqual(Array(2).fill(`🔀 Could not open ${LOG_FILE}: No application knows how to open it.`))
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await ui.press({ key: 'log' })
+    expect(await ui.find({ type: 'Button', key: 'log' })).toBeDefined()
+    await ui.unmount()
+    expect(w.logs.filter((l) => l.includes('Could not open'))).toEqual([`🔀 Could not open ${LOG_FILE}: No application knows how to open it.`])
   })
 
   test('an opener that cannot start answers one line and never throws', async ($, on) => {
@@ -1036,6 +1030,156 @@ describe('opening the event log', () => {
     const w = world(on, undefined, { files: { [LOG_FILE]: '' }, infoFails: true })
     expect((await run($, 'log')).text).toBe(`🔀 The event log is at ${LOG_FILE} (not opened: no opener known for this system)`)
     expect(openRuns(w)).toEqual([])
+  })
+})
+
+const LOG_PANE = {
+  plugin: 'model-router',
+  component: 'Pane',
+  requestId: 'model-router-log',
+  props: { title: 'model-router log', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
+} as const
+const logRuns = (w: World) => w.runs.filter((r) => String(r.argv[1]).endsWith('log.mjs')).map((r) => r.argv.slice(2))
+const MANY = Array.from({ length: 45 }, (_, i) => ({ v: 1, type: 'signal', kind: 'write', ts: new Date(T0 - i * 60000).toISOString(), session: 'sess-many', file: `/repo/f${i}.ts` }))
+
+describe('the log dashboard on graphical surfaces', () => {
+  const DESKTOP: Answers = { surfaces: ['desktop'], files: { [LOG_FILE]: '' } }
+  const keysOf = async (ui: any) => (await ui.findAll({ type: 'Button' })).map((b: any) => b.key)
+
+  test('/model-router log opens the log pane and reads the log once, bounded; no file is opened', async ($, on) => {
+    const w = world(on, undefined, DESKTOP)
+    const out = await run($, 'log')
+    expect(out.text).toBe('🔀 Event log opened beside the chat.')
+    expect(out.isTextDisplayOnly).toBe(true)
+    expect(w.opens).toEqual([{ id: 'model-router-log', title: 'model-router log', focus: true }])
+    expect(logRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--window', '7d', '--type', 'all', '--page', '0']])
+    expect(openRuns(w)).toEqual([])
+  })
+
+  test('the pane draws the dashboard natively: counts by type, a chart by day, the latest records and the files', async ($, on) => {
+    const w = world(on, undefined, DESKTOP)
+    await run($, 'log')
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+      const ui = await $.ui.mount({ ...LOG_PANE, surface })
+      expect(await ui.find({ type: 'Text', text: /records · last 7 days · archive included$/ })).toBeDefined()
+      for (const text of ['Records by type', 'By day (UTC)', 'Latest records', 'when (UTC)']) expect(await ui.find({ type: 'Text', text })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: '/home/u/.claude/model-router/events.jsonl · 48.2 kB' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'Archive: 1 file · 9.1 kB · outcomes.jsonl (9.1 kB)' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'Page 1 of 1 · newest first' })).toBeDefined()
+      const keys = await keysOf(ui)
+      expect(keys.slice(0, 5)).toEqual(['window-24h', 'window-7d', 'window-30d', 'window-all', 'type-all'])
+      expect(keys.includes('type-decision') && keys.includes('type-outcome')).toBe(true)
+      expect(keys.slice(-2)).toEqual(['file', 'refresh'])
+      const drawn = JSON.stringify(await ui.drawn())
+      expect(drawn).toContain('opus → haiku·low')
+      expect(drawn).toContain('<rect class=\\"col\\"')
+      expect(drawn.match(/"variant":"primary"/g)?.length).toBe(2)
+      expect(/[╭╰│▁▂▃▄▅▆▇█░]/.test(drawn)).toBe(false)
+      expect(drawn.includes('"plain":true')).toBe(false)
+      await ui.unmount()
+    }
+    expect(w.debug.filter((l) => l.includes('log pane'))).toEqual([])
+  })
+
+  test('the type and the window buttons read the log again from the newest page', async ($, on) => {
+    const w = world(on, undefined, DESKTOP)
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+    await ui.press({ key: 'type-decision' })
+    expect(logRuns(w).at(-1)).toEqual(['--config-dir', '/home/u/.claude', '--window', '7d', '--type', 'decision', '--page', '0'])
+    expect(await ui.find({ type: 'Text', text: /decision records? of \d+ · last 7 days/ })).toBeDefined()
+    await ui.press({ key: 'window-all' })
+    expect(logRuns(w).at(-1)).toEqual(['--config-dir', '/home/u/.claude', '--window', 'all', '--type', 'decision', '--page', '0'])
+    await ui.press({ key: 'refresh' })
+    expect(logRuns(w).length).toBe(4)
+    await ui.unmount()
+  })
+
+  test('Older and Newer page through the records, each button only where there is a page', async ($, on) => {
+    const w = world(on, undefined, { ...DESKTOP, logRecords: MANY })
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: 'Page 1 of 3 · newest first' })).toBeDefined()
+    expect((await keysOf(ui)).includes('newer')).toBe(false)
+    await ui.press({ key: 'older' })
+    expect(logRuns(w).at(-1)?.slice(-2)).toEqual(['--page', '1'])
+    expect(await ui.find({ type: 'Text', text: 'Page 2 of 3 · newest first' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '/repo/f20.ts' })).toBeDefined()
+    await ui.press({ key: 'older' })
+    expect((await keysOf(ui)).includes('older')).toBe(false)
+    await ui.press({ key: 'newer' })
+    expect(await ui.find({ type: 'Text', text: 'Page 2 of 3 · newest first' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the Log button of the usage pane opens the dashboard, not the file', async ($, on) => {
+    const w = world(on, undefined, { files: { [LOG_FILE]: '' } })
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    const button = JSON.stringify(await ui.find({ type: 'Button', key: 'log' }))
+    expect(button).toContain('"label":"Log"')
+    expect(button).toContain('"variant":"secondary"')
+    await ui.press({ key: 'log' })
+    await ui.unmount()
+    expect(w.opens.map((o) => o.id)).toEqual(['model-router-usage', 'model-router-log'])
+    expect(w.logs).toContain('🔀 Event log opened beside the chat.')
+    expect(openRuns(w)).toEqual([])
+  })
+
+  test('Open file is the way out: it opens the log in the default app and writes one line', async ($, on) => {
+    const w = world(on, undefined, { ...DESKTOP, files: { [LOG_FILE]: '', [ARCHIVE_DIR]: '' }, info: { platform: 'linux', isHosted: false } })
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+    const button = JSON.stringify(await ui.find({ type: 'Button', key: 'file' }))
+    expect(button).toContain('"label":"Open file"')
+    expect(button).toContain('"variant":"secondary"')
+    await ui.press({ key: 'file' })
+    expect(openRuns(w)).toEqual([['xdg-open', LOG_FILE]])
+    expect(w.logs).toContain(`🔀 Event log opened: ${LOG_FILE} · rotated logs: ${ARCHIVE_DIR}`)
+    await ui.unmount()
+  })
+
+  test('a file that cannot be opened is one line, and the dashboard stays drawn', async ($, on) => {
+    const w = world(on, undefined, { ...DESKTOP, open: { exitCode: 1, stdout: '', stderr: 'No application knows how to open it.\nSecond line' } })
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+    await ui.press({ key: 'file' })
+    expect(w.logs).toContain(`🔀 Could not open ${LOG_FILE}: No application knows how to open it.`)
+    expect(await ui.find({ type: 'Text', text: 'Latest records' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a log that cannot be read is one line in the pane, with its buttons', async ($, on) => {
+    world(on, undefined, { ...DESKTOP, logData: { exitCode: 1, stdout: '', stderr: 'permission denied' } })
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: /Could not read the log: permission denied/ })).toBeDefined()
+    expect(await keysOf(ui)).toEqual(['file', 'refresh'])
+    await ui.unmount()
+  })
+
+  test('an empty log says what will appear', async ($, on) => {
+    world(on, undefined, { ...DESKTOP, logRecords: [] })
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+    expect((await ui.findAll({ type: 'Text', text: /^No record \(last 7 days\)\. Records appear here/ })).length).toBeGreaterThan(0)
+    await ui.unmount()
+  })
+
+  test('in a session whose app has not attached yet the pane is kept open', async ($, on) => {
+    const w = world(on, undefined, { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' } })
+    expect((await run($, 'log')).text).toBe('🔀 Event log opened beside the chat.')
+    expect(w.opens.map((o) => o.id)).toEqual(['model-router-log'])
+    expect(w.closes).toEqual([])
+  })
+
+  test('a terminal attached beside the app is told that the log is a file there', async ($, on) => {
+    world(on, undefined, DESKTOP)
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
+    expect(await keysOf(ui)).toEqual(['file'])
+    await ui.unmount()
   })
 })
 
