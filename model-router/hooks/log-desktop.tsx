@@ -57,7 +57,7 @@ function chart(els: GraphicalElements, view: LogView) {
   const { Box } = els
   const k = kit(els)
   const c = view.chart
-  if (!c) return k.card('By day (UTC)', k.empty(view.empty ?? 'No record to chart.'))
+  if (!c) return k.card(view.chartTitle, k.empty(view.empty ?? 'No record to chart.'))
   return k.card(c.title, [k.picture(c.picture), <Box flexDirection="row" justifyContent="space-between">{k.caption(c.first)}{k.caption(c.last)}</Box>])
 }
 

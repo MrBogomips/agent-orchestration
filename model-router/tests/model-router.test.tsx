@@ -1167,7 +1167,7 @@ describe('the log dashboard on graphical surfaces', () => {
     await ui.press({ key: 'older' })
     expect(logRuns(w).at(-1)?.slice(-2)).toEqual(['--page', '1'])
     expect(await ui.find({ type: 'Text', text: 'Page 2 of 3 · newest first' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '/repo/f20.ts' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'f20.ts' })).toBeDefined()
     await ui.press({ key: 'older' })
     expect((await keysOf(ui)).includes('older')).toBe(false)
     await ui.press({ key: 'newer' })
@@ -1391,6 +1391,30 @@ describe('/model-router usage view on graphical surfaces', () => {
     const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
     expect(await ui.find({ type: 'Text', text: /Could not draw the usage view/ })).toBeDefined()
     expect(w.debug.some((l) => l.includes('graphical view'))).toBe(true)
+    await ui.unmount()
+  })
+})
+
+describe('the log dashboard: what a row and the chart say', () => {
+  const RECENT = [
+    { v: 1, type: 'signal', kind: 'write', ts: new Date(T0 - 2 * 3600000).toISOString(), session: 'sess-recent', file: '/private/tmp/claude-501/-Users-someone/notes.md' },
+    { v: 1, type: 'session-end', ts: new Date(T0 - 3600000).toISOString(), session: 'sess-recent', reason: 'other' },
+  ]
+
+  test('the last 24 hours are charted by hour; a file is its name; a session end says so', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'], files: { [LOG_FILE]: '' }, logRecords: RECENT })
+    await run($, 'log')
+    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: 'By day (UTC)' })).toBeDefined()
+    await ui.press({ key: 'window-24h' })
+    expect(await ui.find({ type: 'Text', text: 'By hour (UTC)' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'By day (UTC)' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: 'notes.md' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'session ended' })).toBeDefined()
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn.includes('/private/tmp')).toBe(false)
+    expect(drawn.includes('-Users-someone')).toBe(false)
+    expect(drawn).toContain('20 Nov 10:00: 1 record')
     await ui.unmount()
   })
 })

@@ -116,7 +116,7 @@ the figures are indicative, in place of a mark on every card. Report opens a sec
 with the same elements; its *Open as page* button writes the HTML page and opens it in the default browser. A report too large for the
 pane (many classes and projects) is drawn in brief there, each project and then each class as one line: the page
 has all of it. Log
-opens a third pane, the log dashboard: the records of the event log and its archive counted by type and by day,
+opens a third pane, the log dashboard: the records of the event log and its archive counted by type and by day (by hour for the last 24 hours),
 filters for the window and the type, and the latest records in pages of twenty, without any prompt text; its
 *Open file* button opens the file itself.
 

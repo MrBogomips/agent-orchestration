@@ -431,11 +431,13 @@ the app has not attached yet. `ui-design.md` asks for it: a rich view is a mod p
 - **What it shows** (`logView` of `lib/log-cards.mjs`, drawn by `hooks/log-desktop.tsx`): the title and
   `<n> records · <window> · archive included`; the windows 24h, 7d, 30d and all as native Buttons; *Records by
   type*, a row per type with a Button that filters on it, a share bar and the count (`all` first); *By day (UTC)*,
-  an SVG column chart of the matching records over the window's days (the last thirty for `all`), with a tooltip
+  an SVG column chart of the matching records over the window's days (the last thirty for `all`); for the 24-hour
+  window it is *By hour (UTC)*, over its 24 hours, since one bar for the day says nothing; each has a tooltip
   per day; *Latest records*, a table of when (UTC), type, the first eight characters of the session, a chip (a
   decision's action, an outcome's result, a signal's kind) and the type's fields (a decision's models, subagent
   type and reason; a spawn's type, class, model and route; an outcome's class, tier, cost and why; a report's
-  status, model, tokens and cost; a signal's file); the page and *Newer* and *Older* Buttons, each drawn only where
+  status, model, tokens and cost; a signal's file, by its name alone, since `slimRecord` keeps no path; for a
+  `session-end`, `session ended` and its reason unless it is the engine's `other`); the page and *Newer* and *Older* Buttons, each drawn only where
   there is a page; then the log's path and size, the archive's file count, size and newest names, and when the log
   was read.
 - **Controls.** A window or a type reads again from the newest page; *Refresh* (`refresh`, `r`) reads the same
