@@ -887,8 +887,11 @@ chat; otherwise it opens above the prompt.</p>
 instead of text art: the tabs, the windows and the level are segmented buttons, the KPI tiles are cards with a large
 figure, a status chip and a small chart of the window, the Models and Classes rows have bars, and each routing decision
 has a coloured chip. When fewer than five tasks back the figures, one notice says so instead of <code>weak</code> on
-every tile. Report, Refresh and Log are buttons in the footer, and the letter keys (<code>d</code>, <code>w</code>,
-<code>m</code>, <code>a</code>, <code>p</code>, <code>o</code>, <code>r</code>, <code>l</code>) still work.</p>
+every tile. Report, Refresh and Log are buttons in the footer; Report opens the report as a second pane (section
+3.7). The letter keys (<code>d</code>, <code>w</code>,
+<code>m</code>, <code>a</code>, <code>p</code>, <code>o</code>, <code>r</code>, <code>l</code>) still work. If
+<code>/model-router</code> is the first thing you type in a new session, the view may take a moment to appear: the
+command answers <code>Usage view opening beside the chat.</code> and the pane is drawn as soon as the app is ready.</p>
 <p>The keys work as soon as the view opens, with no click:</p>
 <table>
   <thead><tr><th style="width:30%">Key</th><th>Does</th></tr></thead>
@@ -896,7 +899,7 @@ every tile. Report, Refresh and Log are buttons in the footer, and the letter ke
   <tr><td>↓, ↑</td><td>Next or previous window: last 24 hours, 7 days, 30 days, all time</td></tr>
   <tr><td><code>d</code>, <code>w</code>, <code>m</code>, <code>a</code></td><td>That window directly</td></tr>
   <tr><td><code>p</code></td><td>Switches between your data across projects (user) and this project's</td></tr>
-  <tr><td><code>o</code></td><td>Writes and opens the report page; its path is written as a line in the session</td></tr>
+  <tr><td><code>o</code></td><td>Opens the report (section 3.7): the page in your browser from a terminal, the report pane in the Claude desktop app</td></tr>
   <tr><td><code>r</code></td><td>Refreshes: runs compaction and reads again</td></tr>
   <tr><td><code>l</code></td><td>Opens the event log in the system's default app; its path is written as a line in the session, with the <code>archive/</code> folder when there is one</td></tr>
   <tr><td>Page Up, Page Down</td><td>Scroll a long tab</td></tr>
@@ -982,11 +985,16 @@ choice stands. <code>design-open</code> has no cell with three tasks yet: <code>
 <h2 id="report">3.7 The report page</h2>
 <p>The same numbers on a page, for a longer look or to keep: ask for the <em>model-router report</em> (the
 <code>report</code> skill), type <code>/model-router report</code>, or press <code>o</code> in the view (the Report
-button in the Claude desktop app). The script compacts the event log and writes
-<code>&lt;config dir&gt;/model-router/report.html</code>. In the Claude desktop app the command and the button open the
-page in the app's Browser pane, beside the chat; anywhere else, or if the pane refuses it, the system's default browser
-opens it (<code>open</code> on macOS, <code>xdg-open</code> on Linux). The answer says where the page opened and gives
-its path; when nothing could open it, it says why. From a shell:</p>
+button in the Claude desktop app).</p>
+<p><strong>In a terminal</strong> the script compacts the event log, writes
+<code>&lt;config dir&gt;/model-router/report.html</code> and the system's default browser opens it (<code>open</code>
+on macOS, <code>xdg-open</code> on Linux). The answer says that the page opened and gives its path; when nothing could
+open it, it says why.</p>
+<p><strong>In the Claude desktop app</strong> (and in VS Code and the mobile apps) the report opens as a pane beside the
+chat, drawn with the app's own elements in its light or dark theme, with the same content as the page, top to bottom.
+Its footer has two buttons: <em>Open as page</em> writes the HTML page and opens it in your browser, to keep or to
+share; <em>Refresh</em> reads the data again. Projects are listed one after the other, each under its path.</p>
+<p>From a shell:</p>
 <pre><code>node "&lt;plugin folder&gt;/scripts/report.mjs"             # write and open
 node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote or headless)</code></pre>
 <figure>

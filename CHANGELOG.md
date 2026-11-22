@@ -3,6 +3,27 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.14
+
+2026-11-22 · pull request #TBD
+
+### Changed
+
+- In the Claude desktop app (and in VS Code and the mobile apps) the report is a native pane beside the chat, not a
+  web page: Report in the usage view, `o` and `/model-router report` open it with the 30-day headline, the models,
+  the weekly trend, the routing decisions, a card per task class and the projects, drawn with the app's own
+  elements in its light or dark theme. Its footer has *Open as page*, which writes the HTML page and opens it in
+  the default browser, and *Refresh*. In the terminal nothing changes: the page is written and opened.
+- The report no longer goes through the desktop app's Browser pane, which showed a page outside the project folder
+  as a still image in the light theme and asked for a permission.
+
+### Fixed
+
+- `/model-router` typed as the first command of a session in the Claude desktop app printed the terminal's text
+  view, its text art broken by the app's font. The app attaches its surface only at its first draw, so the pane
+  looked impossible to place. The pane is now kept and drawn when the app attaches, and the answer is one line;
+  the text view stays for a terminal too narrow for the pane and for `claude -p`.
+
 ## model-router 0.3.13
 
 2026-11-22 · pull request #80
