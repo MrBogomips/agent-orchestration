@@ -323,7 +323,7 @@ function decisions(data, state) {
         rows: rows.map((d) => ({ text: decisionText(d), value: d.cls ?? d.subagentType ?? null })),
       };
     }) },
-    note(`Counts are for the ${windowText(state.window)}; the rows are the latest of every session, in UTC.`),
+    note(`Counts are for ${state.window === 'all' ? 'all time' : `the ${windowText(state.window)}`}; the rows are the latest of every session, in UTC.`),
   ];
 }
 
@@ -333,7 +333,7 @@ function trend(report) {
   if (!weeks.length) return [note('No scored task yet. The trend appears here week by week.')];
   const bars = (value) => weeks.map((w) => ({ label: dayText(w.week), parts: [{ value: value(w), color: ACCENT }] }));
   const costs = weeks.filter((w) => isNum(w.costPerSuccess));
-  const scale = scaleOf(Math.max(0, ...costs.map((w) => w.costPerSuccess)), fmtUsd);
+  const scale = scaleOf(Math.max(0, ...costs.map((w) => w.costPerSuccess)), (v) => (v === 0 ? '$0' : fmtUsd(v)));
   const best = [...weeks].sort((a, b) => b.fpy - a.fpy)[0];
   const cheapest = [...costs].sort((a, b) => a.costPerSuccess - b.costPerSuccess)[0];
   const page = report.page ? [{ kind: 'markdown', text: `The same figures, with every class and project, as a page: [report.html](file://${encodeURI(report.page)}).` }] : [];

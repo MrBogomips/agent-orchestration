@@ -154,7 +154,12 @@ export function chartSvg({ bars, ticks = [], max }) {
       y -= height;
       body += `<rect x="${fix(x)}" y="${fix(y)}" width="${fix(width)}" height="${fix(height)}" fill="${escapeXml(part.color ?? ACCENT)}"/>`;
     }
-    if (bar.label) body += label(x + width / 2, base + 20, bar.label, 'middle');
+    if (bar.label) {
+      // A centred label that would run past the right edge is set flush right instead.
+      const centre = x + width / 2;
+      const half = (String(bar.label).length * 7.5) / 2;
+      body += centre + half > CARD_WIDTH ? label(CARD_WIDTH, base + 20, bar.label, 'end') : label(centre, base + 20, bar.label, 'middle');
+    }
   });
   body += `<rect x="${left}" y="${base}" width="${CARD_WIDTH - left}" height="1" fill="currentColor" fill-opacity="0.38"/>`;
   return doc(CARD_WIDTH, base + 28, body);
