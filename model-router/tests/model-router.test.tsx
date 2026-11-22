@@ -466,7 +466,7 @@ describe('/model-router usage view', () => {
   test('the pane draws each tab, and the keys switch tab, window and level', async ($, on) => {
     world(on)
     await run($, '')
-    for (const surface of ['terminal', 'desktop'] as const) {
+    for (const surface of ['terminal'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
       expect((await ui.find({ type: 'Text', text: /^Status:/ }))?.text).toContain('routing on')
       expect(await ui.find({ type: 'Text', text: /Usage by model/ })).toBeDefined()
@@ -510,7 +510,7 @@ describe('/model-router usage view', () => {
   test('the header and the second row are drawn as Claude Code draws its Settings tabs', async ($, on) => {
     world(on)
     await run($, 'classes 30d')
-    for (const surface of ['terminal', 'desktop'] as const) {
+    for (const surface of ['terminal'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
       expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
       const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
@@ -528,7 +528,7 @@ describe('/model-router usage view', () => {
   test('Overview opens with the KPI tiles, sparklines and model bars in colour', async ($, on) => {
     world(on)
     await run($, 'overview 30d')
-    for (const surface of ['terminal', 'desktop'] as const) {
+    for (const surface of ['terminal'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
       expect(await ui.find({ type: 'Text', text: /^╭─ FPY ─/ })).toBeDefined()
       expect(await ui.find({ type: 'Text', text: /75% ▼25/ })).toBeDefined()
@@ -723,5 +723,117 @@ describe('/model-router usage view', () => {
 
   test('the fixture status is what the view prints', () => {
     expect(STATUS.routing).toBe(true)
+  })
+})
+
+describe('/model-router usage view on graphical surfaces', () => {
+  const GRAPHICAL = ['desktop', 'vscode', 'mobile'] as const
+  const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
+
+  test('Overview draws native cards with SVG charts, and none of the terminal text art', async ($, on) => {
+    world(on)
+    await run($, 'overview 30d')
+    for (const surface of GRAPHICAL) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
+      for (const label of ['FPY', '$/success', 'Rework', 'Routed']) expect((await texts(ui)).includes(label)).toBe(true)
+      expect(await ui.find({ type: 'Text', text: /^75%$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: '▼ 25 pts' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /routing on/ })).toBeDefined()
+      const svgs = await ui.findAll({ type: 'Svg' })
+      // Three sparklines, four model bars and three routing bars.
+      expect(svgs.length).toBe(10)
+      const drawn = JSON.stringify(await ui.drawn())
+      expect(drawn).toContain('FPY by 3 days, latest')
+      expect(drawn).toContain('<svg xmlns=')
+      expect(drawn).toContain('"color":"error"')
+      expect(/[╭╰│▁▂▃▄▅▆▇█░]/.test(drawn)).toBe(false)
+      expect(drawn.includes('weak')).toBe(false)
+      expect(await ui.find({ type: 'Text', text: /Tab\/⇧Tab/ })).toBeUndefined()
+      await ui.unmount()
+    }
+  })
+
+  test('the controls are native buttons, the active ones primary', async ($, on) => {
+    world(on)
+    await run($, 'classes 30d')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
+    expect(keys).toEqual(['tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level-user', 'level-project', 'report', 'refresh'])
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn.match(/"variant":"primary"/g)?.length).toBe(3)
+    expect(drawn.includes('"plain":true')).toBe(false)
+    await ui.unmount()
+  })
+
+  test('the buttons switch tab, window and level', async ($, on) => {
+    world(on)
+    await run($, '')
+    for (const surface of GRAPHICAL) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      expect(await ui.find({ type: 'Text', text: /^Last 7 days · user level · 7 tasks scored · vs the 7 days before$/ })).toBeDefined()
+      await ui.press({ key: 'tab-models' })
+      await ui.press({ key: 'window-30d' })
+      expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 30 days · 8 closed tasks')
+      await ui.press({ key: 'tab-classes' })
+      await ui.press({ key: 'level-project' })
+      expect((await ui.find({ type: 'Text', text: /^Classes ·/ }))?.text).toContain('project /work/shop')
+      expect(await ui.find({ type: 'Text', text: 'Recommendations' })).toBeDefined()
+      await ui.press({ key: 'tab-decisions' })
+      expect((await ui.find({ type: 'Text', text: /^Decisions ·/ }))?.text).toContain('latest 5 of 5')
+      expect((await texts(ui)).filter((t: string) => t.includes('● downgrade')).length).toBe(3)
+      await ui.press({ key: 'tab-overview' })
+      await ui.press({ key: 'level-user' })
+      await ui.press({ key: 'window-7d' })
+      await ui.unmount()
+    }
+  })
+
+  test('under five scored tasks one banner says so, and no card does', async ($, on) => {
+    world(on)
+    await run($, 'overview 24h')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: '2 tasks scored — figures are indicative under 5' })).toBeDefined()
+    expect(JSON.stringify(await ui.drawn()).includes('weak')).toBe(false)
+    await ui.unmount()
+  })
+
+  test('Refresh reads again and Report writes the page', async ($, on) => {
+    const w = world(on)
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    await ui.press({ key: 'refresh' })
+    expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(2)
+    await ui.press({ key: 'report' })
+    expect(w.logs).toContain('🔀 Report written to /home/u/.claude/model-router/report.html')
+    await ui.unmount()
+  })
+
+  test('a failed read is one line in place of the cards', async ($, on) => {
+    world(on, undefined, { usage: { exitCode: 1, stdout: '', stderr: 'no node' } })
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect((await ui.find({ type: 'Text', text: /Could not read/ }))?.text).toContain('no node')
+    expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
+    await ui.unmount()
+  })
+
+  test('the minimized pane shows the headline figure and its trend', async ($, on) => {
+    world(on)
+    await run($, 'overview 30d')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { ...PANE.props, placement: 'widget' } })
+    expect((await ui.find({ type: 'Text', text: /^75%/ }))?.text).toContain('FPY · 30d')
+    expect((await ui.findAll({ type: 'Svg' })).length).toBe(1)
+    expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
+    await ui.unmount()
+  })
+
+  test('data neither rendering can draw leaves one readable line, never an empty pane', async ($, on) => {
+    const w = world(on, undefined, { usage: { exitCode: 0, stdout: JSON.stringify({ ...usageData(), windows: { '7d': { models: 'none' } } }) } })
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: /Could not draw the usage view/ })).toBeDefined()
+    expect(w.debug.some((l) => l.includes('graphical view'))).toBe(true)
+    await ui.unmount()
   })
 })

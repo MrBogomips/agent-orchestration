@@ -14,9 +14,12 @@ import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/r
 import { effortOf } from '../lib/tiers.mjs'
 import { parseTag } from '../lib/text.mjs'
 import { promptGate } from '../lib/prompt-gate.mjs'
+import { cardsView } from '../lib/usage-cards.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, TAB_TITLES, TABS, WINDOW_KEYS, helpText, noteRows, parseArgs, tabRows, textView } from '../lib/usage-view.mjs'
 import type { Row } from '../lib/usage-view.mjs'
 import { isArrowScroll, padRows, ringTarget, stepWindow, tabKey, tabOfKey, windowKey } from '../lib/usage-nav.mjs'
+import { usagePane, usageWidget } from './usage-desktop'
+import type { GraphicalElements } from './usage-desktop'
 
 const PLUGIN = 'model-router'
 const PROMPT_CHARS = 2000
@@ -309,6 +312,16 @@ const toneProps = (tone: string | null | undefined) => (tone ? TONES[tone] ?? {}
 const activeProps = (isActive: boolean) => (isActive ? { bold: true, inverse: true, color: ACCENT } : {})
 const HINT = { italic: true, color: 'inactive' as const }
 
+/** The rows of a tab, or one line saying they could not be built: a view never fails the pane. */
+function guardedRows($: any, build: () => Row[]): Row[] {
+  try {
+    return build()
+  } catch (err) {
+    $.ui.log(`[model-router] usage view: ${errorText(err)}`, { to: 'debug' })
+    return [{ text: `Could not draw the usage view: ${errorText(err)}`, tone: 'warn' }]
+  }
+}
+
 /**
  * Keeps the line under an Agent call's row: the model the subagent started on, its effort when known and why.
  * An unknown effort waits for the subagent's first step (`fillEffort`). Never throws: the line is only a view.
@@ -497,21 +510,48 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // The terminal draws monospace rows; a surface with proportional type (the desktop app, the editor, the phones)
+  // draws native cards and SVG charts from the same data. A graphical view that cannot be built falls back to the
+  // rows, and rows that cannot be built to one line: the pane is never left empty.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const els = $.ui.resolve(e)
+    const { Box, Button, Text } = els
     const view = await read($, viewState)
     const usage = await read($, usageState)
     const columns = Math.max(20, e.props.bodyColumns ?? 80)
     const status = await statusOf($, opts)
+    const setView = (patch: Partial<UsageView>) => update($, viewState, (v) => ({ ...v, ...patch }))
+    const report = async () => {
+      try {
+        $.ui.log(`${ROUTE_ICON} Report written to ${await writeReport($, ctx)}`)
+      } catch (err) {
+        $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
+      }
+    }
+    if (e.surface !== 'terminal' && 'Svg' in els) {
+      try {
+        const model = cardsView(usage.data ?? null, { ...view, status }, { error: usage.error, isLoading: usage.isLoading })
+        const graphical = els as GraphicalElements
+        if (e.props.placement === 'widget') return usageWidget(graphical, model)
+        return usagePane(graphical, model, {
+          setTab: (tab) => setView({ tab }),
+          setWindow: (window) => setView({ window }),
+          setLevel: (level) => setView({ level }),
+          report,
+          refresh: () => refreshUsage($, ctx),
+        }, columns)
+      } catch (err) {
+        $.ui.log(`[model-router] graphical view: ${errorText(err)}`, { to: 'debug' })
+      }
+    }
     const rows = usage.error && !usage.data
       ? [{ text: `Could not read the usage data: ${usage.error}`, tone: 'warn' as const }]
-      : tabRows(usage.data ?? null, { ...view, status }, columns)
+      : guardedRows($, () => tabRows(usage.data ?? null, { ...view, status }, columns))
     const notes = [
       ...noteRows(usage.data ?? null, columns),
       ...(usage.isLoading && usage.data ? [{ text: 'Refreshing…', tone: 'dim' as const }] : []),
       ...(usage.error && usage.data ? [{ text: `Last refresh failed: ${usage.error}`, tone: 'warn' as const }] : []),
     ]
-    const setView = (patch: Partial<UsageView>) => update($, viewState, (v) => ({ ...v, ...patch }))
     const isProject = view.level === 'project'
     // Header, sub-tabs, footer and three margins: the fewest rows drawn besides the content and the notes.
     const pad = padRows(rows.length + notes.length + 6, e.props.scroll?.bodyRows)
@@ -553,14 +593,7 @@ export const register: Register = (on, options) => {
         </Box>
         <Box flexDirection="row" flexWrap="wrap" columnGap={1} marginTop={1}>
           <Text {...HINT}>Tab/⇧Tab tab · ↑/↓ period · p level ·</Text>
-          <Button key="report" label="report" hotkey="o" plain dimColor
-            onPress={async () => {
-              try {
-                $.ui.log(`${ROUTE_ICON} Report written to ${await writeReport($, ctx)}`)
-              } catch (err) {
-                $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
-              }
-            }} />
+          <Button key="report" label="report" hotkey="o" plain dimColor onPress={report} />
           <Text {...HINT}>·</Text>
           <Button key="refresh" label="refresh" hotkey="r" plain dimColor onPress={() => refreshUsage($, ctx)} />
           <Text {...HINT}>· Esc</Text>

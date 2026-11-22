@@ -332,3 +332,6 @@ export function textView(data, view, columns) {
   out.push('', ...noteRows(data, width).map((r) => r.text), '/model-router help: tabs, windows, levels and keys.');
   return out.map((l) => l.replace(/\s+$/, '')).join('\n');
 }
+
+// What the graphical rendering (lib/usage-cards.mjs) shares with the rows above, so the two cannot disagree.
+export { ACTION_ORDER, DECISIONS_SHOWN, RECOMMENDATIONS_SHOWN, cell as cellName, headlineOf as headlineFor, levelName, shortModel };

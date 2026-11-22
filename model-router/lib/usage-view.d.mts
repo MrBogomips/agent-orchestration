@@ -29,3 +29,10 @@ export declare function layoutWidth(columns: unknown): number
 export declare function tabRows(data: unknown, view: View, columns: unknown): Row[]
 export declare function noteRows(data: unknown, columns: unknown): Row[]
 export declare function textView(data: unknown, view: View, columns: unknown): string
+export declare const ACTION_ORDER: readonly string[]
+export declare const DECISIONS_SHOWN: number
+export declare const RECOMMENDATIONS_SHOWN: number
+export declare function cellName(tier: unknown, effort: unknown): string
+export declare function headlineFor(data: unknown, view: View): Record<string, any> | null
+export declare function levelName(data: unknown, view: View): string
+export declare function shortModel(model: unknown): string
