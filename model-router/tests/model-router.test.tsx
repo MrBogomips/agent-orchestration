@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { STATUS, usageData } from '../lib/usage-fixture.mjs'
+import { STATUS, reportData, usageData } from '../lib/usage-fixture.mjs'
 
 // A grid with what the mod reads: tiers for the judge prompt, effort questions, classes, the judge mapping.
 const GRID = {
@@ -30,14 +30,14 @@ const GRID = {
 
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
 
-type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; mcp: any[]; connects: string[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
+type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean; surfaces?: string[]; connect?: Record<string, unknown>; pane?: Record<string, unknown> }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean; surfaces?: string[]; env?: Record<string, string>; reportData?: Run }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
 function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, text: FAST_ANSWER, usage: {} } }), answers: Answers = {}): World {
-  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], mcp: [], connects: [], opens: [], closes: [], toasts: [], logs: [], debug: [] }
+  const w: World = { appended: [], agentCalls: [], spawns: [], steps: [], judgeCalls: [], runs: [], opens: [], closes: [], toasts: [], logs: [], debug: [] }
   on('ui.open', ($, e) => {
     w.opens.push(e)
     return { value: answers.isPlaced === false ? { isPlaced: false, reason: 'no surface' } : { isPlaced: true } }
@@ -55,7 +55,7 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     w.toasts.push(String((e as any).text ?? e))
     return { value: undefined }
   })
-  mock.env(on, { HOME: '/home/u' })
+  mock.env(on, { HOME: '/home/u', ...answers.env })
   on('fs.read', ($, e: any) => ({ value: answers.files?.[e.path] ?? answers.grid ?? JSON.stringify(GRID) }))
   on('fs.exists', ($, e: any) => ({ value: Boolean(answers.files && e.path in answers.files) }))
   on('session.info', () => {
@@ -63,14 +63,6 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     return { value: (answers.info ?? { platform: 'macos', isHosted: false }) as any }
   })
   on('session.surfaces', () => ({ value: (answers.surfaces ?? ['terminal']) as any }))
-  on('mcp.connect', ($, e: any) => {
-    w.connects.push(e.server)
-    return { value: (answers.connect ?? { isConnected: true, server: 'Claude_Browser' }) as any }
-  })
-  on('mcp.call', ($, e) => {
-    w.mcp.push(e)
-    return (answers.pane ?? { value: { content: [{ type: 'text', text: 'opened' }], isError: false } }) as any
-  })
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.cwd', () => ({ value: '/repo' }))
   on('session.root', () => ({ value: '/repo' }))
@@ -96,6 +88,8 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
     const script = String(e.argv[1] ?? '')
     const answer = script.endsWith('usage.mjs')
       ? answers.usage ?? USAGE
+      : script.endsWith('report.mjs') && e.argv.includes('--json')
+        ? answers.reportData ?? { exitCode: 0, stdout: JSON.stringify(reportData()) }
       : script.endsWith('report.mjs')
         ? answers.report ?? { exitCode: 0, stdout: '/home/u/.claude/model-router/report.html\n' }
         : { exitCode: 0, stdout: '' }
@@ -750,59 +744,222 @@ const openRuns = (w: World) => w.runs.filter((r) => r.argv[0] === 'open' || r.ar
 const REPORT_FILE = '/home/u/.claude/model-router/report.html'
 const reportRuns = (w: World) => w.runs.filter((r) => String(r.argv[1]).endsWith('report.mjs')).map((r) => r.argv.slice(2))
 
-describe('opening the report', () => {
-  test('on the desktop app the page opens in the Browser pane, and the system browser is not used', async ($, on) => {
+const REPORT_PANE = {
+  plugin: 'model-router',
+  component: 'Pane',
+  requestId: 'model-router-report',
+  props: { title: 'model-router report', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
+} as const
+const jsonRuns = (w: World) => reportRuns(w).filter((argv) => argv.includes('--json'))
+const pageRuns = (w: World) => reportRuns(w).filter((argv) => argv.includes('--no-open'))
+
+describe('the report on graphical surfaces', () => {
+  const allTexts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
+
+  test('/model-router report opens the report pane and reads the data; no page is written', async ($, on) => {
     const w = world(on, undefined, { surfaces: ['desktop'] })
     const out = await run($, 'report')
-    expect(out.text).toBe(`🔀 Report opened in the Browser pane: ${REPORT_FILE}`)
-    expect(reportRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--no-open']])
-    expect(w.connects).toEqual(['Claude_Browser'])
-    expect(w.mcp).toEqual([{ server: 'Claude_Browser', tool: 'preview_start', args: { url: `file://${REPORT_FILE}` } }])
+    expect(out.text).toBe('🔀 Report opened beside the chat.')
+    expect(out.isTextDisplayOnly).toBe(true)
+    expect(w.opens).toEqual([{ id: 'model-router-report', title: 'model-router report', focus: true }])
+    expect(jsonRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--json']])
+    expect(pageRuns(w)).toEqual([])
     expect(openRuns(w)).toEqual([])
   })
 
-  test('the Report button of a pane drawn on the desktop app opens it there too', async ($, on) => {
+  test('the pane draws the report natively: headline, trend, decisions, classes, projects and the footer', async ($, on) => {
+    const w = world(on, undefined, { surfaces: ['desktop'] })
+    await run($, 'report')
+    const probe = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    await probe.unmount()
+    expect(w.debug).toEqual([])
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+      const ui = await $.ui.mount({ ...REPORT_PANE, surface })
+      const texts = await allTexts(ui)
+      for (const text of ['Headline', 'FPY', '$/success', 'Rework', 'Routed', 'Trend by week', 'FPY by week', '$/success by week', 'Routing decisions', 'Classes · all projects', 'Projects']) {
+        expect(texts.includes(text)).toBe(true)
+      }
+      expect(await ui.find({ type: 'Text', text: /^Generated 20 Nov 2026, 12:00 UTC · / })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^Last 30 days · user level · / })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^Read from \/home\/u\/\.claude\/model-router · / })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /decisions logged, all time\.$/ })).toBeDefined()
+      const drawn = JSON.stringify(await ui.drawn())
+      expect(drawn).toContain('edit-specified')
+      expect(drawn).toContain('sonnet·medium')
+      expect(drawn).toContain('★ ')
+      expect(drawn).toContain('○ ')
+      expect(drawn).toContain('/work/shop')
+      expect(drawn).toContain('<svg xmlns=')
+      expect(/[╭╰│▁▂▃▄▅▆▇█░]/.test(drawn)).toBe(false)
+      expect(drawn.includes('n < 5')).toBe(false)
+      expect((await ui.findAll({ type: 'Svg' })).length).toBeGreaterThan(8)
+      expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['page', 'refresh'])
+      await ui.unmount()
+    }
+  })
+
+  test('a narrow pane leaves out the cost per task and the explored share', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'] })
+    await run($, 'report')
+    const wide = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    expect((await allTexts(wide)).includes('$/task')).toBe(true)
+    expect((await allTexts(wide)).includes('explored')).toBe(true)
+    await wide.unmount()
+    const narrow = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop', props: { ...REPORT_PANE.props, bodyColumns: 50 } })
+    expect((await allTexts(narrow)).includes('$/task')).toBe(false)
+    expect((await allTexts(narrow)).includes('explored')).toBe(false)
+    expect((await allTexts(narrow)).includes('rework')).toBe(true)
+    await narrow.unmount()
+  })
+
+  test('the Report button of the usage pane opens the report pane', async ($, on) => {
     const w = world(on)
     await run($, '')
     const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
     await ui.press({ key: 'report' })
     await ui.unmount()
-    expect(w.mcp.map((c) => c.tool)).toEqual(['preview_start'])
-    expect(w.logs).toContain(`🔀 Report opened in the Browser pane: ${REPORT_FILE}`)
+    expect(w.opens.map((o) => o.id)).toEqual(['model-router-usage', 'model-router-report'])
+    expect(w.logs).toContain('🔀 Report opened beside the chat.')
+    expect(pageRuns(w)).toEqual([])
   })
 
-  const REFUSALS: Record<string, Answers> = {
-    'is denied by a hook': { pane: { value: { deny: 'A browser tool must be loaded by the model first.' } } },
-    'fails on the URL': { pane: { value: { content: [{ type: 'text', text: 'file URLs are not allowed' }], isError: true } } },
-    'is not connected': { connect: { isConnected: false, reason: 'unlisted', message: 'No server of that name.' } },
-  }
-  for (const [name, refusal] of Object.entries(REFUSALS)) {
-    test(`a pane that ${name} falls back to the default browser, and the reason is logged for debugging`, async ($, on) => {
-      const w = world(on, undefined, { surfaces: ['desktop'], ...refusal })
-      expect((await run($, 'report')).text).toBe(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
-      expect(openRuns(w)).toEqual([['open', REPORT_FILE]])
-      expect(w.debug.some((l) => l.startsWith('[model-router] Browser pane: '))).toBe(true)
-    })
-  }
+  test('Open as page writes the HTML page and opens it in the default browser; Refresh reads again', async ($, on) => {
+    const w = world(on, undefined, { surfaces: ['desktop'] })
+    await run($, 'report')
+    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    const page = JSON.stringify(await ui.find({ type: 'Button', key: 'page' }))
+    expect(page).toContain('"label":"Open as page"')
+    expect(page).toContain('"variant":"secondary"')
+    await ui.press({ key: 'page' })
+    expect(pageRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--no-open']])
+    expect(openRuns(w)).toEqual([['open', REPORT_FILE]])
+    expect(w.logs).toContain(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
+    await ui.press({ key: 'refresh' })
+    expect(jsonRuns(w).length).toBe(2)
+    await ui.unmount()
+  })
 
-  test('off the desktop app no MCP call is made: the default browser opens the page', async ($, on) => {
+  test('a page the opener cannot open is one line with the path, and the pane stays drawn', async ($, on) => {
+    const w = world(on, undefined, { surfaces: ['desktop'], open: { exitCode: 1, stdout: '', stderr: 'no display' } })
+    await run($, 'report')
+    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    await ui.press({ key: 'page' })
+    expect(w.logs).toContain(`🔀 Report written to ${REPORT_FILE} (not opened: no display)`)
+    expect(await ui.find({ type: 'Text', text: 'Headline' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('data that cannot be read is one line in the pane, with its buttons', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'], reportData: { exitCode: 1, stdout: '', stderr: 'disk full' } })
+    await run($, 'report')
+    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: /Could not read the report data: disk full/ })).toBeDefined()
+    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['page', 'refresh'])
+    await ui.unmount()
+  })
+
+  test('data the report cannot be built from leaves one readable line, never an empty pane', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'], reportData: { exitCode: 0, stdout: JSON.stringify({ levels: [], trend: [{ week: 5 }], decisions: 3, usage: { windows: 7 } }) } })
+    await run($, 'report')
+    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    expect((await ui.findAll({ type: 'Text' })).length).toBeGreaterThan(0)
+    expect((await ui.findAll({ type: 'Button' })).some((b) => b.key === 'page')).toBe(true)
+    await ui.unmount()
+  })
+
+  test('a terminal attached beside the app is told that the report is a page there', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'] })
+    await run($, 'report')
+    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
+    expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+    await ui.unmount()
+  })
+})
+
+describe('the report in the terminal', () => {
+  test('/model-router report writes the page and opens it in the default browser; no pane is opened', async ($, on) => {
     const w = world(on, undefined, { info: { platform: 'linux', isHosted: false } })
     expect((await run($, 'report')).text).toBe(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
-    expect(w.connects).toEqual([])
-    expect(w.mcp).toEqual([])
+    expect(pageRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--no-open']])
+    expect(jsonRuns(w)).toEqual([])
     expect(openRuns(w)).toEqual([['xdg-open', REPORT_FILE]])
+    expect(w.opens).toEqual([])
   })
 
-  test('with neither a pane nor a browser the line gives the path and why', async ($, on) => {
-    const w = world(on, undefined, { surfaces: ['desktop'], connect: { isConnected: false, reason: 'policy', message: 'Blocked.' }, open: { exitCode: 1, stdout: '', stderr: 'no display' } })
+  test('the o key of the usage view does the same', async ($, on) => {
+    const w = world(on)
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await ui.press({ key: 'report' })
+    await ui.unmount()
+    expect(w.opens.map((o) => o.id)).toEqual(['model-router-usage'])
+    expect(openRuns(w)).toEqual([['open', REPORT_FILE]])
+    expect(w.logs).toContain(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
+  })
+
+  test('a browser that cannot open the page leaves the path and why', async ($, on) => {
+    world(on, undefined, { open: { exitCode: 1, stdout: '', stderr: 'no display' } })
     expect((await run($, 'report')).text).toBe(`🔀 Report written to ${REPORT_FILE} (not opened: no display)`)
-    expect(w.mcp).toEqual([])
   })
 
   test('on a hosted session nothing is opened and the line says so', async ($, on) => {
     const w = world(on, undefined, { info: { platform: 'linux', isHosted: true } })
     expect((await run($, 'report')).text).toBe(`🔀 Report written to ${REPORT_FILE} (not opened: this session runs on a hosted machine)`)
     expect(openRuns(w)).toEqual([])
+  })
+
+  test('a -p run writes the page too: nothing is drawn there', async ($, on) => {
+    const w = world(on, undefined, { surfaces: [], env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' } })
+    expect((await run($, 'report')).text).toBe(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
+    expect(w.opens).toEqual([])
+  })
+})
+
+describe('a session whose app has not attached its surface yet', () => {
+  const FRESH: Answers = { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' } }
+
+  test('/model-router keeps the pane open and answers one line, not the text view', async ($, on) => {
+    const w = world(on, undefined, FRESH)
+    const out = await run($, '', 80)
+    expect(out.text).toBe('🔀 Usage view opening beside the chat.')
+    expect(out.isTextDisplayOnly).toBe(true)
+    expect(/[╭╰│─]/.test(out.text)).toBe(false)
+    expect(w.opens.map((o) => o.id)).toEqual(['model-router-usage'])
+    expect(w.closes).toEqual([])
+    expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(1)
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
+    expect((await ui.findAll({ type: 'Svg' })).length).toBeGreaterThan(0)
+    await ui.unmount()
+  })
+
+  test('the pane is tried there even under 60 columns', async ($, on) => {
+    const w = world(on, undefined, FRESH)
+    expect((await run($, 'models', 40)).text).toBe('🔀 Usage view opening beside the chat.')
+    expect(w.opens.length).toBe(1)
+  })
+
+  test('/model-router report keeps the report pane open too', async ($, on) => {
+    const w = world(on, undefined, FRESH)
+    expect((await run($, 'report')).text).toBe('🔀 Report opened beside the chat.')
+    expect(w.opens.map((o) => o.id)).toEqual(['model-router-report'])
+    expect(w.closes).toEqual([])
+    expect(pageRuns(w)).toEqual([])
+  })
+
+  test('a -p run, where nothing ever attaches, still prints the text view and closes the pane', async ($, on) => {
+    const w = world(on, undefined, { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' } })
+    const out = await run($, '', 80)
+    expect(out.text).toContain('── Overview')
+    expect(w.closes[0].id).toBe('model-router-usage')
+  })
+
+  test('a terminal too narrow for the pane still prints the text view', async ($, on) => {
+    const w = world(on, undefined, { isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'cli' } })
+    const out = await run($, '', 80)
+    expect(out.text).toContain('── Overview')
+    expect(w.closes[0].id).toBe('model-router-usage')
   })
 })
 
@@ -998,7 +1155,7 @@ describe('/model-router usage view on graphical surfaces', () => {
     await ui.press({ key: 'refresh' })
     expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(2)
     await ui.press({ key: 'report' })
-    expect(w.logs).toContain('🔀 Report opened in the Browser pane: /home/u/.claude/model-router/report.html')
+    expect(w.logs).toContain('🔀 Report opened beside the chat.')
     await ui.unmount()
   })
 

@@ -1,43 +1,41 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BROWSER_SERVER, BROWSER_TOOL, connectRefusal, fileUrl, hasBrowserPane, paneRefusal, reportLine } from './open-report.mjs';
+import { PAGE_HOTKEY, PAGE_KEY, PAGE_LABEL, REPORT_PANE, hostKind, isGraphical, reportLine } from './open-report.mjs';
 
 const FILE = '/home/u/.claude/model-router/report.html';
 
-test('the page is addressed as a file URL, its segments encoded', () => {
-  assert.equal(fileUrl(FILE), `file://${FILE}`);
-  assert.equal(fileUrl('/Users/a b/#1?/r%.html'), 'file:///Users/a%20b/%231%3F/r%25.html');
-  assert.equal(fileUrl('report.html'), null);
-  assert.equal(fileUrl(undefined), null);
+test('every surface but the terminal is graphical', () => {
+  for (const surface of ['desktop', 'vscode', 'mobile']) assert.equal(isGraphical(surface), true);
+  for (const surface of ['terminal', '', null, undefined, 3]) assert.equal(isGraphical(surface), false);
 });
 
-test('only the desktop app has a Browser pane', () => {
-  assert.equal(hasBrowserPane(['desktop']), true);
-  assert.equal(hasBrowserPane(['terminal', 'desktop']), true);
-  for (const surfaces of [['terminal'], ['vscode'], ['mobile'], [], undefined, 'desktop']) assert.equal(hasBrowserPane(surfaces), false);
-  assert.deepEqual([BROWSER_SERVER, BROWSER_TOOL], ['Claude_Browser', 'preview_start']);
+test('an attached terminal makes the host a terminal, whatever else is attached', () => {
+  assert.equal(hostKind({ surfaces: ['terminal'], entrypoint: 'cli' }), 'terminal');
+  assert.equal(hostKind({ surfaces: ['terminal', 'mobile'], entrypoint: 'cli' }), 'terminal');
 });
 
-test('a connect answer gives a server, or one line saying why not', () => {
-  assert.equal(connectRefusal({ isConnected: true, server: 'Claude_Browser' }), null);
-  assert.equal(connectRefusal({ isConnected: false, reason: 'unlisted', message: 'No server of that name.\nmore' }), 'unlisted: No server of that name.');
-  assert.equal(connectRefusal({ isConnected: true }), 'the Browser pane is not connected');
-  assert.equal(connectRefusal(undefined), 'the Browser pane is not connected');
+test('with only graphical surfaces attached the host is graphical', () => {
+  assert.equal(hostKind({ surfaces: ['desktop'], entrypoint: 'claude-desktop' }), 'graphical');
+  assert.equal(hostKind({ surfaces: ['mobile'], entrypoint: 'cli' }), 'graphical');
 });
 
-test('a tool result that is missing, denied or failed is a refusal', () => {
-  assert.equal(paneRefusal({ content: [{ type: 'text', text: 'opened' }], isError: false }), null);
-  assert.equal(paneRefusal({ deny: 'A browser tool must be loaded by the model first.' }), 'A browser tool must be loaded by the model first.');
-  assert.equal(paneRefusal({ deny: '' }), 'denied');
-  assert.equal(paneRefusal({ isError: true, content: [{ type: 'image' }, { type: 'text', text: 'file URLs are not allowed\nsecond' }] }), 'file URLs are not allowed');
-  assert.equal(paneRefusal({ isError: true, content: [] }), 'the Browser pane refused the page');
-  assert.equal(paneRefusal(undefined), 'the Browser pane gave no answer');
-  assert.equal(paneRefusal({ isError: true, content: [{ type: 'text', text: 'x'.repeat(500) }] }).length, 200);
+test('with no surface attached yet, an app that hosts the session is graphical; a shell or the SDK is headless', () => {
+  assert.equal(hostKind({ surfaces: [], entrypoint: 'claude-desktop' }), 'graphical');
+  assert.equal(hostKind({ surfaces: [], entrypoint: 'claude-vscode' }), 'graphical');
+  for (const entrypoint of ['cli', 'CLI ', 'sdk-cli', 'sdk-ts', 'sdk-py', '', undefined, null]) {
+    assert.equal(hostKind({ surfaces: [], entrypoint }), 'headless', String(entrypoint));
+  }
+  assert.equal(hostKind({ surfaces: undefined, entrypoint: undefined }), 'headless');
+  assert.equal(hostKind(), 'headless');
 });
 
-test('the line says where the page was opened, or why it was not', () => {
-  assert.equal(reportLine('pane', FILE), `Report opened in the Browser pane: ${FILE}`);
+test('the line says where the report was opened, or why the page was not', () => {
+  assert.equal(reportLine('pane'), 'Report opened beside the chat.');
   assert.equal(reportLine('browser', FILE), `Report opened in the default browser: ${FILE}`);
-  assert.equal(reportLine('none', FILE, 'no opener known for windows'), `Report written to ${FILE} (not opened: no opener known for windows)`);
+  assert.equal(reportLine('none', FILE, 'no opener known for windows\nmore'), `Report written to ${FILE} (not opened: no opener known for windows)`);
   assert.equal(reportLine('none', FILE), `Report written to ${FILE} (not opened: no browser could be opened)`);
+});
+
+test('the pane and its page control are named once', () => {
+  assert.deepEqual([REPORT_PANE, PAGE_KEY, PAGE_LABEL, PAGE_HOTKEY], ['model-router-report', 'page', 'Open as page', 'o']);
 });

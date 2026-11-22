@@ -3,22 +3,7 @@ import assert from 'node:assert/strict';
 import { REPORT_WINDOW, readableTime, renderReport, taskCount } from './report-html.mjs';
 import { TOKENS } from './report-style.mjs';
 import { cardsView } from './usage-cards.mjs';
-import { agedCells, classesOf, decisionsOf, latestOutcomes, trendOf } from './usage-data.mjs';
-import { GRID, PROJECT, T0, events, level, outcomes, usageData } from './usage-fixture.mjs';
-
-/** The report data of the usage fixture, built as scripts/report.mjs builds it. */
-function fixtureData() {
-  const list = latestOutcomes(events());
-  const own = outcomes().filter((o) => o.project?.id === PROJECT.id);
-  return {
-    generatedAt: new Date(T0).toISOString(), configDir: '/home/u/.claude', events: events().length, outcomes: list.length, halfLifeDays: 30,
-    levels: [
-      { kind: 'user', title: 'user', classes: classesOf(agedCells(level(outcomes(), 'user'), T0, 30), GRID, { outcomes: list }) },
-      { kind: 'project', title: PROJECT.root, classes: classesOf(agedCells(level(own, 'project', PROJECT), T0, 30), GRID, { outcomes: list, projectId: PROJECT.id }) },
-    ],
-    trend: trendOf(list), decisions: decisionsOf(events()), usage: usageData(),
-  };
-}
+import { reportData as fixtureData } from './usage-fixture.mjs';
 
 const cell = (over = {}) => ({
   tier: 'opus', effort: 'medium', n: 2.9, tasks: 3, fpy: 1, reworkRate: 0, costPerTask: 1.798, costPerSuccess: 1.798, exploreShare: 0,

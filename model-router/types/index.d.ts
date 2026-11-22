@@ -10,6 +10,13 @@ export type UsageCache = {
   error?: string
 }
 
+/** The report's data as `scripts/report.mjs --json` printed it, and whether a read is running. */
+export type ReportCache = {
+  data?: { [key: string]: unknown }
+  isLoading: boolean
+  error?: string
+}
+
 /** The model and effort a subagent got, and why: the line drawn under its Agent call's row. */
 export type RouteLineState = { model: string; effort: string | null; reason: string }
 
@@ -24,6 +31,8 @@ declare module 'claude-code' {
       view: Shaped<UsageView>
       /** The usage view's data, read by `/model-router` and the `r` key. */
       usage: Shaped<UsageCache>
+      /** The report pane's data, read when the pane opens and by its Refresh. */
+      report: Shaped<ReportCache>
     }
   }
 }

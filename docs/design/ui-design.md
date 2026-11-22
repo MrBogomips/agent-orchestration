@@ -10,8 +10,9 @@ The two plugins draw on two kinds of surface, reported by `e.surface` in a `ui.r
 - **Graphical surfaces** (`desktop`, `vscode`, `mobile`): the Claude desktop app, the VS Code extension and the mobile
   apps. They draw native elements in a proportional font, with the Claude desktop app's design system.
 
-A plugin may also write an **HTML page** (the report of `model-router`), shown in a browser or in the desktop app's
-Browser pane. It is a graphical surface with its own rules, in *Graphical surfaces: HTML pages*.
+A plugin may also write an **HTML page** (the report of `model-router`), shown in a browser. It is a graphical surface
+with its own rules, in *Graphical surfaces: HTML pages*. On the graphical surfaces above the same content is a
+native pane, never the page.
 
 Each surface gets a rendering made for it. A graphical surface never gets the terminal's text art.
 
@@ -79,6 +80,9 @@ Each surface gets a rendering made for it. A graphical surface never gets the te
   aside on a graphical surface and passes the event on.
 - Letter hotkeys may stay as accelerators; the footer shows no key hints.
 - Every pane offers its plugin's own log: a button that opens it in the system's default app.
+- A pane opened before the app has attached its surface is kept, not replaced by text: `$.ui.open` answers
+  `isPlaced: false` there, the app attaches at its first draw and the pane is drawn then. The command answers one
+  short line. Text in place of a pane is for a terminal too narrow for it and for a run that draws nowhere (`-p`).
 
 ## Graphical surfaces: HTML pages
 
@@ -106,10 +110,15 @@ CSS in place of the native elements:
   so, and long secondary sections are folded (`<details>`).
 - **Charts.** As in a pane: with one to three values, a bar per value. Axis and point labels are HTML text beside
   the chart or `<title>` tooltips, never SVG text that a narrow width can clip.
-- **Narrow first.** The page is read in the Browser pane beside the chat: it must read at 360 px. Grids wrap
+- **Narrow first.** The page may be read in a narrow window beside other work: it must read at 360 px. Grids wrap
   (`auto-fit`), a table scrolls inside its card and drops its secondary columns under 560 px, long paths wrap.
-- **Where it opens.** In the Claude desktop app, in the app's Browser pane; elsewhere, or when the pane refuses, in
-  the system's default browser; failing that, the plugin gives the path. The line the person reads says which.
+- **Where it opens.** In the system's default browser; failing that, the plugin gives the path. The line the person
+  reads says which. Not in the desktop app's Browser pane: it draws a page outside the project folder as a still
+  image, in the light theme whatever the app's, and its tool asks for a permission.
+- **A pane first on graphical surfaces.** Where the session draws on a graphical surface the content is a native
+  pane built from the same view model as the page (one module returns the texts, figures and charts; the page
+  writes them as markup, the pane lays them out with native elements). The pane follows the app's theme and needs
+  no permission; it offers the page as a button, for keeping or sharing.
 
 ## Checking an interface
 

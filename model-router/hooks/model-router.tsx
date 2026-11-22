@@ -5,7 +5,7 @@
 import { atom, memberOf, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { RouteLineState, UsageCache, UsageView } from '../types'
+import type { ReportCache, RouteLineState, UsageCache, UsageView } from '../types'
 
 import { buildJudgePrompt, parseJudgeAnswer } from '../lib/judge.mjs'
 import { projectId } from '../lib/project-id.mjs'
@@ -14,10 +14,11 @@ import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/r
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
 import { failText, logPaths, openPlan, openerArgv, whyNot } from '../lib/open-log.mjs'
-import { BROWSER_SERVER, BROWSER_TOOL, connectRefusal, fileUrl, hasBrowserPane, paneRefusal, reportLine } from '../lib/open-report.mjs'
+import { REPORT_PANE, REPORT_PANE_TITLE, hostKind, isGraphical as isGraphicalSurface, reportLine } from '../lib/open-report.mjs'
 import { promptGate } from '../lib/prompt-gate.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, helpText, parseArgs, textView } from '../lib/usage-view.mjs'
 import { isArrowScroll, ringTarget, stepWindow, tabKey, tabOfKey } from '../lib/usage-nav.mjs'
+import { drawReportPane } from './report-desktop'
 import { drawUsagePane } from './usage-pane'
 
 const PROMPT_CHARS = 2000
@@ -36,6 +37,7 @@ const enabled = atom({ plugin: 'model-router', key: 'enabled' } as const, true)
 // Change a shape tag when its value's fields change: it declines what an earlier version stored.
 const viewState = atom({ plugin: 'model-router', key: 'view' } as const, { ...DEFAULT_VIEW } as UsageView, { shape: 'view-1' })
 const usageState = atom({ plugin: 'model-router', key: 'usage' } as const, { isLoading: false } as UsageCache, { shape: 'usage-1' })
+const reportState = atom({ plugin: 'model-router', key: 'report' } as const, { isLoading: false } as ReportCache, { shape: 'report-1' })
 // One member per Agent call, by tool_use_id: what the subagent got, drawn under the call's row.
 const routeLines = atom({ plugin: 'model-router', key: 'route' } as const, null as RouteLineState | null)
 
@@ -258,7 +260,36 @@ async function refreshUsage($: any, ctx: Ctx, force = false) {
   }
 }
 
-/** Writes the report page with scripts/report.mjs and returns its path; `showReport` opens it. */
+/** Reads the report's data with scripts/report.mjs --json, which compacts first and writes no page. */
+async function loadReport($: any, ctx: Ctx): Promise<{ [key: string]: unknown }> {
+  const argv = ['node', `${$.plugin.root}/scripts/report.mjs`, '--config-dir', await configDirOf($, ctx), '--json']
+  const run = await $.process.run(argv, { timeoutMs: REPORT_TIMEOUT_MS })
+  if (run.exitCode !== 0) throw new Error(run.stderr.trim() || `report.mjs exited with ${run.exitCode}`)
+  const data = JSON.parse(run.stdout)
+  if (!data || typeof data !== 'object' || !Array.isArray(data.levels)) throw new Error('report.mjs gave unreadable data')
+  return data
+}
+
+/** Reads the report's data again into the pane's state; an error is kept for the pane to show, never thrown. */
+async function refreshReport($: any, ctx: Ctx, force = false) {
+  if (!force && (await read($, reportState)).isLoading) return
+  await update($, reportState, (r) => ({ ...r, isLoading: true }))
+  try {
+    const data = await loadReport($, ctx)
+    await update($, reportState, () => ({ data, isLoading: false }))
+  } catch (err) {
+    await update($, reportState, (r) => ({ ...r, isLoading: false, error: errorText(err) }))
+  }
+}
+
+/** Where the session is shown: a terminal, a graphical host (attached, or about to attach), or nowhere (`-p`). */
+async function hostOf($: any) {
+  const surfaces = await guarded($, 'session.surfaces', () => $.session.surfaces(), [])
+  const entrypoint = await guarded($, 'env.get', () => $.env.get('CLAUDE_CODE_ENTRYPOINT'), undefined)
+  return hostKind({ surfaces, entrypoint })
+}
+
+/** Writes the report page with scripts/report.mjs and returns its path; `openPage` opens it. */
 async function writeReport($: any, ctx: Ctx): Promise<string> {
   const argv = ['node', `${$.plugin.root}/scripts/report.mjs`, '--config-dir', await configDirOf($, ctx), '--no-open']
   const run = await $.process.run(argv, { timeoutMs: REPORT_TIMEOUT_MS })
@@ -291,18 +322,6 @@ async function openLog($: any, ctx: Ctx): Promise<string> {
   }
 }
 
-/** Opens the page in the desktop app's Browser pane. Answers null when it opened, else why not. Never throws. */
-async function openInPane($: any, file: string): Promise<string | null> {
-  try {
-    const url = fileUrl(file)
-    if (!url) return 'the page has no absolute path'
-    const browser = await $.mcp.connect(BROWSER_SERVER)
-    return connectRefusal(browser) ?? paneRefusal(await $.mcp.call(browser.server, BROWSER_TOOL, { url }))
-  } catch (err) {
-    return errorText(err)
-  }
-}
-
 /** Opens the page in the system's default browser. Answers null when it opened, else why not. Never throws. */
 async function openInBrowser($: any, file: string): Promise<string | null> {
   try {
@@ -316,37 +335,45 @@ async function openInBrowser($: any, file: string): Promise<string | null> {
   }
 }
 
-/**
- * Writes the report and shows it: in the Browser pane where the session draws on the desktop app (`onDesktop`: the
- * usage pane last drew there), else in the default browser, else nowhere. Answers the line that says which; a page
- * that cannot be written throws.
- */
-async function showReport($: any, ctx: Ctx, onDesktop = false): Promise<string> {
+/** Writes the report page and opens it in the default browser. Answers the line that says where; a page that cannot be written throws. */
+async function openPage($: any, ctx: Ctx): Promise<string> {
   const file = await writeReport($, ctx)
-  if (onDesktop || hasBrowserPane(await $.session.surfaces().catch(() => []))) {
-    const refused = await openInPane($, file)
-    if (!refused) return reportLine('pane', file)
-    $.ui.log(`[model-router] Browser pane: ${refused}`, { to: 'debug' })
-  }
   const failed = await openInBrowser($, file)
   return failed ? reportLine('none', file, failed) : reportLine('browser', file)
+}
+
+/**
+ * Shows the report: as a native pane on a graphical host (`onGraphical`: the press came from a graphical drawing),
+ * as the HTML page in the default browser anywhere else. A pane that is not placed yet is kept: an app attaches
+ * its surface at its first draw, and the pane is drawn then.
+ */
+async function showReport($: any, ctx: Ctx, onGraphical = false): Promise<string> {
+  if (!onGraphical && (await hostOf($)) !== 'graphical') return openPage($, ctx)
+  await $.ui.open({ id: REPORT_PANE, title: REPORT_PANE_TITLE, focus: true })
+  await refreshReport($, ctx, true)
+  return reportLine('pane')
 }
 
 const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
 // A one-line answer to the person carries the identity, after the plugin name the engine puts first: `🔀 …`.
 const say = (text: string) => display(`${ROUTE_ICON} ${text}`)
 
-/** Opens the usage view; where no pane can be placed, answers its rows as text. */
+/**
+ * Opens the usage view. Where no pane can be placed it answers its rows as text: a terminal too narrow, a `-p`
+ * run. On a graphical host a pane that is not placed yet is kept, not replaced by the text: the app attaches its
+ * surface at its first draw, and the pane is drawn then.
+ */
 async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | null; window: string | null; level: string | null }, columns: number) {
   const view: UsageView = { tab: asked.tab ?? DEFAULT_VIEW.tab, window: asked.window ?? DEFAULT_VIEW.window, level: asked.level ?? DEFAULT_VIEW.level }
   await update($, viewState, () => view)
-  if (columns >= MIN_COLUMNS) {
+  const onGraphical = (await hostOf($)) === 'graphical'
+  if (columns >= MIN_COLUMNS || onGraphical) {
     const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true, rows: PANE_ROWS })
-    if (opened.isPlaced) {
+    if (opened.isPlaced || onGraphical) {
       // A pane that was already open keeps its ring where it was: move it to the tab asked for.
-      void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
+      if (opened.isPlaced) void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
       await refreshUsage($, ctx, true)
-      return say('Usage view opened (Esc closes it).')
+      return say(opened.isPlaced ? 'Usage view opened (Esc closes it).' : 'Usage view opening beside the chat.')
     }
     await $.ui.close({ id: PANE }).catch(() => undefined)
   }
@@ -479,9 +506,6 @@ export const register: Register = (on, options) => {
     return started
   })
 
-  // The surface the usage pane last drew on: the desktop app has a Browser pane for the report.
-  let lastSurface: string | null = null
-
   on('command.run', { command: 'model-router' }, async ($, e) => {
     const asked = parseArgs(e.args)
     if (asked.kind === 'toggle') {
@@ -492,7 +516,7 @@ export const register: Register = (on, options) => {
     if (asked.kind === 'unknown') return display(`${ROUTE_ICON} Unknown argument "${asked.word}".\n\n${helpText()}`)
     if (asked.kind === 'report') {
       try {
-        return say(await showReport($, ctx, lastSurface === 'desktop'))
+        return say(await showReport($, ctx))
       } catch (err) {
         return say(`Could not write the report: ${errorText(err)}`)
       }
@@ -562,16 +586,29 @@ export const register: Register = (on, options) => {
       openLog: async () => $.ui.log(`${ROUTE_ICON} ${await openLog($, ctx)}`),
       report: async () => {
         try {
-          $.ui.log(`${ROUTE_ICON} ${await showReport($, ctx, e.surface === 'desktop')}`)
+          $.ui.log(`${ROUTE_ICON} ${await showReport($, ctx, isGraphicalSurface(e.surface))}`)
         } catch (err) {
           $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
         }
       },
     })
     isGraphical = drawn.isGraphical
-    lastSurface = e.surface
     return drawn.tree
   })
+
+  // The report pane (hooks/report-desktop.tsx): the report's view model in native cards and charts. Its page
+  // button writes the HTML page and opens it in the default browser, as `o` does in the terminal.
+  on('ui.render', { component: 'Pane', requestId: REPORT_PANE }, async ($, e) =>
+    drawReportPane($, e, await read($, reportState), {
+      refresh: () => refreshReport($, ctx),
+      openPage: async () => {
+        try {
+          $.ui.log(`${ROUTE_ICON} ${await openPage($, ctx)}`)
+        } catch (err) {
+          $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
+        }
+      },
+    }))
 
   // The choose-model line under an Agent call's row: `🔀 opus ▰▰▰▱ high -> reason`, in colour, with what the
   // subagent actually got. The row is kept as it is; with no line yet, or on any error, only the row is drawn.
