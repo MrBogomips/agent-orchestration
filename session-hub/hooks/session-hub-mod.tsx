@@ -8,14 +8,15 @@
 // hooks.json stays and covers file writes with mods off.
 
 import { atom, memberOf, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderElement, RenderInputOf, RenderSurface } from 'claude-code'
 
 import type { ScopeLine, SessionHubMaster, SessionHubPanel, SessionHubStarts } from '../types'
 import { helpText, parseCommand } from './mod/command.mjs'
 import { identityMismatch, mismatchText } from './mod/identity.mjs'
 import { markContext, markText } from './mod/origin.mjs'
 import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
-import { childStarts, startLineSegments } from './mod/start-line.mjs'
+import { childStarts, isSessionStartTool, startLineSegments, toolStarts } from './mod/start-line.mjs'
+import type { ChildStart } from './mod/start-line.mjs'
 import { readRole } from './mod/role.mjs'
 import { SECTION_ID, roleSummary, scopeSection } from './mod/scope-line.mjs'
 import { judgeSend } from './mod/send-guard.mjs'
@@ -62,15 +63,33 @@ const segmentProps = (segment: Segment) => ({
   ...(segment.bold ? { weight: 'bold' as const } : {}),
 })
 
-// Keeps the lines of the children a Bash call started, for its row. Never throws: the line is only a view.
-async function recordStarts($: $, toolUseId: unknown, command: string) {
+// Keeps the lines of the children a call started (a launch command, or the desktop app's session tool), for its
+// row. Never throws: the line is only a view.
+async function recordStarts($: $, toolUseId: unknown, startsOf: () => ChildStart[]) {
   try {
-    const starts = childStarts(command)
+    const starts = startsOf()
     if (typeof toolUseId !== 'string' || toolUseId === '' || starts.length === 0) return
     await update($, memberOf(startLines, { requestId: toolUseId }), () => ({ starts }))
   } catch (error) {
     $.ui.log(`[session-hub] start line: ${error instanceof Error ? error.message : error}`, { to: 'debug' })
   }
+}
+
+// The row of a call that started children, with its start lines under it; the row alone when it has none.
+async function withStarts($: $, e: RenderInputOf<'ToolUse', RenderSurface>, row: RenderElement): Promise<RenderElement> {
+  const lines = await read($, memberOf(startLines, e))
+  if (!lines || lines.starts.length === 0) return row
+  const { Box, Text } = $.ui.resolve(e)
+  return (
+    <Box flexDirection="column">
+      {row}
+      {lines.starts.map((start) => (
+        <Text wrap="truncate">
+          {(startLineSegments(start) as Segment[]).map((segment) => <Text {...segmentProps(segment)}>{segment.text}</Text>)}
+        </Text>
+      ))}
+    </Box>
+  )
 }
 
 // The role comes from the launch environment, read at every use: no module state to go stale.
@@ -257,7 +276,7 @@ export const register: Register = (on) => {
       return verdict.allow ? next(e) : { deny: verdict.reason }
     }
     const result = await next(e)
-    if (role.kind === 'none' && e.tool === 'Bash') await recordStarts($, e.tool_use_id, e.command)
+    if (role.kind === 'none' && e.tool === 'Bash') await recordStarts($, e.tool_use_id, () => childStarts(e.command))
     const found = role.kind === 'none' && e.tool === 'Bash' ? parseRegistryCall(e.command) : undefined
     if (found) {
       await becomeMaster($, { record: found.file, hub: found.hub })
@@ -355,25 +374,27 @@ export const register: Register = (on) => {
     )
   })
 
-  // The start line under a Bash call that started children: `⎿  🔀 opus   ▰▰▰▱ high   -> <child>`, one per child.
-  // The row is kept as it is; with no line, or on any error, only the row is drawn.
-  on('ui.render', { component: 'ToolUse', props: { tool: 'Bash' } }, async ($, e, next) => {
-    const lines = await read($, memberOf(startLines, e))
-    const row = await next(e)
-    if (!lines || lines.starts.length === 0) return row
-    const { Box, Text } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="column">
-        {row}
-        {lines.starts.map((start) => (
-          <Text wrap="truncate">
-            {(startLineSegments(start) as Segment[]).map((segment) => <Text {...segmentProps(segment)}>{segment.text}</Text>)}
-          </Text>
-        ))}
-      </Box>
-    )
-  }).catch(($, e, next) => {
-    $.ui.log(`[session-hub] start line: ${next.error?.message ?? next.error?.kind ?? 'unknown error'}`, { to: 'debug' })
-    return next(e)
-  })
+  // In the desktop app a child starts with the app's session tool, not a launch command: its line comes from the
+  // call's input. Only a master (no role) draws start lines, as for Bash.
+  // Nothing after next() throws (the role read and the record are guarded), so the catch only sees next() fail.
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    if (!isSessionStartTool(e.tool)) return result
+    const role = await loadRole($).catch(() => undefined)
+    if (role?.kind === 'none') await recordStarts($, e.tool_use_id, () => toolStarts(String(e.tool), e))
+    return result
+  }).catch(($, e, next) => next(e))
+
+  // The start line under a call that started children: `⎿  🔀 opus   ▰▰▰▱ high   -> <child>`, one per child. The
+  // row is kept as it is; with no line, or on any error, only the row is drawn.
+  on('ui.render', { component: 'ToolUse', props: { tool: 'Bash' } }, async ($, e, next) => withStarts($, e, await next(e)))
+    .catch(($, e, next) => {
+      $.ui.log(`[session-hub] start line: ${next.error?.message ?? next.error?.kind ?? 'unknown error'}`, { to: 'debug' })
+      return next(e)
+    })
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (isSessionStartTool(e.props.tool) ? withStarts($, e, await next(e)) : next(e)))
+    .catch(($, e, next) => {
+      $.ui.log(`[session-hub] start line: ${next.error?.message ?? next.error?.kind ?? 'unknown error'}`, { to: 'debug' })
+      return next(e)
+    })
 }

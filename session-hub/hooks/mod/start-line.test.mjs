@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { childStarts, startLineSegments, startLineText } from './start-line.mjs';
+import { childStarts, isSessionStartTool, startLineSegments, startLineText, toolStarts } from './start-line.mjs';
 
 const ENV = 'SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub SESSION_HUB_SCOPE_ROOT=/h/product SESSION_HUB_HANDOFF=/h/t.md ' +
   'SESSION_HUB_REGISTRY=/r.json SESSION_HUB_GUARDS=on';
@@ -66,4 +66,22 @@ test('the line as text, and as segments in the shared look', () => {
     { text: ' -> t42-product', tone: 'dim' },
   ]);
   assert.equal(startLineText({ name: 'c', model: 'gpt-x' }), '⎿  🔀 gpt-x  ▱▱▱▱ default -> c');
+});
+
+test("a desktop app start: the session tool's name and model; the effort as the tool gives it", () => {
+  const tool = 'mcp__ccd_session__start_session';
+  assert.equal(isSessionStartTool(tool), true);
+  assert.deepEqual(toolStarts(tool, { name: 'review-seed', title: 'Review', model: 'claude-sonnet-5-5', prompt: 'x' }), [
+    { name: 'review-seed', model: 'claude-sonnet-5-5', effort: undefined },
+  ]);
+  assert.deepEqual(toolStarts(tool, { title: 'Review the seed', effort: 'high' }), [{ name: 'Review the seed', model: undefined, effort: 'high' }]);
+});
+
+test('no desktop line for another tool, a start with neither model nor effort, or input that is not an object', () => {
+  assert.equal(isSessionStartTool('Bash'), false);
+  assert.equal(isSessionStartTool('mcp__x__start_session_later'), false);
+  assert.deepEqual(toolStarts('Read', { name: 'a', model: 'opus' }), []);
+  assert.deepEqual(toolStarts('mcp__ccd_session__start_session', { name: 'a' }), []);
+  assert.deepEqual(toolStarts('mcp__ccd_session__start_session', null), []);
+  assert.deepEqual(toolStarts('mcp__ccd_session__start_session', { name: 'a', model: 42 }), []);
 });

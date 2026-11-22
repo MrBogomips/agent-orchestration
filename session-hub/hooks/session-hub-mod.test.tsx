@@ -374,3 +374,34 @@ test('/session-hub sizes the children table to the terminal', async ($, on) => {
   expect((text ?? '').split('\n').every((l: string) => l.length <= 70)).toBe(true)
   expect(text).toMatch(/t42-product/)
 })
+
+const START_SESSION = 'mcp__ccd_session__start_session'
+const startInput = { name: 'review-seed', title: 'Review the seed', model: 'claude-sonnet-5-5', cwd: '/hub/seed', prompt: 'x' }
+const startRow = (id: string) => ({
+  plugin: 'session-hub',
+  component: 'ToolUse',
+  requestId: id,
+  props: { tool_use_id: id, tool: START_SESSION, input: startInput, isRunning: false, isErrored: false, isInterrupted: false },
+}) as const
+
+test("a child started with the desktop app's session tool gets the start line under that tool's row", async ($, on) => {
+  engine(on, {}, '/hub')
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu4' } as never)
+  for (const surface of ['desktop', 'terminal'] as const) {
+    const ui = await $.ui.mount({ ...startRow('tu4'), surface } as never)
+    expect((await ui.find({ type: 'Text', text: /^ {2}⎿ {2}🔀 / }))?.text).toBe('  ⎿  🔀 sonnet ▱▱▱▱ default -> review-seed')
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
+    expect(drawn).toContain('"color":"#7dd3fc"')
+    await ui.unmount()
+  }
+})
+
+test('a desktop session start in a child session draws only its row', async ($, on) => {
+  engine(on, CHILD_ENV)
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu5' } as never)
+  const ui = await $.ui.mount({ ...startRow('tu5'), surface: 'desktop' } as never)
+  expect(await ui.find({ type: 'Text', text: /🔀/ })).toBeUndefined()
+})
