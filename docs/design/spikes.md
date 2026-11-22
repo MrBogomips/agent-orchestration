@@ -134,3 +134,12 @@ model call.
 | ID | Date | Claude Code | Setup | Outcome |
 |---|---|---|---|---|
 | S17 | 2026-11-21 | 2.1.330 | As above. | **The agent type is the frontmatter `name`, not the file name.** The init event's `agents` list reads `bar`, `claude`, `Explore`, `general-purpose`, `plain`, `Plan`, `statusline-setup`: `bar` is there, `foo` is not. So the mod's lookup of `<dir>/.claude/agents/<type>.md` can read a file that defines another agent; it now treats a file whose `name` differs from the type as `unknown` (start kept). The run stopped at the login check, so no subagent was started. |
+
+## Results for the desktop cards (model-router 0.4.0, session-hub 0.5.0)
+
+Setup: the Claude desktop app, dark theme, a throwaway mod with eight `/ui-spike <n>` commands, each drawing one card
+from fixed demo data through a `ui.render` hook on its `CommandOutput` row.
+
+| ID | Date | Claude Code | Setup | Outcome |
+|---|---|---|---|---|
+| S18 | 2026-11-22 | 2.1.330 | As above. | **A `CommandOutput` hook's tree draws as a card** in the row's place, with the app's own frame; the app draws its copy, pin and time under it, and copies the row's `text`. **`Select`** is the app's dropdown with a checkmark menu, and a pick redraws the row at once. **A plain `Button`** holding a chevron is drawn as bare text and its press works; a default `Button` is a grey box, a Markdown link blue. **A `$.state` write from a `$.clock` timer redraws the card**; `onScreen` was never reported. **An `Svg` with a `viewBox` and no `width`** fills the card's width (about 840 px on that window); text inside a 440-unit drawing came out twice its size, so labels are sized for an 840-unit drawing. The four model blues read apart; a fixed dark track did not suit a light ground. **Only a Markdown `file:` link** opens a file; `Link` is not drawn as a link. A Markdown table draws as heavy grey cells; `Box` rows with an `Svg` hairline read like `/stats`. **A row placed with `$.ui.place` never shows under the app's `start_session` card**, nor does a line added under that tool's row. |
