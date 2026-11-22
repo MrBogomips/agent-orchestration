@@ -95,6 +95,31 @@ Each surface gets a rendering made for it. A graphical surface never gets the te
   `isPlaced: false` there, the app attaches at its first draw and the pane is drawn then. The command answers one
   short line. Text in place of a pane is for a terminal too narrow for it and for a run that draws nowhere (`-p`).
 
+## The size of a tree
+
+Claude Code bounds every tree a `ui.render` hook returns: **20,000 elements, 32 deep, 100,000 characters once
+serialized** (Claude Code 2.1.330; stated in the API types for a surface module's tree, as "every tree's bounds").
+A tree past a bound is refused whole. Nothing tells the person: on the desktop app the pane keeps the app's own
+empty state, "Nothing to show yet". The mod test kit does not enforce the bound, so a test passes on a tree the
+app will not show.
+
+The characters are the bound a pane meets first. An element costs about a hundred characters, a table row of
+eight cells about a thousand, an SVG bar about three hundred: a hundred table rows are a whole budget.
+
+- A pane whose content grows with the data **measures its tree** before returning it (`treeSize` and
+  `firstThatFits` of `model-router/lib/tree-bounds.mjs`) and keeps to a budget of four fifths of the bounds
+  (80,000 characters, 16,000 elements), since the engine serializes a tree its own way.
+- When the whole content does not fit, the pane **degrades in steps**, richest first: it draws a section in brief
+  (a line per item in place of a table), then more sections in brief, and says in one line what it left out and
+  where the whole is (a page, a file). The last step is one readable line and the button that opens the whole.
+  Never an empty pane.
+- A step that is far past the budget by a count of its rows is not built at all: a tree of megabytes is costly
+  to build only to be measured and thrown away.
+- Prefer content that is bounded by design: a page of twenty rows with paging, the latest forty events, the first
+  six names and a count of the rest.
+- A mod test for such a pane draws data large enough to be past the bound and asserts the size of the drawn tree
+  (`treeSize(await ui.drawn())`), not only what it shows.
+
 ## Graphical surfaces: HTML pages
 
 A page a plugin writes (`model-router`'s `report.html`) follows the rules above for content, colour and layout, with

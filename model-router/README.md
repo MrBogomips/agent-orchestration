@@ -113,7 +113,9 @@ That is the terminal's rendering. In Claude Desktop, the editor and the mobile a
 native elements: buttons for the tabs, windows and level, four KPI cards with a status chip and an SVG sparkline,
 tables with aligned columns and SVG bars, and Report, Refresh and Log buttons. Under five scored tasks one banner says
 the figures are indicative, in place of a mark on every card. Report opens a second pane there, the report drawn
-with the same elements; its *Open as page* button writes the HTML page and opens it in the default browser. Log
+with the same elements; its *Open as page* button writes the HTML page and opens it in the default browser. A report too large for the
+pane (many classes and projects) is drawn in brief there, each project and then each class as one line: the page
+has all of it. Log
 opens a third pane, the log dashboard: the records of the event log and its archive counted by type and by day,
 filters for the window and the type, and the latest records in pages of twenty, without any prompt text; its
 *Open file* button opens the file itself.

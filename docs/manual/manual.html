@@ -1009,7 +1009,9 @@ open it, it says why.</p>
 <p><strong>In the Claude desktop app</strong> (and in VS Code and the mobile apps) the report opens as a pane beside the
 chat, drawn with the app's own elements in its light or dark theme, with the same content as the page, top to bottom.
 Its footer has two buttons: <em>Open as page</em> writes the HTML page and opens it in your browser, to keep or to
-share; <em>Refresh</em> reads the data again. Projects are listed one after the other, each under its path.</p>
+share; <em>Refresh</em> reads the data again. Projects are listed one after the other, each under its path. A report
+with many classes and projects is too large for the pane: it then shows each project as one line, and for a larger
+one each class as one line too, and says so above them; <em>Open as page</em> always has every table.</p>
 <p>From a shell:</p>
 <pre><code>node "&lt;plugin folder&gt;/scripts/report.mjs"             # write and open
 node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote or headless)</code></pre>

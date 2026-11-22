@@ -2,7 +2,8 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { logCollector } from '../lib/log-data.mjs'
-import { STATUS, T0, events, reportData, usageData } from '../lib/usage-fixture.mjs'
+import { TREE_BOUNDS, TREE_BUDGET, treeSize } from '../lib/tree-bounds.mjs'
+import { STATUS, T0, bigReportData, events, reportData, usageData } from '../lib/usage-fixture.mjs'
 
 // A grid with what the mod reads: tiers for the judge prompt, effort questions, classes, the judge mapping.
 const GRID = {
@@ -886,6 +887,68 @@ describe('the report on graphical surfaces', () => {
     expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
     expect(await ui.find({ type: 'Svg' })).toBeUndefined()
     await ui.unmount()
+  })
+})
+
+// A real report (six classes, two projects) drawn whole is a tree of about 150,000 characters. Claude Code refuses
+// a tree past 100,000 and the desktop app then shows its own empty state, "Nothing to show yet".
+describe('a report too large for one tree', () => {
+  const draw = async ($: any, on: On, size: { classes?: number; cells?: number; projects?: number }) => {
+    const w = world(on, undefined, { surfaces: ['desktop'], reportData: { exitCode: 0, stdout: JSON.stringify(bigReportData(size)) } })
+    await run($, 'report')
+    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    const drawn = await ui.drawn()
+    const texts: string[] = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
+    const keys: string[] = (await ui.findAll({ type: 'Button' })).map((b: any) => b.key)
+    await ui.unmount()
+    return { w, size: treeSize(drawn), texts, keys }
+  }
+  const skipped = (w: World) => w.debug.filter((l) => l.startsWith('[model-router] report pane, '))
+
+  test('the fixture\'s report is drawn whole, within the bounds', async ($, on) => {
+    const w = world(on, undefined, { surfaces: ['desktop'] })
+    await run($, 'report')
+    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
+    const size = treeSize(await ui.drawn())
+    await ui.unmount()
+    expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
+    expect(size.depth).toBeLessThan(TREE_BOUNDS.depth)
+    expect(skipped(w)).toEqual([])
+  })
+
+  test('six classes and two projects keep the user level whole and draw each project as one line', async ($, on) => {
+    const { w, size, texts, keys } = await draw($, on, { classes: 6, cells: 3, projects: 2 })
+    expect(size.chars).toBeLessThan(TREE_BOUNDS.chars)
+    expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
+    expect(size.nodes).toBeLessThan(TREE_BOUNDS.nodes)
+    expect(skipped(w).length).toBe(1)
+    expect(skipped(w)[0]).toMatch(/^\[model-router\] report pane, full: chars \d{6} > 80000$/)
+    expect(texts.some((t) => t.startsWith('The tables of the projects are too large to draw here'))).toBe(true)
+    expect(texts.includes('Headline') && texts.includes('Trend by week') && texts.includes('Classes · all projects')).toBe(true)
+    expect(texts.some((t) => t.includes('class-6'))).toBe(true)
+    expect(texts.filter((t) => t === 'tier · effort').length).toBe(6)
+    expect(texts.some((t) => t.startsWith('/work/hub/project-2') && t.includes('6 classes · 18 cells'))).toBe(true)
+    expect(keys).toEqual(['page', 'refresh'])
+  })
+
+  test('a larger report draws each class as one line too', async ($, on) => {
+    const { w, size, texts, keys } = await draw($, on, { classes: 12, cells: 4, projects: 2 })
+    expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
+    expect(skipped(w).map((l) => l.split(':')[0])).toEqual(['[model-router] report pane, full', '[model-router] report pane, projects'])
+    expect(texts.some((t) => t.startsWith('The class tables are too large to draw here'))).toBe(true)
+    expect(texts.filter((t) => t === 'tier · effort').length).toBe(0)
+    expect(texts.some((t) => t.startsWith('class-12') && t.includes('4 cells'))).toBe(true)
+    expect(texts.includes('Headline')).toBe(true)
+    expect(keys).toEqual(['page', 'refresh'])
+  })
+
+  test('a report past every level is one line and the page button; a level with far too many rows is never built', async ($, on) => {
+    const { w, size, texts, keys } = await draw($, on, { classes: 200, cells: 2, projects: 6 })
+    expect(size.chars).toBeLessThan(2000)
+    expect(texts).toContain('The report is too large to draw here. Open as page shows it whole.')
+    expect(skipped(w).map((l) => l.split(': ')[1]).slice(0, 2)).toEqual(['2800 rows > 400', '406 rows > 400'])
+    expect(skipped(w)[2]).toMatch(/classes: chars \d+ > 80000$/)
+    expect(keys).toEqual(['page'])
   })
 })
 

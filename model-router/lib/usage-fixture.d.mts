@@ -9,3 +9,4 @@ export declare function events(): Record<string, unknown>[]
 export declare function level(list: readonly Record<string, unknown>[], kind: string, project?: { id: string; root: string }): Record<string, unknown>
 export declare function usageData(): { [key: string]: unknown }
 export declare function reportData(): { [key: string]: unknown }
+export declare function bigReportData(size?: { classes?: number; cells?: number; projects?: number }): { [key: string]: unknown }

@@ -35,4 +35,7 @@ export declare const MARKS: Readonly<{ recommended: string; few: string }>
 export declare const TREND_SIZE: Readonly<{ width: number; height: number }>
 export declare function readableTime(iso: unknown): string
 export declare function taskCount(cell: { tasks?: number; n?: number }): number
+export declare const DETAILS: readonly ['full', 'projects', 'classes']
+export declare const MAX_ROWS: number
+export declare function rowsAt(view: ReportView, detail: 'full' | 'projects' | 'classes'): number
 export declare function reportView(data: { [key: string]: unknown }): ReportView

@@ -3,6 +3,19 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.3.15
+
+2026-11-22 · pull request #TBD
+
+### Fixed
+
+- In the Claude desktop app the report pane opened empty, with the app's own "Nothing to show yet", for a report
+  with several classes and projects. Claude Code refuses a tree of more than 100,000 characters, and a report of
+  six classes and two projects drawn whole is about 150,000. The pane now measures what it draws and, when the
+  whole report does not fit, draws each project as one line, then each class as one line too, saying what it left
+  out and that *Open as page* shows everything; past that it draws one line and the page button. The usage view
+  and the log dashboard keep to the same bounds.
+
 ## model-router 0.3.14
 
 2026-11-22 · pull request #81

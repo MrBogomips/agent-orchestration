@@ -104,3 +104,25 @@ export function reportData() {
 }
 
 export const STATUS = { routing: true, routeSubagents: true, measuring: true, adapt: false };
+
+/**
+ * Report data of a chosen size, for the bounds of a tree: `classes` classes of `cells` cells at the user level and
+ * in each of `projects` projects, the rest as `reportData()`. Six classes of two or three cells and two projects
+ * is a real report that, drawn whole, is past the engine's 100,000 characters.
+ */
+export function bigReportData({ classes = 6, cells = 3, projects = 2 } = {}) {
+  const base = reportData();
+  const efforts = ['low', 'medium', 'high', 'xhigh'];
+  const tiers = ['haiku', 'sonnet', 'opus', 'fable'];
+  const cell = (i) => ({
+    tier: tiers[i % 4], effort: efforts[Math.floor(i / 4) % 4], model: null, n: 6.4 + i, tasks: 7 + i, fpy: 0.5 + (i % 5) / 10, reworkRate: 0.1,
+    costPerTask: 0.04 * (i + 1), costPerSuccess: 0.05 * (i + 1), exploreShare: 0, flags: [], recommended: i === 0,
+  });
+  const cls = (i) => ({
+    cls: `class-${i + 1}`, covers: `what class ${i + 1} covers`, default: { tier: 'sonnet', effort: 'medium' },
+    recommendation: { tier: 'haiku', effort: 'low', source: 'data' }, differs: i % 2 === 0, cells: Array.from({ length: cells }, (_, j) => cell(j)),
+    summary: { n: 20, tasks: 20, flags: [] },
+  });
+  const level = (kind, title, shift) => ({ kind, title, classes: Array.from({ length: classes }, (_, i) => ({ ...cls(i), covers: `${cls(i).covers}${shift}` })) });
+  return { ...base, levels: [level('user', 'user', ''), ...Array.from({ length: projects }, (_, i) => level('project', `/work/hub/project-${i + 1}`, ` in project ${i + 1}`))] };
+}

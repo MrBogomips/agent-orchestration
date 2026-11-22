@@ -7,10 +7,11 @@ import type { RenderChildren } from 'claude-code'
 import type { ReportCache } from '../types'
 
 import { PAGE_HOTKEY, PAGE_KEY, PAGE_LABEL } from '../lib/open-report.mjs'
-import { MARKS, reportView } from '../lib/report-cards.mjs'
+import { DETAILS, MARKS, MAX_ROWS, reportView, rowsAt } from '../lib/report-cards.mjs'
 import type { CellRow, ClassCard, LevelSection, ReportView, TrendChart } from '../lib/report-cards.mjs'
 import { ROUTE_ICON } from '../lib/route-line.mjs'
 import { errorText } from '../lib/text.mjs'
+import { firstThatFits } from '../lib/tree-bounds.mjs'
 import { TILES_ONE_ROW } from '../lib/usage-tiles.mjs'
 import { ACCENT, MUTED, banner, kit, kpis, modelsTable } from './usage-desktop'
 import type { GraphicalElements } from './usage-desktop'
@@ -19,6 +20,17 @@ import type { GraphicalElements } from './usage-desktop'
 export type ReportActions = { openPage: () => unknown; refresh: () => unknown }
 
 const PLUGIN = 'model-router'
+/**
+ * How much of the class tables a drawing holds, richest first. A report with many classes and projects makes a tree
+ * past the engine's bounds, which is refused whole: the pane then draws the next level, and says what it left out.
+ * `full`: every table. `projects`: each project as one line. `classes`: each class of the user level as one line too.
+ */
+export type Detail = (typeof DETAILS)[number]
+const LEFT_OUT: Record<Detail, string | null> = {
+  full: null,
+  projects: 'The tables of the projects are too large to draw here: each project is one line. Open as page shows them all.',
+  classes: 'The class tables are too large to draw here: each class and each project is one line. Open as page shows them all.',
+}
 // The shares of a cell row's columns: every column where the pane is wide, without cost per task and the explored
 // share where it is narrow (the page drops the same two).
 const WIDE = { name: '22%', tasks: '8%', fpy: '9%', rework: '10%', costPerTask: '12%', costPerSuccess: '13%', explored: '10%' }
@@ -130,19 +142,45 @@ function classCard(els: GraphicalElements, c: ClassCard, shares: Shares) {
 const levelCards = (els: GraphicalElements, level: LevelSection, shares: Shares) =>
   (level.empty ? [kit(els).card(null, kit(els).empty(level.empty))] : level.cards.map((c) => classCard(els, c, shares)))
 
+const cellCount = (level: LevelSection) => level.cards.reduce((n, c) => n + c.rows.length, 0)
+const count = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
+
+/** A level in brief: one line per class, with its grid cell, its recommendation and how many cells it has. */
+function levelLines(els: GraphicalElements, level: LevelSection) {
+  const { Text } = els
+  const k = kit(els)
+  if (level.empty) return [k.card(null, k.empty(level.empty))]
+  return [k.card(null, level.cards.map((c) => (
+    <Text size="footnote" wrap="truncate">
+      <Text weight="medium">{c.name}</Text>
+      <Text {...MUTED}> · {c.caption} · {count(c.rows.length, 'cell')}{c.differs ? ' · differs from the grid' : ''}</Text>
+    </Text>
+  )))]
+}
+
 /** The classes of the user level, then the projects: one line when the only project repeats them, else a section each. */
-function classes(els: GraphicalElements, view: ReportView, columns: number) {
+function classes(els: GraphicalElements, view: ReportView, columns: number, detail: Detail) {
   const { Text } = els
   const k = kit(els)
   const shares = columns >= TILES_ONE_ROW ? WIDE : NARROW
   const p = view.projects
+  const projectLine = (s: LevelSection & { title: string }) => (
+    <Text size="footnote" wrap="truncate">
+      <Text weight="medium">{s.title}</Text>
+      <Text {...MUTED}> · {s.empty ?? `${count(s.cards.length, 'class', 'classes')} · ${count(cellCount(s), 'cell')}`}</Text>
+    </Text>
+  )
+  const sections = p?.sections ?? []
   return [
     <Text weight="semibold">{view.classes.title}</Text>,
     k.caption(view.classes.caption),
-    ...levelCards(els, view.classes, shares),
+    ...(LEFT_OUT[detail] ? [<Text size="footnote" color="warning">{LEFT_OUT[detail]}</Text>] : []),
+    ...(detail === 'classes' ? levelLines(els, view.classes) : levelCards(els, view.classes, shares)),
     ...(p ? [<Text weight="semibold">{p.title}</Text>] : []),
     ...(p?.note ? [k.caption(p.note)] : []),
-    ...(p?.sections ?? []).flatMap((s) => [<Text weight="medium" wrap="truncate">{s.title}</Text>, ...levelCards(els, s, shares)]),
+    ...(detail === 'full'
+      ? sections.flatMap((s) => [<Text weight="medium" wrap="truncate">{s.title}</Text>, ...levelCards(els, s, shares)])
+      : sections.length ? [k.card(null, sections.map(projectLine))] : []),
   ]
 }
 
@@ -167,9 +205,10 @@ function footer({ Box, Text, Button }: GraphicalElements, view: ReportView | nul
 
 /**
  * The whole report pane. `view` is null while there is no data: one line then says that it is being read, or why
- * it could not be. `columns` is the body's width in cells, which decides one row or two for the cards and charts.
+ * it could not be. `columns` is the body's width in cells, which decides one row or two for the cards and charts;
+ * `detail` how much of the class tables is drawn.
  */
-export function reportPane(els: GraphicalElements, view: ReportView | null, cache: ReportCache, actions: ReportActions, columns: number) {
+export function reportPane(els: GraphicalElements, view: ReportView | null, cache: ReportCache, actions: ReportActions, columns: number, detail: Detail = 'full') {
   const { Box, Text } = els
   const waiting = cache.error
     ? <Text color="warning">Could not read the report data: {cache.error}</Text>
@@ -181,7 +220,7 @@ export function reportPane(els: GraphicalElements, view: ReportView | null, cach
       {view ? headline(els, view, columns) : null}
       {view ? trend(els, view, columns) : null}
       {view ? decisions(els, view) : null}
-      {view ? classes(els, view, columns) : null}
+      {view ? classes(els, view, columns, detail) : null}
       {footer(els, view, cache, actions)}
     </Box>
   )
@@ -199,15 +238,26 @@ function plainPane({ Box, Text, Button }: GraphicalElements, actions: ReportActi
 }
 
 /**
- * The report pane's tree for the surface of `e`. Fails open: data the model cannot be built from, or a tree that
- * cannot be laid out, leaves one readable line and the page button, never an empty pane.
+ * The report pane's tree for the surface of `e`: the richest drawing whose tree is within the engine's bounds
+ * (lib/tree-bounds.mjs), since a tree past them is refused whole and the app then shows its own empty state. Fails
+ * open: data the model cannot be built from, a tree that cannot be laid out, or one too large at every level of
+ * detail, leaves one readable line and the page button, never an empty pane.
  */
 export function drawReportPane($: any, e: any, cache: ReportCache, actions: ReportActions) {
   const els = $.ui.resolve(e)
   if (e.surface === 'terminal' || !('Svg' in els)) return plainPane(els, actions, 'This pane is drawn on graphical surfaces. Here the report is a page.')
   try {
     const view = cache.data ? reportView(cache.data) : null
-    return reportPane(els, view, cache, actions, Math.max(20, e.props.bodyColumns ?? 80))
+    const columns = Math.max(20, e.props.bodyColumns ?? 80)
+    // A level with far too many rows is not even built: its tree would be megabytes, to be measured and thrown away.
+    const build = (detail: Detail) => () => {
+      if (view && rowsAt(view, detail) > MAX_ROWS) throw new Error(`${rowsAt(view, detail)} rows > ${MAX_ROWS}`)
+      return reportPane(els, view, cache, actions, columns, detail)
+    }
+    const found = firstThatFits(DETAILS.map(build), {
+      onSkip: (index, why) => $.ui.log(`[model-router] report pane, ${DETAILS[index]}: ${why}`, { to: 'debug' }),
+    })
+    return found.tree ?? plainPane(els, actions, 'The report is too large to draw here. Open as page shows it whole.')
   } catch (err) {
     $.ui.log(`[model-router] report pane: ${errorText(err)}`, { to: 'debug' })
     return plainPane(els, actions, `Could not draw the report: ${errorText(err)}`)
