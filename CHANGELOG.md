@@ -3,6 +3,21 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.5.1
+
+2026-11-23 · pull request #92
+
+### Fixed
+
+- On native Windows the scope guard no longer blocks every `Edit` and `Write` of a child (issue #89). It walked the
+  drive (`C:`) as a folder, so every file seemed outside the write root; it now starts from the path's own root, a
+  drive or a network share.
+- `SESSION_HUB_SCOPE_ROOT` accepts a Windows path (`C:\hub\repo`, `C:/hub/repo`, `\\server\share\repo`), and a drive
+  root such as `C:\` is refused as too wide, like `/`. The repository's `.claude/settings*.json` stays blocked with
+  either separator.
+- The hook command sets `MSYS2_ENV_CONV_EXCL` so that Git Bash no longer rewrites the `SESSION_HUB_*` values before
+  the guard reads them.
+
 ## model-router 0.6.0
 
 2026-11-23 · pull request #91

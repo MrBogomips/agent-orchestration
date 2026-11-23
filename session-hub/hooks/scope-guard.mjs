@@ -13,13 +13,13 @@
 
 import { lstatSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, dirname, normalize as normalizePath, sep } from 'node:path';
+import * as nodePath from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { checkRootFolder, checkRootSetting, isRootSettings, settingsReason } from './mod/write-root.mjs';
 
 // A path without `.`, `..` or a trailing separator, as written.
-const asWritten = (path) => normalizePath(String(path)).replace(/(.)\/+$/, '$1');
+const asWritten = (path) => nodePath.normalize(String(path)).replace(/(.)[\\/]+$/, '$1');
 
 const PREFIX = '[session-hub]';
 // Path fields per tool, in the order they are looked up.
@@ -91,27 +91,32 @@ function exists(path) {
 // Resolves an absolute path component by component, following symbolic links in the parts that exist, so that
 // `..` after a link goes to the link target's parent, as the file system does. Parts that do not exist yet are
 // kept as written. A dangling link makes realpath fail, which the caller turns into a block.
-export function resolveTarget(absolutePath) {
-  let current = realpath(sep);
-  for (const part of absolutePath.split(sep)) {
+// The walk starts from the path's own root (`/`, a drive such as `C:\`, or a share `\\server\share\`), never from a
+// part of it (issue #89). `path`, `realpath` and `exists` are replaceable so that tests can walk Windows paths.
+export function resolveTarget(absolutePath, { path = nodePath, realpath: realOf = realpath, exists: isThere = exists } = {}) {
+  const { root } = path.parse(absolutePath);
+  const separators = path.sep === '\\' ? /[\\/]/ : '/';
+  let current = realOf(path.normalize(root));
+  for (const part of absolutePath.slice(root.length).split(separators)) {
     if (part === '' || part === '.') continue;
     if (part === '..') {
-      current = dirname(current);
+      current = path.dirname(current);
       continue;
     }
-    const next = current === sep ? `${sep}${part}` : `${current}${sep}${part}`;
-    current = exists(next) ? realpath(next) : next;
+    const next = path.join(current, part);
+    current = isThere(next) ? realOf(next) : next;
   }
   return current;
 }
 
-const isUnder = (path, root) => path === root || path.startsWith(`${root}${sep}`);
+export const isUnder = (path, root, { sep } = nodePath) =>
+  path === root || path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
 
 function targetPath(input) {
   const fields = WRITE_TOOLS[input.tool_name];
   const raw = fields.map((field) => input.tool_input?.[field]).find((value) => typeof value === 'string' && value);
   if (!raw) throw new Error(`the ${input.tool_name} call has no ${fields.join(' or ')}`);
-  if (!isAbsolute(raw)) throw new Error(`${raw} is not an absolute path`);
+  if (!nodePath.isAbsolute(raw)) throw new Error(`${raw} is not an absolute path`);
   return raw;
 }
 
