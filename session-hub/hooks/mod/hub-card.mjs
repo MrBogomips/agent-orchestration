@@ -38,6 +38,8 @@ const note = (text, tone = null) => ({ kind: 'note', text, tone });
 /** The last part of a path, so that the card shows no machine folder but in its closing line. */
 export const baseName = (path) => String(path ?? '').replace(/\/+$/, '').split('/').pop() || String(path ?? '');
 const statusOf = (status) => STATUSES.find((s) => s.status === status) ?? { ...OTHER, status };
+/** A text whose absolute paths are cut to their last part: the card shows no machine folder but in its last line. */
+const noPaths = (text) => String(text ?? '').replace(/(?:\/[^\s/·]+)+\/([^\s/·]+)/g, '$1');
 /** `2026-11-20 10:30` (UTC) as `Nov 20, 10:30`. */
 function whenText(when) {
   const m = /^(\d{4})-(\d\d)-(\d\d) (\d\d:\d\d)$/.exec(String(when ?? ''));
@@ -156,7 +158,7 @@ function recordBlocks(input, children) {
     ] },
     ...(shown.length
       ? [{ kind: 'table', title: 'Timeline', aside: `latest ${shown.length}${picked ? ` of ${picked}` : ''}`, rows: shown.map((e) => ({
-        label: [picked ? null : e.child, e.what.text, e.text.replace(/ → /g, ': ')].filter(Boolean).join(' · '), value: whenText(e.when) || '–', tone: TONES.includes(e.what.tone) ? e.what.tone : null,
+        label: [picked ? null : e.child, e.what.text, noPaths(e.text).replace(/ → /g, ': ')].filter(Boolean).join(' · '), value: whenText(e.when) || '–', tone: TONES.includes(e.what.tone) ? e.what.tone : null,
       })) }]
       : [note(children.length ? 'No event for this child yet.' : 'No child in the record yet. A child appears here when the master starts one.')]),
     ...(left > 0 ? [note(`${plural(left, 'earlier event')} in the record.`)] : []),

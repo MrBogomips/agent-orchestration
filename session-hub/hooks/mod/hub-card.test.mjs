@@ -135,3 +135,10 @@ test('a session with no role gets no read error under its note; a child or a mas
   assert.equal(hubCardOf({ state: {}, role: NONE, master: { isMaster: false }, log }).blocks.length, 1);
   assert.equal(hubCardOf({ state: {}, role: NONE, master: MASTER, log }).blocks.at(-1).tone, 'warn');
 });
+
+test('a repository recorded as a path is shown by its last part in the timeline', () => {
+  const record = { children: [{ name: 'c', status: 'running', repo: '/Users/someone/hub/product', task: 'T-1', started: '2026-11-22T16:35:00Z', requests: [] }] };
+  const c = card({ view: 'record' }, { log: { record, file: FILE } });
+  assert.deepEqual(blockOf(c, 'table').rows.map((r) => r.label), ['c · started · product · T-1']);
+  assert.equal(JSON.stringify(c.blocks.filter((b) => b.kind !== 'markdown')).includes('/Users/someone'), false);
+});
