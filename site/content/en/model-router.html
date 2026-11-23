@@ -1,4 +1,4 @@
-<!-- translated-from: it/model-router.html sha256:917d6ca6437f -->
+<!-- translated-from: it/model-router.html sha256:8b3e0add1743 -->
 <h1>model-router</h1>
 <p class="lede">Choosing the right model for every subagent, child session, or workflow agent shouldn't be guesswork. <code>model-router</code> applies a single written grid, routes launches that don't specify a model on the fly, and measures on your machine how well each choice actually paid off.</p>
 
@@ -125,7 +125,7 @@
 <h3>The call and the response</h3>
 <p>The router makes a single call to the <code>fast</code> tier (the <code>fastModel</code> option, which defaults to <code>haiku</code>) at <code>low</code> effort, with a 300-token output cap and an 8-second timeout (<code>timeoutMs</code>). The call runs through your session's client like a regular subagent and counts toward your session cost.</p>
 <p>The judge returns a single JSON object:</p>
-<pre><code>{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "&lt;class&gt;" }</code></pre>
+<pre><code>{ "tier": "fast | balanced | frontier | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "&lt;class&gt;" }</code></pre>
 <h3>How the router decides</h3>
 <p>Aiming too low ruins the output; aiming too high just costs a bit more. Because of that, decision thresholds are asymmetric:</p>
 <table>
@@ -137,7 +137,7 @@
     <tr><td>Missing <code>confidence</code></td><td>—</td><td>Never changes the model in either direction</td></tr>
   </tbody>
 </table>
-<p>Comparison is always relative to the parent session's model. Effort likewise changes only when <code>effort_confidence</code> clears the threshold (the downgrade threshold for <code>low</code>, the upgrade threshold for higher levels). If the call already carries an explicit effort, that value is kept, and <code>max</code> is never set. Finally, the judge's tiers top out at <code>deep</code> (<code>opus</code>), so the router never picks <code>fable</code>.</p>
+<p>Comparison is always relative to the parent session's model. Effort likewise changes only when <code>effort_confidence</code> clears the threshold (the downgrade threshold for <code>low</code>, the upgrade threshold for higher levels). If the call already carries an explicit effort, that value is kept, and <code>max</code> is never set. Finally, the <code>frontier</code> tier (<code>fable</code>) is only allowed for <code>design-open</code> with a confidence of at least 0.7 (<code>minFrontierConfidence</code>); otherwise the response counts as <code>deep</code> (<code>opus</code>). Risky work always goes to <code>deep</code>.</p>
 <h3>When it fails</h3>
 <p>On error, the router <strong>fails open</strong>. A judge failure, timeout, or unreadable response leaves the launch untouched and logs an <code>error</code> — except when a launch is marked with <code>!</code>, which still gets bumped to <code>deep</code>. Every decision is logged with its action: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>, <code>explicit</code>, <code>forced-risk</code>, or <code>error</code>.</p>
 <p>The defaults work well in most cases, though every repository has its own exceptions — here is how to configure them.</p>
@@ -176,9 +176,10 @@ listed here follows the grid.
 <table>
   <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>opus</code></td><td>Models mapped to the judge's <code>fast</code>, <code>balanced</code>, and <code>deep</code> tiers; <code>fastModel</code> also runs the judge itself</td></tr>
+    <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>frontierModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>fable</code>, <code>opus</code></td><td>Models mapped to the judge's <code>fast</code>, <code>balanced</code>, <code>frontier</code>, and <code>deep</code> tiers; <code>fastModel</code> also runs the judge itself</td></tr>
     <tr><td><code>minDowngradeConfidence</code></td><td><code>0.6</code></td><td>Confidence required to lower the model or set <code>low</code> effort</td></tr>
     <tr><td><code>minUpgradeConfidence</code></td><td><code>0.3</code></td><td>Confidence required to raise the model or set <code>medium</code>, <code>high</code>, or <code>xhigh</code> effort</td></tr>
+    <tr><td><code>minFrontierConfidence</code></td><td><code>0.7</code></td><td>Confidence required to send a <code>design-open</code> task to the <code>frontier</code> tier; below this, or for any other class, the spawn gets <code>deep</code></td></tr>
     <tr><td><code>riskThreshold</code></td><td><code>0.7</code></td><td>Risk score above which a launch gets the <code>deep</code> tier and at least <code>high</code> effort</td></tr>
     <tr><td><code>timeoutMs</code></td><td><code>8,000</code></td><td>Maximum wait time for the judge; once exceeded, the launch stays unchanged</td></tr>
     <tr><td><code>routeSubagents</code></td><td><code>true</code></td><td>Turns subagent launch routing on or off altogether</td></tr>
@@ -465,7 +466,7 @@ listed here follows the grid.
 <p>Four limitations of the current version worth keeping in mind:</p>
 <ul>
   <li>Only launches made through the <code>Agent</code> tool are routed; plugin-internal agents and workflow agents are measured, not routed.</li>
-  <li>The router never picks <code>fable</code> and, through version <code>0.3</code>, does not enforce the grid's floor on <code>review-debug</code> and <code>design-open</code>.</li>
+  <li>The router only picks <code>fable</code> for <code>design-open</code> and, through version <code>0.3</code>, does not enforce the grid's floor on <code>review-debug</code> and <code>design-open</code>.</li>
   <li>Costs are engine estimates; edits made outside the session's tools are not detected.</li>
   <li>Through version <code>0.3</code>, quality data is measured only, never used to make decisions. Adaptive selection driven by quality data is planned for <code>0.4</code>.</li>
 </ul>

@@ -63,11 +63,24 @@ export function decideEffort({ judge, explicitEffort, risky, options }) {
   return confident(bar) ? level : undefined;
 }
 
+/** The only class the frontier tier is for: the grid gives that tier to open-ended design alone. */
+export const FRONTIER_CLASS = 'design-open';
+
 /**
- * The model decision at the start, against the model the subagent would run on otherwise (`current`).
+ * Whether a `frontier` answer stands: the task's class is the frontier one, the judge's confidence passes the
+ * frontier bar and a frontier model is set. Otherwise the answer counts as `deep`, and never lowers a start.
+ */
+function frontierStands({ judge, cls, options, models }) {
+  const isConfident = typeof judge.confidence === 'number' && judge.confidence >= options.minFrontierConfidence;
+  return cls === FRONTIER_CLASS && isConfident && Boolean(models.frontier);
+}
+
+/**
+ * The model decision at the start, against the model the subagent would run on otherwise (`current`). `cls` is
+ * the task's class, from the tag or else from the judge.
  * Returns `{ action, model?, reason }`, `action` one of `downgrade`, `upgrade`, `keep`, `forced-risk`.
  */
-export function decideModel({ judge, current, risky, options, models }) {
+export function decideModel({ judge, cls, current, risky, options, models }) {
   if (risky) {
     const deep = models.deep;
     if (tierRank(current) >= tierRank(deep) && tierRank(current) >= 0) {
@@ -76,13 +89,16 @@ export function decideModel({ judge, current, risky, options, models }) {
     return { action: 'forced-risk', model: deep, reason: 'risky work: deep tier' };
   }
   if (!judge) return { action: 'keep', reason: 'no judge answer' };
-  const target = models[judge.tier];
+  const isHeld = judge.tier === 'frontier' && !frontierStands({ judge, cls, options, models });
+  const target = models[isHeld ? 'deep' : judge.tier];
   const from = tierRank(current);
   const to = tierRank(target);
   const conf = typeof judge.confidence === 'number' ? judge.confidence : null;
-  const reason = `judge: ${judge.tier} at ${conf ?? 'no confidence'}`;
+  const reason = `judge: ${judge.tier} at ${conf ?? 'no confidence'}${isHeld ? ', held to deep' : ''}`;
   const isUpgrade = from < 0 || to > from;
   if (familyOf(current) === familyOf(target) && from >= 0) return { action: 'keep', reason };
+  // The judge asked for more than the deep tier: holding its answer must not take a start below what it has.
+  if (isHeld && from > to) return { action: 'keep', reason };
   if (isUpgrade) {
     return conf !== null && conf >= options.minUpgradeConfidence ? { action: 'upgrade', model: target, reason } : { action: 'keep', reason };
   }

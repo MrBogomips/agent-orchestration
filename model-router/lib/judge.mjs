@@ -2,7 +2,8 @@
 // Plain ES module with no Node or engine imports, so both the mod and node scripts load it.
 
 export const DEFAULT_MAX_CHARS = 4000;
-const JUDGE_TIERS = ['fast', 'balanced', 'deep'];
+// In the order the judge checks them: `deep` comes last because its grid tier is the one for everything else.
+const JUDGE_TIERS = ['fast', 'balanced', 'frontier', 'deep'];
 
 /** Escapes every closing `</task` so the task text cannot end the data block. */
 export function escapeTask(text) {
@@ -50,7 +51,7 @@ export function buildJudgePrompt(grid, task, { maxChars = DEFAULT_MAX_CHARS } = 
     'restored is risky; writing or testing code that deals with those things is not.',
     '',
     'Answer with one JSON object and nothing else:',
-    '{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "<class>" }',
+    '{ "tier": "fast | balanced | frontier | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "<class>" }',
     'confidence, effort_confidence and risky are numbers from 0 to 1.',
   ].join('\n');
   const body = [

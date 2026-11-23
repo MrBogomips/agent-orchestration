@@ -23,7 +23,7 @@
   <text x="340" y="130" class="d-label">the four effort questions,</text>
   <text x="340" y="149" class="d-label">the six task classes,</text>
   <text x="340" y="168" class="d-label">and: risk is about the act</text>
-  <text x="340" y="204" class="d-cap d-start">fast · balanced · deep</text>
+  <text x="340" y="204" class="d-cap d-start">fast · balanced · frontier · deep</text>
 
   <rect x="620" y="30" width="280" height="200" rx="14" class="d-node d-primary"/>
   <circle cx="644" cy="54" r="12" class="d-fill"/><text x="644" y="59" class="d-num">3</text>

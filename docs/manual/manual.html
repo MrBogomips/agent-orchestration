@@ -836,6 +836,8 @@ task, and answers a tier, an effort, a class, a risk and its confidence. The rou
 <ul>
   <li>lowers the model only at confidence ≥ 0.6 (<code>minDowngradeConfidence</code>), raises it at ≥ 0.3
   (<code>minUpgradeConfidence</code>);</li>
+  <li>raises it to the frontier tier (<code>fable</code>) only for a task of class <code>design-open</code> at
+  confidence ≥ 0.7 (<code>minFrontierConfidence</code>); any other frontier answer counts as the deep tier;</li>
   <li>sends risky work (risk &gt; 0.7, or a <code>!</code> tag) to the deep tier with at least <code>high</code>
   effort;</li>
   <li>leaves the start unchanged on a judge error, a timeout or an unreadable answer (logged as <code>error</code>),
@@ -848,8 +850,7 @@ line of Figure 7 with the model the subagent started on, its effort and the reas
 starts and the effort on each of the subagent's model requests, so routing works in every permission mode, auto mode
 included. An effort the call already carries is kept. Starts made by a plugin's own code and workflow agents are
 measured, not routed. Of the built-in types, only <code>general-purpose</code> and <code>Explore</code> are routed.
-The judge's tiers stop at the deep tier: with the default <code>deepModel</code> (<code>opus</code>), the router never
-picks <code>fable</code>.</p>
+Risky work goes to the deep tier, never to the frontier one.</p>
 <p>Turn routing off for one session with <code>/model-router off</code> (and back with <code>on</code>), or for good
 with the <code>routeSubagents</code> option.</p>
 
@@ -1104,9 +1105,10 @@ under <code>pluginConfigs</code> in a settings file, keyed by the installed plug
 }</code></pre>
 <table>
   <thead><tr><th style="width:32%">Option</th><th style="width:13%">Default</th><th>Meaning</th></tr></thead>
-  <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>opus</code></td><td>Models behind the judge's fast, balanced and deep tiers; the fast one also runs the judge</td></tr>
+  <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>frontierModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>fable</code>, <code>opus</code></td><td>Models behind the judge's fast, balanced, frontier and deep tiers; the fast one also runs the judge</td></tr>
   <tr><td><code>minDowngradeConfidence</code></td><td>0.6</td><td>Judge confidence needed to lower the model, or to set effort <code>low</code></td></tr>
   <tr><td><code>minUpgradeConfidence</code></td><td>0.3</td><td>Judge confidence needed to raise the model, or to set effort <code>medium</code>, <code>high</code> or <code>xhigh</code></td></tr>
+  <tr><td><code>minFrontierConfidence</code></td><td>0.7</td><td>Judge confidence needed to send a <code>design-open</code> task to the frontier tier; below it, or for any other class, the start gets the deep tier</td></tr>
   <tr><td><code>riskThreshold</code></td><td>0.7</td><td>Risk above which the start gets the deep tier and at least <code>high</code> effort</td></tr>
   <tr><td><code>timeoutMs</code></td><td>8000</td><td>Judge time limit; past it the start is left unchanged</td></tr>
   <tr><td><code>routeSubagents</code></td><td>true</td><td>Route subagent starts at all</td></tr>
@@ -1145,7 +1147,7 @@ trimmed).</p>
   <li>The mod needs Claude Code 2.1.329 or later; the skills do not need the mod.</li>
   <li>Only starts made through the <code>Agent</code> tool are routed. An agent defined by a plugin is never routed;
   of the built-in types only <code>general-purpose</code> and <code>Explore</code> are.</li>
-  <li>With the default <code>deepModel</code> the router never picks <code>fable</code>, and it compares with the parent's model, so a subagent of a
+  <li>The router picks <code>fable</code> only for <code>design-open</code> work, and it compares with the parent's model, so a subagent of a
   <code>fable</code> session can be lowered. Up to 0.3 it does not hold <code>review-debug</code> and
   <code>design-open</code> to the grid's floor.</li>
   <li>Costs are the engine's estimates. Edits made outside the session's own tools are not seen.</li>
@@ -1279,8 +1281,9 @@ trimmed).</p>
 Environment (<code>auto</code>) · Layout (<code>ask</code>) · Worktrees (<code>repo</code>) · Session name
 (<code>&lt;task&gt;-&lt;repo&gt;</code>)</p>
 <h3>Options (<code>model-router</code>)</h3>
-<p><code>fastModel</code> haiku · <code>balancedModel</code> sonnet · <code>deepModel</code> opus ·
-<code>minDowngradeConfidence</code> 0.6 · <code>minUpgradeConfidence</code> 0.3 · <code>riskThreshold</code> 0.7 ·
+<p><code>fastModel</code> haiku · <code>balancedModel</code> sonnet · <code>frontierModel</code> fable · <code>deepModel</code> opus ·
+<code>minDowngradeConfidence</code> 0.6 · <code>minUpgradeConfidence</code> 0.3 · <code>minFrontierConfidence</code> 0.7 ·
+<code>riskThreshold</code> 0.7 ·
 <code>timeoutMs</code> 8000 · <code>routeSubagents</code> true · <code>measure</code> true · <code>adapt</code> false ·
 <code>halfLifeDays</code> 30 · <code>projectPriorStrength</code> 5 · <code>exploreCap</code> 0.1 ·
 <code>reworkWindowMin</code> 30 · <code>similarityThreshold</code> 0.5</p>

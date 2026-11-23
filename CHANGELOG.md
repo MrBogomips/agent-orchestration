@@ -3,6 +3,18 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.5.0
+
+2026-11-23 · pull request #89
+
+### Added
+
+- The judge has a fourth tier, `frontier`, behind `fable`. A start with no model is raised to it only when the task's
+  class is `design-open` and the judge's confidence is at least 0.7; any other `frontier` answer counts as the deep
+  tier and its decision's reason ends with `held to deep`. A `frontier` answer never lowers a start, so a subagent of a `fable`
+  session keeps `fable` on it. Risky work still goes to the deep tier.
+- Options `frontierModel` (default `fable`) and `minFrontierConfidence` (default 0.7).
+
 ## model-router 0.4.1
 
 2026-11-23 · pull request #86

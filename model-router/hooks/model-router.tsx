@@ -47,9 +47,11 @@ const routeLines = atom({ plugin: 'model-router', key: 'route' } as const, null 
 type Options = {
   fastModel: string
   balancedModel: string
+  frontierModel: string
   deepModel: string
   minDowngradeConfidence: number
   minUpgradeConfidence: number
+  minFrontierConfidence: number
   riskThreshold: number
   timeoutMs: number
   routeSubagents: boolean
@@ -92,9 +94,11 @@ type Ctx = {
 const DEFAULTS: Options = {
   fastModel: 'haiku',
   balancedModel: 'sonnet',
+  frontierModel: 'fable',
   deepModel: 'opus',
   minDowngradeConfidence: 0.6,
   minUpgradeConfidence: 0.3,
+  minFrontierConfidence: 0.7,
   riskThreshold: 0.7,
   timeoutMs: 8000,
   routeSubagents: true,
@@ -214,8 +218,8 @@ function decisionOf(p: Pending, e: any, opts: Options) {
   if (p.route === 'explicit') return { action: 'explicit', model: undefined, reason: p.reason }
   if (p.route !== 'judge') return { action: 'keep', model: undefined, reason: p.reason }
   if (p.error && !p.risky) return { action: 'error', model: undefined, reason: p.error }
-  const models = { fast: opts.fastModel, balanced: opts.balancedModel, deep: opts.deepModel }
-  return decideModel({ judge: p.judge, current: e.parentModel, risky: p.risky, options: opts, models })
+  const models = { fast: opts.fastModel, balanced: opts.balancedModel, frontier: opts.frontierModel, deep: opts.deepModel }
+  return decideModel({ judge: p.judge, cls: p.cls, current: e.parentModel, risky: p.risky, options: opts, models })
 }
 
 async function reportOf($: any, e: any) {

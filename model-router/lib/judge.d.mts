@@ -9,7 +9,7 @@ export declare function parseJudgeAnswer(
   text: string | undefined,
   classes: readonly string[],
 ): {
-  tier: 'fast' | 'balanced' | 'deep'
+  tier: 'fast' | 'balanced' | 'frontier' | 'deep'
   confidence: number | null
   effort: number | null
   effortConfidence: number | null

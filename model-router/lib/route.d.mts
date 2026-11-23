@@ -6,7 +6,7 @@ type Judged = {
   risky: number | null
 } | null
 
-type Thresholds = { minDowngradeConfidence: number; minUpgradeConfidence: number; riskThreshold: number }
+type Thresholds = { minDowngradeConfidence: number; minUpgradeConfidence: number; minFrontierConfidence: number; riskThreshold: number }
 
 export declare const INHERITING_BUILTINS: readonly string[]
 export declare function definitionCase(subagentType: string, definitionText?: string): 'inherit' | 'fixed' | 'unknown'
@@ -25,8 +25,10 @@ export declare function decideEffort(input: {
   risky: boolean
   options: Thresholds
 }): string | undefined
+export declare const FRONTIER_CLASS: string
 export declare function decideModel(input: {
   judge: Judged
+  cls?: string | null
   current: string | undefined
   risky: boolean
   options: Thresholds
