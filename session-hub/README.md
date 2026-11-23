@@ -83,6 +83,12 @@ the conversation instead, laid out like the app's own `/context` card, and opens
 - The title folds the card to its header and one bar of the children by status. The newest card follows the
   30-second refresh.
 
+The two views read the same children record and answer different questions. **Children** is the state now: one row
+per child, with its status, its model and effort, and what the live session list says about it (running, idle, or
+not listed). **Record** is the history: what happened and when, as counts and a timeline of starts, last messages and
+requests with their outcomes, newest first. Look at Children to see who is working; at Record to see what has
+happened so far.
+
 In a session with no role (a real run of `claude -p "/session-hub"`):
 
 ```text

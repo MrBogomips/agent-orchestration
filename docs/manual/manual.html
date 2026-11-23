@@ -618,6 +618,18 @@ title folds the card to its header and one bar of the children by status. A drop
   child started, and the latest seven events (starts, messages and requests, with what was decided about each); a
   dropdown at the right narrows them to one child.</li>
 </ul>
+<p>The two views read the same children record and answer different questions. <strong>Children</strong> is the
+state now: one row per child, with its status, its model and effort, and what the live session list says about it.
+<strong>Record</strong> is the history: what happened and when, as counts and a timeline of starts, last messages and
+requests with their outcomes, newest first. Children shows who is working; Record shows what has happened so far.</p>
+<figure class="half">
+  <img src="images/sh-desktop-children.png" alt="The Session hub card on the Children view in the Claude desktop app">
+  <figcaption>Figure 4b. The Session hub card in the Claude desktop app, on Children: the role, the hub, the repositories and the record, then the children by status, the Running group open.</figcaption>
+</figure>
+<figure class="half">
+  <img src="images/sh-desktop-record.png" alt="The Session hub card on the Record view in the Claude desktop app">
+  <figcaption>Figure 4c. The same card on Record: the counts and the latest events of the record, with the child picker at the right.</figcaption>
+</figure>
 <p>The record file is linked in the card's last line. The newest card follows the 30-second refresh; the cards
 before it keep their header and bar, and older ones are plain text.</p>
 <p>In the master, a <code>Bash</code> call that starts children gets one line per child under its row, in the same
@@ -756,6 +768,10 @@ each <code>Agent</code> call's row, with what the subagent <em>actually got</em>
   judge lowered it to <code>haiku</code> at <code>low</code>. The second named <code>opus</code> at <code>high</code>,
   which the router keeps. The third carried no model either: the judge kept <code>sonnet</code> and set the
   effort.</figcaption>
+</figure>
+<figure class="half">
+  <img src="images/mr-desktop-agent-lines.png" alt="The routing line under an Agent call in the Claude desktop app">
+  <figcaption>Figure 7b. In the Claude desktop app the same line is one quiet line under the <code>Agent</code> row, in words: the model and effort it got, then the reason.</figcaption>
 </figure>
 <p>The colours: the model in bold, <code>haiku</code> white, <code>sonnet</code> light blue, <code>opus</code> blue,
 <code>fable</code> orange; the effort bar and word by level, <code>low</code> green, <code>medium</code> yellow,
@@ -970,11 +986,19 @@ latest value; then one FPY bar per tier and effort, coloured as the FPY dot (gre
   by action. Here the week was worse than the one before (FPY down 6 points, cost per success up 58%), and the
   session ran the three subagents of Figure 7.</figcaption>
 </figure>
+<figure class="half">
+  <img src="images/mr-desktop-overview.png" alt="The Model routing card on Overview in the Claude desktop app">
+  <figcaption>Figure 8b. The Model routing card in the Claude desktop app, on Overview: the heatmap of tasks per day, the key figures and the routing decisions by kind.</figcaption>
+</figure>
 <h3>Models</h3>
 <figure class="half">
   <img src="images/mr-models.png" alt="model-router usage view, Models tab">
   <figcaption>Figure 9. Models: the tiles, then per tier and effort over the window, closed tasks, tokens, cost, FPY
   with a bar, cost per successful task, and the model ids seen.</figcaption>
+</figure>
+<figure class="half">
+  <img src="images/mr-desktop-models.png" alt="The Model routing card on Models in the Claude desktop app">
+  <figcaption>Figure 9b. The card on Models: a row per model with its share of tasks and the figures per effort level, then tasks per day by model.</figcaption>
 </figure>
 <h3>Classes</h3>
 <figure class="half">
@@ -1009,6 +1033,10 @@ choice stands. <code>design-open</code> has no cell with three tasks yet: <code>
   before → the tier and effort after, the subagent type and the reason. <code>•</code> marks this session's.</figcaption>
 </figure>
 <figure class="half">
+  <img src="images/mr-desktop-decisions.png" alt="The Model routing card on Decisions in the Claude desktop app">
+  <figcaption>Figure 13b. The card on Decisions: the decisions by kind as a bar and a legend, with the latest of the kind that is open.</figcaption>
+</figure>
+<figure class="half">
   <img src="images/mr-help.png" alt="/model-router help">
   <figcaption>Figure 14. <code>/model-router help</code>.</figcaption>
 </figure>
@@ -1032,6 +1060,14 @@ node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote
   of the usage view), the models of that window and the weekly trend. Further down, the page has the routing decisions
   by action, one card per class at the user level and the projects. The page follows the system's light or dark
   theme.</figcaption>
+</figure>
+<figure class="half">
+  <img src="images/mr-desktop-report.png" alt="The Model routing card on Trend in the Claude desktop app">
+  <figcaption>Figure 15b. In the Claude desktop app <code>/model-router report</code> opens the card on Trend: right first time and cost per success per week, with the page linked in the last line.</figcaption>
+</figure>
+<figure class="half">
+  <img src="images/mr-desktop-log.png" alt="The Model routing card on Log in the Claude desktop app">
+  <figcaption>Figure 15c. <code>/model-router log</code> opens the card on Log: the records by kind and per day, the latest of the kind that is open, and <code>events.jsonl</code> linked in the last line.</figcaption>
 </figure>
 <p>The page reads top to bottom:</p>
 <ul>
