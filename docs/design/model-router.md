@@ -370,8 +370,10 @@ file is opened: the report is the card's Trend view and the event log its Log vi
   The `choose-model` skill also has the model write its own `🔀` line before each start; on the desktop app that
   repeated the routing above the row, in terminal glyphs. Where the host is graphical the mod adds a session section
   to the system prompt (`prompt.compose`, `DRAWN_LINE_SECTION` of `lib/route-line.mjs`) saying the line is drawn for
-  it, and the skill tells the model not to write it before an `Agent` call when that section is there. A child
-  session or a workflow still gets the model's line; with mods off, or in a terminal, nothing changes.
+  it, and appends the same note to the `choose-model` skill's text (`skill.prompt`): an organization's managed mod
+  can skip a user mod's `prompt.compose` hook (`spikes.md`), and then only the skill carries it. The skill tells the
+  model not to write the line before an `Agent` call when that note is there. A child session or a workflow still
+  gets the model's line; with mods off, or in a terminal, nothing changes.
 - **A pane** of the usage view drawn on a graphical surface says in one line that the view is the card.
 - **Not in the card**: the 🔀 icon, the teal accent, the tier and effort colours (`shared-contract.md`), buttons,
   hotkeys, sparklines and KPI tiles.

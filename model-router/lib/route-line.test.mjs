@@ -59,3 +59,20 @@ test('the desktop line is quiet and in words: the model and effort, then the rea
   assert.deepEqual(quietLine({ model: 'opus', effort: null, reason: 'explicit: the call names the model' }), { model: 'Opus · default', reason: 'the call names the model' });
   assert.equal(quietLine({ model: 'sonnet', effort: 'high', reason: 'keep: routing off' }).reason, 'kept: routing off');
 });
+
+test('withDrawnLineNote appends the note once', async () => {
+  const { withDrawnLineNote, DRAWN_LINE_SECTION } = await import('./route-line.mjs');
+  const once = withDrawnLineNote('Body.\n\n');
+  assert.equal(once, `Body.\n\n${DRAWN_LINE_SECTION.text}\n`);
+  assert.equal(withDrawnLineNote(once), once);
+});
+
+test('isChooseModel matches only this plugin\'s skill', async () => {
+  const { isChooseModel } = await import('./route-line.mjs');
+  assert.equal(isChooseModel('model-router:choose-model', 'model-router'), true);
+  assert.equal(isChooseModel('model-router:choose-model'), true);
+  assert.equal(isChooseModel('choose-model', 'model-router'), true);
+  assert.equal(isChooseModel('choose-model'), false);
+  assert.equal(isChooseModel('other:choose-model', 'other'), false);
+  assert.equal(isChooseModel('model-router:report', 'model-router'), false);
+});
