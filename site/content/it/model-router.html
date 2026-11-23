@@ -290,7 +290,7 @@ listed here follows the grid.
   <thead><tr><th>Comando</th><th>Cosa fa</th></tr></thead>
   <tbody>
     <tr><td><code>/model-router</code></td><td>Apre la vista d'uso, o la card nell'app desktop, su <code>Overview</code>, ultimi 7 giorni, tutti i progetti</td></tr>
-    <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Apre direttamente sulla vista, finestra e livello indicati, in qualsiasi ordine</td></tr>
+    <tr><td><code>/model-router [overview|models|classes|decisions|savings] [24h|7d|30d|all] [user|project]</code></td><td>Apre direttamente sulla vista, finestra e livello indicati, in qualsiasi ordine</td></tr>
     <tr><td><code>/model-router on</code>, <code>off</code></td><td>Attiva o disattiva il routing per la sessione corrente</td></tr>
     <tr><td><code>/model-router report</code></td><td>Nel terminale genera la pagina HTML del report, la apre nel browser predefinito e ne stampa il percorso; nell'app desktop apre la card sulla vista Trend</td></tr>
     <tr><td><code>/model-router log</code></td><td>Nel terminale apre il log degli eventi (<code>events.jsonl</code>) con l'app predefinita del sistema e ne stampa il percorso; nell'app desktop apre la card sulla vista Log</td></tr>
@@ -320,6 +320,7 @@ listed here follows the grid.
   <li><strong>Models</strong>: una riga per modello, dal blu più scuro di Opus al più chiaro di Haiku, con la quota di compiti; sotto, il successo al primo tentativo, il costo per successo e, per ogni livello di effort, quanti compiti e con quale esito. Segue un grafico dei compiti per giorno, diviso per modello.</li>
   <li><strong>Task classes</strong> e <strong>Projects</strong>: una riga per classe di attività o per progetto, con le stesse cifre.</li>
   <li><strong>Decisions</strong>: le decisioni del router per tipo (verso un modello più economico, verso uno più forte, mantenuto, modello indicato nella chiamata); un clic sul nome di un tipo ne mostra le ultime.</li>
+  <li><strong>Savings</strong>: dice se il routing conviene. Confronta il costo dei subagent con quello che gli stessi compiti avrebbero avuto sul modello della sessione che li ha avviati: un verdetto in una frase, il costo per successo e il risparmio, la quota di compiti spostati su un modello più economico con il loro esito, la spesa per settimana e il risparmio per coppia di modelli. Il verdetto richiede almeno 100 compiti confrontati. La stessa vista è una scheda del terminale e la prima sezione della pagina del report.</li>
   <li><strong>Trend</strong>: successo al primo tentativo e costo per successo per settimana, come barre. L'ultima riga collega la pagina HTML del report.</li>
   <li><strong>Log</strong>: i record del log degli eventi per tipo e nel tempo, con gli ultimi di ciascun tipo; l'ultima riga collega <code>events.jsonl</code>. Il testo dei prompt non compare mai.</li>
 </ul>
@@ -380,7 +381,7 @@ listed here follows the grid.
   <input type="radio" name="mr-report" id="mr-report-desktop"><label for="mr-report-desktop">App desktop</label>
   <div class="tab">
     <figure class="shot">
-      <img src="{{img:mr-report}}" alt="La pagina del report di model-router: andamento settimanale di FPY e costo per compito riuscito, e decisioni del router per azione" loading="lazy">
+      <img src="{{img:mr-report}}" alt="La pagina del report di model-router: la sezione Savings con il verdetto, il costo per successo, il risparmio, la spesa per settimana e il risparmio per coppia di modelli" loading="lazy">
       <figcaption>La parte superiore della pagina del report, aperta nel browser. <span class="badge demo">Dati dimostrativi</span></figcaption>
     </figure>
   </div>

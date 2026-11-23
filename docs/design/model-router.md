@@ -252,14 +252,14 @@ tab and window (drawn as an inverse block, as Claude Code draws its active tab) 
 colours are the theme's success, warning and error, and everything else keeps the theme's colours.
 
 ```
-🔀 model-router [Overview]  Models   Classes   Decisions
+🔀 model-router [Overview]  Models   Classes   Decisions   Savings
 d:  24h  w: [7d] m:  30d  a:  all                p: user · project
 ...
 Tab/⇧Tab tab · ↑/↓ period · p level · o: report · r: refresh · l: log · Esc
 ```
 
 The second row is the window, on every tab, with the level (user or project) at its right end; the level is not a
-row of its own because only Classes and the tiles depend on it. The view has four tabs:
+row of its own because only Classes, Savings and the tiles depend on it. The view has five tabs:
 
 | Tab | Shows |
 |---|---|
@@ -267,6 +267,7 @@ row of its own because only Classes and the tiles depend on it. The view has fou
 | Models | The tiles when they fit on one row; then per tier and effort, over the window: closed tasks, tokens, cost, first-pass yield with a bar coloured as above, cost per successful task; the model ids seen in the window, on one line. It counts the same closed tasks as the tiles: a task closed `cancelled` counts in none of its figures. |
 | Classes | The tiles when they fit on one row; then per class, over the window and at the level: n, first-pass yield with a bar, rework rate, cost per successful task, the best measured cell next to the grid's choice, weak-signal flags; under each class its cells. Then up to three recommendation rows that differ from the grid, each led by the recommended cell's first-pass yield. |
 | Decisions | The latest routing decisions, all sessions, newest last: time, action, model before and after, effort, subagent type, reason. |
+| Savings | What routing gained in the window at the level (`model-router-quality-loop.md`, *Savings*): the verdict with its status dot (🟢 pays off, 🔴 costs more, ⚪ not proven) and its sentence; then one line per measure: per success against per success on the session's model and the saved share, saved with spent of the baseline, moved cheaper (its share as ten effort-bar cells `▰▱`), kept and moved stronger with their FPY, rework and saving, quality, the judge's calls and time; the moves per pair of tiers with a total; spend per week; the tasks left out. With no task to compare, one line saying savings are measured for tasks started from release 0.7.0 on. |
 
 The headline numbers (`headline` of each window in `lib/usage-data.mjs`) count the scored tasks (success, rework,
 failure) of the window; at the project level they count the project's tasks and the decisions of its spawns.
@@ -306,7 +307,7 @@ command does not know, print the list of arguments and keys.
 
 **Text fallback.** Where no pane can be placed (headless or `claude -p`, a terminal narrower than 60 columns, or
 an open that answers `isPlaced: false`, which is then closed so it does not appear later), the command answers
-the same rows as aligned text: the requested tab, or all four stacked when no tab was named. Every text answer
+the same rows as aligned text: the requested tab, or all five stacked when no tab was named. Every text answer
 of the command carries `isTextDisplayOnly: true`: it is for the person, and the model does not read it.
 
 **Window and level.** The default window is 7 days, the default level the user. A window counts the closed
@@ -350,8 +351,8 @@ file is opened: the report is the card's Trend view and the event log its Log vi
   keeps the card's state and does the reads.
 - **Header.** The route icon, "Model routing" (the press that collapses the card), the window's right first time and
   cost per success at the right, a chevron. Collapsed: the header and one bar of the window's tasks by model.
-- **Dropdowns.** The view at the left: Overview, Models, Task classes, Projects, Decisions, Trend, Log. At the right
-  the scope (All projects, This project; on Overview, Models, Task classes and Decisions, in a session with a
+- **Dropdowns.** The view at the left: Overview, Models, Task classes, Projects, Decisions, Savings, Trend, Log. At
+  the right the scope (All projects, This project; on Overview, Models, Task classes, Decisions and Savings, in a session with a
   project) and the window (Last 24 hours, Last 7 days, Last 30 days, All time; Trend and Projects are all time).
   `/model-router models 30d project` opens on that view, window and scope; `report` on Trend, `log` on Log for the
   last 24 hours.
@@ -363,6 +364,7 @@ file is opened: the report is the card's Trend view and the event log its Log vi
 | Task classes | A share row per class (at most 8), the detail giving right first time, cost per success, the grid's cell and, where the data favours another, that cell. |
 | Projects | A share row per project of the learned data (at most 8), with right first time and cost per success. |
 | Decisions | A segmented bar and legend of the window's decisions by kind; a group per kind, the first open with its latest 6 (when, models, effort, class). |
+| Savings | The verdict as a dot and a word with its saved share, and its sentence; a grid of per success, on the session's model, saved, spent of the baseline, right first time moved and kept, quality, the judge, tasks compared and left out; three share rows (Moved to a cheaper model, Kept on the session's model, Moved to a stronger model) with right first time, redone and the saving; spend per week as stacked bars (spent, and what the session's model would have added; the last 8 weeks); the moves per pair of tiers (at most 8) with a total; the closing line. A week that cost more than on the session's model stacks its baseline and the cost above it in orange, which the legend under the chart then names. Built by `lib/card-savings.mjs`. The header summary is the same as on the other views. |
 | Trend | Right first time per week and cost per success per week, a bar chart each (the last 8 weeks); best and cheapest week; the last line links the HTML report page, written for it (`report.html`, a `file:` link). |
 | Log | The records of the window by kind as a segmented bar and legend; records per hour (24 hours) or per day; a group per kind, the first open with its latest 5; the last line links `events.jsonl` with its size and archive count. A read of the log is bounded (`scripts/log.mjs`, below). |
 
@@ -451,6 +453,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.4.0 | On the desktop app `/model-router` is one card in the transcript, with every view (the report as Trend, the log as Log); the report and log panes are gone. |
 | 0.5.0 | The judge's `frontier` tier: `fable` for open-ended design, at its own confidence bar. |
 | 0.6.0 | The spawn and outcome records name the starting session's model (`parentModel`). |
+| 0.7.0 | The Savings view: what routing saved against the session's own model, on the page, the terminal and the card. |
 | later | Adaptive selection from the quality data (`model-router-quality-loop.md`, which plans it as 0.4). |
 
 ## Open points

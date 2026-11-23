@@ -3,6 +3,21 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.7.0
+
+2026-11-23 · pull request #93
+
+### Added
+
+- A Savings view says whether routing pays off: what the subagents cost against what the same tasks would have cost
+  on the model of the session that started them. It shows the cost per successful task and its baseline, the amount
+  saved, the share of tasks moved to a cheaper model, whether their quality holds, the spend per week, the saving
+  per pair of models and the judge's time, under a verdict of `pays off`, `not proven` or `costs more`. It is the
+  first section of the quality report, a view of `/model-router` in the terminal and a view of its card on the
+  desktop app. The baseline prices each task's tokens, kind by kind, at prices read back from the logged costs of the
+  session's model; the plugin holds no price list. It counts the tasks started from this release on.
+- The report and outcome records carry `usage`, the tokens by kind (input, output, cache read, cache write).
+
 ## session-hub 0.5.1
 
 2026-11-23 · pull request #92

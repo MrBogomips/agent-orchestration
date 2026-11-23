@@ -1,4 +1,4 @@
-<!-- translated-from: it/model-router.html sha256:8b3e0add1743 -->
+<!-- translated-from: it/model-router.html sha256:5036de09c33a -->
 <h1>model-router</h1>
 <p class="lede">Choosing the right model for every subagent, child session, or workflow agent shouldn't be guesswork. <code>model-router</code> applies a single written grid, routes launches that don't specify a model on the fly, and measures on your machine how well each choice actually paid off.</p>
 
@@ -291,7 +291,7 @@ listed here follows the grid.
   <thead><tr><th>Command</th><th>What it does</th></tr></thead>
   <tbody>
     <tr><td><code>/model-router</code></td><td>Opens the usage view — or the card in the desktop app — on <code>Overview</code>, last 7 days, all projects</td></tr>
-    <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens directly on the specified view, time window, and level, in any order</td></tr>
+    <tr><td><code>/model-router [overview|models|classes|decisions|savings] [24h|7d|30d|all] [user|project]</code></td><td>Opens directly on the specified view, time window, and level, in any order</td></tr>
     <tr><td><code>/model-router on</code>, <code>off</code></td><td>Turns routing on or off for the current session</td></tr>
     <tr><td><code>/model-router report</code></td><td>In the terminal, builds the HTML report page, opens it in your default browser, and prints its path; in the desktop app, opens the card on the Trend view</td></tr>
     <tr><td><code>/model-router log</code></td><td>In the terminal, opens the event log (<code>events.jsonl</code>) in your system's default app and prints its path; in the desktop app, opens the card on the Log view</td></tr>
@@ -321,6 +321,7 @@ listed here follows the grid.
   <li><strong>Models</strong>: one row per model, shaded from dark blue for Opus to light blue for Haiku, showing its share of tasks; underneath, first-pass yield, cost per success, and task counts and outcomes broken down by effort level. Below that sits a daily task chart split by model.</li>
   <li><strong>Task classes</strong> and <strong>Projects</strong>: one row per task class or project, with the same metrics.</li>
   <li><strong>Decisions</strong>: router decisions grouped by type (moved to a cheaper model, moved to a stronger one, kept, or passed explicitly in the call); clicking a type shows its latest entries.</li>
+  <li><strong>Savings</strong>: tells you whether routing pays off. It compares subagent costs against what the same tasks would have cost on the model of the session that started them: a one-sentence verdict, cost per success and savings, the share of tasks moved to a cheaper model along with their outcomes, weekly spend, and savings by model pair. The verdict requires at least 100 compared tasks. The same view appears as a terminal tab and as the first section of the report page.</li>
   <li><strong>Trend</strong>: weekly first-pass yield and cost per success rendered as bar charts. The bottom row links to the HTML report page.</li>
   <li><strong>Log</strong>: event log records broken down by type and over time, along with the latest entries for each type; the bottom row links to <code>events.jsonl</code>. Prompt text is never shown.</li>
 </ul>
@@ -381,7 +382,7 @@ listed here follows the grid.
   <input type="radio" name="mr-report" id="mr-report-desktop"><label for="mr-report-desktop">Desktop app</label>
   <div class="tab">
     <figure class="shot">
-      <img src="{{img:mr-report}}" alt="The model-router report page: weekly FPY and cost per successful task trends, and router decisions by action" loading="lazy">
+      <img src="{{img:mr-report}}" alt="The model-router report page: the Savings section with the verdict, cost per success, savings, weekly spend, and savings per model pair" loading="lazy">
       <figcaption>Top half of the report page, opened in a browser. <span class="badge demo">Demo data</span></figcaption>
     </figure>
   </div>

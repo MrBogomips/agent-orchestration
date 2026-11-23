@@ -3,13 +3,15 @@
 // The headline (KPI cards, chips, sparklines, the sample-size notice) and the models are the usage view's own model
 // (lib/usage-cards.mjs) for one window. See docs/design/model-router-quality-loop.md, "Report".
 // Plain ES module with no Node or engine imports, so the mod, the scripts and node tests load it.
+import { savingsFootnotes, savingsSection } from './report-savings.mjs';
 import { ACTION_TONES, cardsView } from './usage-cards.mjs';
 import { BAR_SIZE, COLORS, barSvg, sparklineSvg, toneColor } from './usage-svg.mjs';
 import { WEAK_N, fpyStatus } from './usage-tiles.mjs';
-import { ACTION_ORDER, cellName, fmtNum, fmtPct, fmtUsd } from './usage-view.mjs';
+import { ACTION_ORDER, WINDOW_TITLES, cellName, fmtNum, fmtPct, fmtUsd } from './usage-view.mjs';
 
 /** The window the headline and the models are shown for: the usage view shows the same figures on it. */
 export const REPORT_WINDOW = '30d';
+const REPORT_WINDOW_TITLE = `${WINDOW_TITLES[REPORT_WINDOW][0].toUpperCase()}${WINDOW_TITLES[REPORT_WINDOW].slice(1)}`;
 /** The marks of a cell's row: the recommended cell, and a row with fewer than WEAK_N tasks. */
 export const MARKS = Object.freeze({ recommended: '★', few: '○' });
 export const TREND_SIZE = Object.freeze({ width: 320, height: 72 });
@@ -126,11 +128,16 @@ function footnotes(data) {
     `Tasks are whole counts. In the class tables FPY, rework and cost weigh a recent task more than an old one${halfLife}. ` +
       `${MARKS.few} marks a row with fewer than ${WEAK_N} tasks, to be read as indicative; ` +
       `${MARKS.recommended} the recommended cell.`,
+    ...savingsFootnotes(savingsOfReport(data), REPORT_WINDOW_TITLE),
   ];
 }
 
+/** The savings the page shows: the usage data's own, for the report's window at the user level. */
+const savingsOfReport = (data) => data.usage?.windows?.[REPORT_WINDOW]?.savings?.user ?? null;
+
 /**
- * Everything the report shows, top to bottom: `generated`, `headline` (the usage view's Overview model for
+ * Everything the report shows, top to bottom: `generated`, `savings` (lib/report-savings.mjs, or null without usage
+ * data), `headline` (the usage view's Overview model for
  * REPORT_WINDOW, or null without usage data), `trend`, `decisions`, `classes` (the user level), `projects` (or
  * null), `footnotes`, `source` (where the data was read) and `privacy`.
  */
@@ -139,6 +146,7 @@ export function reportView(data) {
   const user = levels.find((l) => l.kind === 'user');
   return {
     generated: `Generated ${readableTime(data.generatedAt)} · ${plural(data.outcomes, 'closed task')}, all time`,
+    savings: savingsSection(savingsOfReport(data), REPORT_WINDOW_TITLE, Boolean(data.usage)),
     headline: data.usage ? cardsView(data.usage, { tab: 'overview', window: REPORT_WINDOW, level: 'user' }) : null,
     trend: trendSection(data.trend),
     decisions: decisionsSection(data.decisions),

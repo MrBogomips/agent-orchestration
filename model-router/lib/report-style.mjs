@@ -65,6 +65,13 @@ tr.few td { color: var(--muted); }
 details > summary { cursor: pointer; font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
 details[open] > summary { margin-bottom: 12px; }
 details > div { display: flex; flex-direction: column; gap: 12px; }
+.verdict { font-size: 15px; }
+.verdict .chip { font-weight: 600; }
+.key { font-size: 12px; white-space: nowrap; }
+.key::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.muted-key::before { background: var(--muted); opacity: 0.45; }
+.accent-key::before { background: var(--accent); }
+table.moves tbody tr:last-child td { font-weight: 600; border-top: 1px solid var(--border); }
 footer { color: var(--muted); display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 12px; overflow-wrap: anywhere; }
 @media (max-width: 560px) {
   main { padding: 16px 12px 32px; gap: 20px; }

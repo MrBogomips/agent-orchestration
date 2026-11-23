@@ -59,6 +59,33 @@ test('the view keeps only the records it uses, and shows the same data as from t
   assert.equal(kept({ type: 'spawn', agentId: 'z9', project: { id: '0123456789abcdef' } }), null);
 });
 
+test('the savings read the archived outcomes and the judge times of the decisions', async () => {
+  const configDir = fixture();
+  mkdirSync(join(configDir, 'model-router', 'archive'), { recursive: true });
+  // Opus at $10 per million input tokens and $50 per million output tokens: eight kept tasks price it.
+  const archived = (i, tier, parent, usage, cost) => ({
+    v: 1, type: 'outcome', ts: at(T0 - 86400000), session: 'old', agentId: `o${i}`, task: `old/o${i}`, class: null, tier, model: `claude-${tier}-5-5`,
+    parentModel: `claude-${parent}-5-5`, effort: 'medium', outcome: 'success', costUsd: cost, tokens: usage.input + usage.output, usage, project: PROJECT,
+    reportTs: at(T0 - 86400000),
+  });
+  const opus = (i) => {
+    const usage = { input: 50000 + 10000 * i, output: 4000 + 3000 * (i % 3), cacheRead: 0, cacheWrite: 0 };
+    return archived(i, 'opus', 'opus', usage, (usage.input * 10 + usage.output * 50) / 1e6);
+  };
+  const moved = archived(9, 'haiku', 'opus', { input: 100000, output: 0, cacheRead: 0, cacheWrite: 0 }, 0.1);
+  const kept = [...Array.from({ length: 8 }, (_, i) => opus(i)), moved];
+  writeFileSync(join(configDir, 'model-router', 'archive', 'outcomes.jsonl'), kept.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  const timed = { v: 1, type: 'decision', ts: at(T0 - 3600000), session: 's1', agentId: 'a2', action: 'downgrade', judge: { tier: 'fast', confidence: 0.9, ms: 750 } };
+  appendFileSync(join(configDir, 'model-router', 'events.jsonl'), `${JSON.stringify(timed)}\n`);
+  const data = await readUsage({ configDir, now: T0, input: { session: 's1', project: PROJECT, live: [] }, budgetMs: 10000 });
+  const savings = data.windows['7d'].savings.user;
+  assert.equal(savings.tasks, 9);
+  assert.ok(Math.abs(savings.rates.opus.input - 10) < 1e-6);
+  assert.ok(Math.abs(savings.groups.cheaper.baseline - 1) < 1e-6, 'the moved task at the fitted opus prices');
+  assert.equal(savings.leftOut, 1, 'the live task has no session model and no tokens by kind');
+  assert.deepEqual(savings.judge, { calls: 1, totalMs: 750, medianMs: 750 });
+});
+
 test('a compaction past its budget leaves the data as of the last one, with a note', async () => {
   const configDir = fixture();
   const slow = join(configDir, 'slow.mjs');

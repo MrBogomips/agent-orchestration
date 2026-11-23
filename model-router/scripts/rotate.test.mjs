@@ -14,8 +14,9 @@ const PROJECT = { id: '0123456789abcdef', root: '/repo' };
 // rotateBytes: 1 rotates at every run that leaves a non-empty log.
 const OPTIONS = { halfLifeDays: 30, reworkWindowMin: 30, similarityThreshold: 0.5, rotateBytes: 1, keepDays: 90 };
 
+const USAGE = { input: 1200, output: 800, cacheRead: 17000, cacheWrite: 1000 };
 const spawn = (session, agentId, min) => ({ v: 1, type: 'spawn', ts: at(min), session, agentId, subagentType: 'general-purpose', description: `task ${agentId}`, class: 'edit-specified', risky: false, model: 'claude-sonnet-5-5', effort: 'medium', route: 'judge', project: PROJECT });
-const report = (session, agentId, min) => ({ v: 1, type: 'report', ts: at(min), session, agentId, status: 'completed', model: 'claude-sonnet-5-5', effort: 'medium', costUsd: 0.04, tokens: 20000 });
+const report = (session, agentId, min) => ({ v: 1, type: 'report', ts: at(min), session, agentId, status: 'completed', model: 'claude-sonnet-5-5', effort: 'medium', costUsd: 0.04, tokens: 20000, usage: USAGE });
 const decision = (min) => ({ v: 1, type: 'decision', ts: at(min), session: 's1', agentId: 'x', action: 'kept' });
 const prompt = (min) => ({ v: 1, type: 'signal', kind: 'prompt', ts: at(min), session: 's1', text: 'private words' });
 const lines = (records) => records.map((r) => JSON.stringify(r)).join('\n') + '\n';
@@ -107,6 +108,9 @@ test('rotated logs older than keepDays keep only their outcomes, in archive/outc
   assert.equal(summary.expired, 1);
   assert.deepEqual(archived(configDir), ['outcomes.jsonl']);
   assert.deepEqual(outcomeTasks(configDir), ['a1']);
+  // The tokens by kind ride the outcome through compaction, the slimmed log and the archive.
+  const kept = readFileSync(archivePaths(p.root).outcomes, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.deepEqual(kept[0].usage, USAGE);
   assert.equal(scanLog(p, { keep: (r) => r.type === 'decision' }).records.length, 1);
   rmSync(configDir, { recursive: true, force: true });
 });

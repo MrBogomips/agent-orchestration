@@ -33,9 +33,10 @@ test('a ring move onto a tab lands there', () => {
 });
 
 test('Tab off the last tab wraps to the first, Shift+Tab off the first to the last', () => {
-  assert.equal(ringTarget('tab-decisions', 'window-24h'), 'tab-overview');
-  assert.equal(ringTarget('tab-overview', 'title'), 'tab-decisions');
-  assert.equal(ringTarget('tab-overview', 'refresh'), 'tab-decisions');
+  assert.equal(ringTarget('tab-savings', 'window-24h'), 'tab-overview');
+  assert.equal(ringTarget('tab-overview', 'title'), 'tab-savings');
+  assert.equal(ringTarget('tab-overview', 'refresh'), 'tab-savings');
+  assert.equal(ringTarget('tab-decisions', 'tab-savings'), 'tab-savings');
 });
 
 test("a move onto one of the engine's stops cannot be rewritten and lands there", () => {

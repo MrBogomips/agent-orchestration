@@ -1,6 +1,7 @@
 // The outcome of each task (one subagent start), fixed when its rework window closes.
 // See docs/design/model-router-quality-loop.md, "Signals" and "Outcome of one task".
 // Plain ES module with no Node or engine imports, so both the mod and node scripts load it.
+import { checkedUsage } from './prices.mjs';
 import { isSimilar, mentionsFile } from './text.mjs';
 import { familyOf, effortOf } from './tiers.mjs';
 
@@ -111,6 +112,8 @@ function outcomeRecord(task, result, now) {
     why: result.why.join('; '), weak: task.files.length === 0, learn, explore: false, route: spawn.route ?? null,
     costUsd: typeof report?.costUsd === 'number' ? report.costUsd : null,
     tokens: typeof report?.tokens === 'number' ? report.tokens : null,
+    // The tokens by kind (from 0.7), which Savings prices: null when the report has none or they are malformed.
+    usage: checkedUsage(report?.usage),
     project: spawn.project ?? null, reportTs: report?.ts ?? null,
   };
 }

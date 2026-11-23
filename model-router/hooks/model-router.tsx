@@ -229,11 +229,16 @@ async function reportOf($: any, e: any) {
     (n, u) => n + (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0),
     0,
   )
+  // The tokens by kind, which price differently on each tier: what Savings reads the prices back from.
+  const sum = (field: string) => usage.reduce((n, u) => n + (typeof u?.[field] === 'number' ? u[field] : 0), 0)
+  const byKind = row
+    ? { input: sum('input_tokens'), output: sum('output_tokens'), cacheRead: sum('cache_read_input_tokens'), cacheWrite: sum('cache_creation_input_tokens') }
+    : null
   return {
     type: 'report', ts: now(), session: await $.session.id(), agentId: e.agentId, parentAgentId: e.parentAgentId,
     subagentType: e.subagentType, status: e.status, model: row?.model ?? null,
     effort: row?.effort ?? row?.lastRequest?.effort ?? null,
-    costUsd: typeof row?.cost?.usd === 'number' ? row.cost.usd : null, tokens: row ? tokens : null,
+    costUsd: typeof row?.cost?.usd === 'number' ? row.cost.usd : null, tokens: row ? tokens : null, usage: byKind,
   }
 }
 

@@ -906,7 +906,7 @@ into the aggregates. It is safe to repeat: a task is never counted twice.</p>
 <table>
   <thead><tr><th style="width:46%">Command</th><th>Does</th></tr></thead>
   <tr><td><code>/model-router</code></td><td>Opens the usage view on Overview, last 7 days, user level</td></tr>
-  <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Opens it on that tab, window and level, in any order (<code>stats</code> works as <code>classes</code>)</td></tr>
+  <tr><td><code>/model-router [overview|models|classes|decisions|savings] [24h|7d|30d|all] [user|project]</code></td><td>Opens it on that tab, window and level, in any order (<code>stats</code> works as <code>classes</code>)</td></tr>
   <tr><td><code>/model-router on</code>, <code>/model-router off</code></td><td>Turns routing on or off for this session</td></tr>
   <tr><td><code>/model-router report</code></td><td>Writes and opens the report page, and prints its path; in the Claude desktop app, opens the card on Trend</td></tr>
   <tr><td><code>/model-router log</code></td><td>Opens the event log (<code>events.jsonl</code>) in the system's default app, printing its path; in the Claude desktop app, opens the card on Log</td></tr>
@@ -932,6 +932,10 @@ right the scope (all projects or this one) and the window:</p>
   <li><strong>Task classes</strong> and <strong>Projects</strong>: a row each, with the same figures.</li>
   <li><strong>Decisions</strong>: the decisions by kind (moved to a cheaper model, moved to a stronger one, kept as
   asked, model named in the call) with the latest of the kind you open.</li>
+  <li><strong>Savings</strong>: whether routing pays off. A verdict in one sentence; the cost per success against the
+  cost of the same tasks on the model of the session that started them, the amount saved and spent, right first time
+  for the tasks moved and for those kept, and the judge's calls and time; where the tasks ran (moved to a cheaper
+  model, kept, moved to a stronger model); the spend per week; the saving per pair of models, with a total.</li>
   <li><strong>Trend</strong>: right first time and cost per success per week, as bars; its last line links the
   report page (section 3.7).</li>
   <li><strong>Log</strong>: the event log by kind and over time (by hour for the last 24 hours), with the latest
@@ -1057,9 +1061,10 @@ its last line, to open, keep or share.</p>
 node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote or headless)</code></pre>
 <figure>
   <img src="images/mr-report.png" alt="The model-router quality report page">
-  <figcaption>Figure 15. The top of the report page, with sample data: the headline of the last 30 days (the KPI cards
-  of the usage view), the models of that window and the weekly trend. Further down, the page has the routing decisions
-  by action, one card per class at the user level and the projects. The page follows the system's light or dark
+  <figcaption>Figure 15. The top of the report page, with sample data: the Savings section of the last 30 days, with its
+  verdict, its four cards, the spend per week, the judge's figures and the saving per pair of models. Further down,
+  the page has the headline (the KPI cards of the usage view), the weekly trend, the routing decisions by action, one
+  card per class at the user level and the projects. The page follows the system's light or dark
   theme.</figcaption>
 </figure>
 <figure class="half">
@@ -1072,6 +1077,14 @@ node "&lt;plugin folder&gt;/scripts/report.mjs" --no-open   # write only (remote
 </figure>
 <p>The page reads top to bottom:</p>
 <ul>
+  <li><strong>Savings.</strong> The last 30 days: what the subagents cost against what the same tasks would have cost
+  on the model of the session that started them. A verdict (<code>pays off</code>, <code>not proven</code> or
+  <code>costs more</code>) with its reason, then four cards: the cost per successful task with its baseline and the
+  share saved; the amount saved; the share of tasks moved to a cheaper model; whether their quality holds. Under them,
+  the spend per week against the baseline, the judge's calls and time, and the saving per pair of models. A verdict
+  needs at least 100 tasks compared. Only tasks started from release 0.7.0 on are compared: their records name the
+  session's model and the tokens by kind, from which the page reads back each model's prices. The terminal's usage
+  view has the same figures on its Savings tab.</li>
   <li><strong>Headline.</strong> The last 30 days: the same four KPI cards as the usage view on <code>30d</code>
   (first-pass yield, cost per successful task, rework, routed starts) with their status, their change against the 30
   days before and a small chart, then the models of the window. With fewer than five scored tasks one notice says the

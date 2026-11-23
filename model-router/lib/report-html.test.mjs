@@ -29,6 +29,34 @@ test('the page carries the tokens of both schemes and switches on the system set
   for (const name of ['success', 'warning', 'error', 'accent']) assert.ok(name in TOKENS.light);
 });
 
+test('Savings is the first section, above the headline: verdict, cards, spend per week, judge and moves; the limits in the footnote', async () => {
+  const { LIMITS } = await import('./savings-text.mjs');
+  const { reportView } = await import('./report-cards.mjs');
+  const data = fixtureData();
+  const html = renderReport(data);
+  const v = reportView(data).savings;
+  assert.ok(html.indexOf('<h2>Savings</h2>') > 0);
+  assert.ok(html.indexOf('<h2>Savings</h2>') < html.indexOf('<h2>Headline</h2>'));
+  assert.ok(html.includes(`<span class="chip">${v.verdict.word}</span>`));
+  for (const c of v.cards) assert.ok(html.includes(`<div class="figure">${c.value}`), c.label);
+  assert.ok(html.includes('<th>Session to subagent</th>'));
+  assert.ok(html.includes('<td>All tasks</td>'));
+  assert.ok(html.includes('Time added by the judge'));
+  const footer = html.slice(html.indexOf('<footer>'));
+  for (const limit of LIMITS) assert.ok(footer.includes(limit.replaceAll("'", '&#39;')), limit.slice(0, 30));
+  const evil = JSON.parse(JSON.stringify(data).replaceAll('"opus"', '"<b>opus</b>"'));
+  assert.doesNotMatch(renderReport(evil), /<b>opus<\/b>/);
+});
+
+test('with no task to compare the section is one line', () => {
+  const data = fixtureData();
+  const usage = { ...data.usage, windows: { ...data.usage.windows, [REPORT_WINDOW]: { ...data.usage.windows[REPORT_WINDOW], savings: { user: null, project: null } } } };
+  const html = renderReport({ ...data, usage });
+  const section = html.slice(html.indexOf('<h2>Savings</h2>'), html.indexOf('<h2>Headline</h2>'));
+  assert.match(section, /release 0\.7\.0/);
+  assert.doesNotMatch(section, /class="figure"/);
+});
+
 test('the headline shows the usage view\'s own cards for the same window', () => {
   const data = fixtureData();
   const html = renderReport(data);

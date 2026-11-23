@@ -146,3 +146,27 @@ test('a column chart draws one column per count above zero, the tallest at full 
   const many = columnsSvg(Array.from({ length: 4000 }, () => 1), { labels: Array.from({ length: 4000 }, () => 'x'.repeat(40)) });
   assert.ok(many.length <= SVG_MAX);
 });
+
+test('a parts bar is one track filled by its parts in order, each in its colour; odd parts are skipped', async () => {
+  const { partsBarSvg } = await import('./usage-svg.mjs');
+  const svg = partsBarSvg([{ share: 0.7, color: '#111111' }, { share: 0.2, color: '#222222' }, { share: 0.1, color: 'red' }, { share: -1 }, null], { width: 100, height: 8 });
+  assert.match(svg, /^<svg [^>]*width="100" height="8"/);
+  assert.equal(count(svg, 'class="track"'), 1);
+  assert.match(svg, /<rect x="0" width="70" height="8" fill="#111111"\/>/);
+  assert.match(svg, /<rect x="70" width="20" height="8" fill="#222222"\/>/);
+  assert.ok(svg.includes(`x="90" width="10" height="8" fill="${COLORS.dim}"`), 'a colour that is no hex is the muted one');
+  assert.equal(count(partsBarSvg([], {}), '<rect'), 1);
+});
+
+test('paired bars: two bars per period, the second in front, each with its tooltip, on one scale', async () => {
+  const { PAIRS_SIZE, pairedBarsSvg } = await import('./usage-svg.mjs');
+  const svg = pairedBarsSvg([[2, 1], [4, 3]], { labels: [['a <b>', 'c'], ['d', 'e']] });
+  assert.match(svg, new RegExp(`width="${PAIRS_SIZE.width}" height="${PAIRS_SIZE.height}"`));
+  assert.equal(count(svg, 'class="first"'), 2);
+  assert.equal(count(svg, 'class="second"'), 2);
+  assert.ok(svg.includes('<title>a &lt;b&gt;</title>'));
+  assert.equal(count(pairedBarsSvg([], {}), '<rect'), 0);
+  assert.equal(count(pairedBarsSvg([[0, 0]], {}), 'class="first"'), 0);
+  const many = pairedBarsSvg(Array.from({ length: 2000 }, () => [1, 2]), { labels: Array.from({ length: 2000 }, () => ['x'.repeat(40), 'y'.repeat(40)]) });
+  assert.ok(many.length <= SVG_MAX);
+});

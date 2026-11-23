@@ -35,7 +35,7 @@ const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confiden
 
 type World = { appended: any[]; agentCalls: any[]; spawns: any[]; steps: any[]; judgeCalls: any[]; runs: any[]; opens: any[]; closes: any[]; toasts: string[]; logs: string[]; debug: string[] }
 type Run = { exitCode: number; stdout: string; stderr?: string }
-type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean; surfaces?: string[]; env?: Record<string, string>; reportData?: Run; logData?: Run; logRecords?: Record<string, unknown>[] }
+type Answers = { usage?: Run; report?: Run; isPlaced?: boolean; denySpawn?: string; grid?: string; repoFails?: boolean; files?: Record<string, string>; info?: Record<string, unknown>; infoFails?: boolean; open?: Run; openThrows?: boolean; surfaces?: string[]; env?: Record<string, string>; reportData?: Run; logData?: Run; logRecords?: Record<string, unknown>[]; agents?: any[] }
 
 const USAGE = { exitCode: 0, stdout: JSON.stringify(usageData()) }
 
@@ -84,7 +84,7 @@ function world(on: On, judge: () => any = () => ({ value: { isAnswered: true, te
   })
   on('command.register', () => ({ value: { command: 'model-router' } }))
   on('agent.list', () => ({
-    value: [{ id: 'ag1', model: 'claude-haiku-5-5', effort: 'low', usage: [{ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }], cost: { usd: 0.002 } }] as any,
+    value: (answers.agents ?? [{ id: 'ag1', model: 'claude-haiku-5-5', effort: 'low', usage: [{ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }], cost: { usd: 0.002 } }]) as any,
   }))
   on('model.complete', ($, e) => {
     w.judgeCalls.push(e)
@@ -528,7 +528,22 @@ describe('measuring', () => {
     const report = w.appended.find((r) => r.type === 'report')
     expect(report.costUsd).toBe(0.002)
     expect(report.tokens).toBe(15)
+    expect(report.usage).toEqual({ input: 10, output: 5, cacheRead: 0, cacheWrite: 0 })
     expect(report.effort).toBe('low')
+  })
+
+  test('the report record sums the tokens by kind over every request of the agent; none without its row', async ($, on) => {
+    const w = world(on, undefined, { agents: [{ id: 'ag1', model: 'claude-haiku-5-5', usage: [
+      { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 1000, cache_creation_input_tokens: 40 },
+      { input_tokens: 2, output_tokens: 7, cache_read_input_tokens: 3000 },
+    ], cost: { usd: 0.004 } }] })
+    await $.agent.report({ agentId: 'ag1', subagentType: 'general-purpose', provider: { plugin: 'engine', tier: 'core' }, status: 'completed', text: 'done' } as any)
+    await $.agent.report({ agentId: 'gone', subagentType: 'general-purpose', provider: { plugin: 'engine', tier: 'core' }, status: 'completed', text: 'done' } as any)
+    const reports = w.appended.filter((r) => r.type === 'report')
+    expect(reports[0].usage).toEqual({ input: 12, output: 12, cacheRead: 4000, cacheWrite: 40 })
+    expect(reports[0].tokens).toBe(4064)
+    expect(reports[1].usage).toBe(null)
+    expect(reports[1].tokens).toBe(null)
   })
 
   test('a prompt typed before any subagent has reported is not stored', async ($, on) => {
@@ -629,7 +644,7 @@ describe('/model-router usage view', () => {
       const ui = await $.ui.mount({ ...PANE, surface })
       expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
       const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
-      expect(keys).toEqual(['title', 'tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level', 'report', 'refresh', 'log'])
+      expect(keys).toEqual(['title', 'tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'tab-savings', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level', 'report', 'refresh', 'log'])
       const drawn = JSON.stringify(await ui.drawn())
       // The active tab and window are inverse blocks in the teal accent; no other label is.
       expect(drawn.match(/"inverse":true/g)?.length).toBe(2)
@@ -657,6 +672,20 @@ describe('/model-router usage view', () => {
     }
   })
 
+  test('Savings draws the verdict with its dot, the measures and the effort-bar cells of the share moved cheaper', async ($, on) => {
+    world(on)
+    await run($, 'savings 30d')
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text', text: /^Savings ·/ }))?.text).toBe('Savings · last 30 days · user level · 7 tasks compared')
+    expect(await ui.find({ type: 'Text', text: /^Per success: +\$0\.110 · \$0\.096 on the session's model · 14% more$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Moved cheaper: +▰{7}▱{3} 71%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Judge: +4 calls · 3\.6 s · median 0\.9 s$/ })).toBeDefined()
+    expect(JSON.stringify(await ui.drawn())).toContain('{"dimColor":true},"children":["not proven"]')
+    await ui.press({ key: 'level' })
+    expect((await ui.find({ type: 'Text', text: /^Savings ·/ }))?.text).toContain('project /work/shop')
+    await ui.unmount()
+  })
+
   test('the body is kept one row taller than the window, so Up and Down arrive as a scroll', async ($, on) => {
     world(on)
     await run($, '')
@@ -678,9 +707,9 @@ describe('/model-router usage view', () => {
     })
     const person = (element: string | undefined) =>
       $.ui.focus({ requestId: 'model-router-usage', component: 'Pane', element, origin: { kind: 'person' } } as any)
-    await run($, 'decisions')
+    await run($, 'savings')
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-    await $.ui.focus({ requestId: 'model-router-usage', key: 'tab-decisions' } as any)
+    await $.ui.focus({ requestId: 'model-router-usage', key: 'tab-savings' } as any)
     await person('window-24h')
     expect(landed.at(-1)).toBe('tab-overview')
     expect(await ui.find({ type: 'Text', text: /^Status:/ })).toBeDefined()
@@ -688,8 +717,8 @@ describe('/model-router usage view', () => {
     expect(await ui.find({ type: 'Text', text: /^Models ·/ })).toBeDefined()
     await person('tab-overview')
     await person('title')
-    expect(landed.at(-1)).toBe('tab-decisions')
-    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
+    expect(landed.at(-1)).toBe('tab-savings')
+    expect(await ui.find({ type: 'Text', text: /^Savings ·/ })).toBeDefined()
     // Onto one of the engine's stops (the close mark) a move cannot be rewritten: it lands there, the tab stays.
     await person('tab-overview')
     await person(undefined)
@@ -701,12 +730,12 @@ describe('/model-router usage view', () => {
   test('a click off the tab row from an end tab keeps the tab and presses what was clicked', async ($, on) => {
     world(on)
     on('ui.focus', () => ({}))
-    await run($, 'decisions')
+    await run($, 'savings')
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-    await $.ui.focus({ requestId: 'model-router-usage', key: 'tab-decisions' } as any)
+    await $.ui.focus({ requestId: 'model-router-usage', key: 'tab-savings' } as any)
     await $.ui.focus({ requestId: 'model-router-usage', component: 'Pane', element: 'window-30d', origin: { kind: 'person' } } as any)
     await ui.press({ key: 'window-30d' })
-    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Savings ·/ })).toBeDefined()
     await ui.press({ key: 'tab-models' })
     expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 30 days')
     await ui.unmount()
@@ -766,7 +795,7 @@ describe('/model-router usage view', () => {
     const out = await run($, '', 80)
     expect(out.isTextDisplayOnly).toBe(true)
     expect(w.closes[0].id).toBe('model-router-usage')
-    for (const tab of ['Overview', 'Models', 'Classes', 'Decisions']) expect(out.text).toContain(`── ${tab}`)
+    for (const tab of ['Overview', 'Models', 'Classes', 'Decisions', 'Savings']) expect(out.text).toContain(`── ${tab}`)
     expect(out.text.split('\n').every((l: string) => l.length <= 80)).toBe(true)
   })
 
@@ -1083,6 +1112,32 @@ describe('the card on the desktop app', () => {
     await ui.unmount()
   })
 
+  test('Savings is a view of the card: the verdict by its dot, the grid, the share rows and spend per week, in the words of the card', async ($, on) => {
+    world(on, undefined, DESKTOP)
+    const out = await run($, 'savings 30d')
+    expect(out.text.split('\n\n')[1]).toBe('Savings · All projects · Last 30 days')
+    expect(out.text).toContain('| Per success | $0.110 |')
+    expect(out.text).toContain('| Moved to a cheaper model | 5 tasks | 71% |')
+    for (const surface of GRAPHICAL) {
+      const ui = await $.ui.mount({ ...cardRow(out, 'savings 30d'), surface })
+      expect(await selects(ui)).toEqual({ view: 'savings', scope: 'user', window: '30d' })
+      const all = await texts(ui)
+      for (const text of ['Verdict', 'Not proven', 'Per success', 'Right first time, moved', 'Where tasks ran · Last 30 days', 'Moved to a stronger model', 'Cost above the session\'s model', 'Saved by move', 'Total']) expect(all.includes(text)).toBe(true)
+      const alts = (await ui.findAll({ type: 'Svg' })).map((x: any) => String(x.props?.alt ?? x.alt))
+      expect(alts).toContain('dim')
+      expect(alts.some((a: string) => a.startsWith('Spent $0.550 of $0.481'))).toBe(true)
+      const json = JSON.stringify(await ui.drawn())
+      expect(/[╭╰│▁▂▃▄▅▆▇█░▰▱🔀→]|#14b8a6/.test(json)).toBe(false)
+      await ui.unmount()
+    }
+    const ui = await $.ui.mount({ ...cardRow(out, 'savings 30d'), surface: 'desktop' })
+    await ui.select({ key: 'scope', value: 'project' })
+    expect(await ui.find({ type: 'Text', text: 'Where tasks ran · Last 30 days' })).toBeDefined()
+    await ui.select({ key: 'window', value: '24h' })
+    expect(await ui.find({ type: 'Text', text: 'Where tasks ran · Last 24 hours' })).toBeDefined()
+    await ui.unmount()
+  })
+
   test('the title collapses the card to its header and one segmented bar, and opens it again', async ($, on) => {
     world(on, undefined, DESKTOP)
     const ui = await $.ui.mount({ ...cardRow(await run($, '30d')), surface: 'desktop' })
@@ -1159,7 +1214,7 @@ describe('the card on the desktop app', () => {
   test('every view of a card is within the tree budget', async ($, on) => {
     world(on, undefined, { ...DESKTOP, files: { [LOG_FILE]: '' }, reportData: { exitCode: 0, stdout: JSON.stringify(bigReportData({ classes: 40, cells: 6, projects: 30 })) } })
     const ui = await $.ui.mount({ ...cardRow(await run($, '30d')), surface: 'desktop' })
-    for (const view of ['overview', 'models', 'classes', 'projects', 'decisions', 'trend', 'log']) {
+    for (const view of ['overview', 'models', 'classes', 'projects', 'decisions', 'savings', 'trend', 'log']) {
       await ui.select({ key: 'view', value: view })
       const size = treeSize(await ui.drawn())
       expect(size.chars).toBeLessThan(40000)

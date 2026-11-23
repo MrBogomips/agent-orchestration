@@ -26,6 +26,43 @@ test('the headline is the usage view\'s Overview model for the report\'s window'
   assert.equal(reportView(bare()).headline, null);
 });
 
+test('Savings is the 30-day user-level model, written through the texts the terminal and the card share', async () => {
+  const { verdictSentence, savingText, LIMITS, EMPTY_TEXT } = await import('./savings-text.mjs');
+  const { fmtPct, fmtUsd } = await import('./format.mjs');
+  const data = reportData();
+  const s = data.usage.windows[REPORT_WINDOW].savings.user;
+  const v = reportView(data).savings;
+  assert.equal(v.title, 'Savings');
+  assert.equal(v.caption, 'Last 30 days · user level · 7 tasks compared · against the same tasks on the model of the session that started them');
+  assert.deepEqual(v.verdict, { word: 'not proven', tone: 'dim', sentence: verdictSentence(s) });
+  assert.deepEqual(v.cards.map((c) => [c.label, c.value]), [
+    ['Per success', fmtUsd(s.perSuccess)], ['Saved', savingText(s.saved)], ['Moved cheaper', fmtPct(s.groups.cheaper.share)], ['Quality', fmtPct(s.groups.cheaper.fpy)],
+  ]);
+  const { sharePhrase } = await import('./savings-text.mjs');
+  assert.equal(v.cards[0].detail, `${fmtUsd(s.baselinePerSuccess)} on the session's model · ${sharePhrase(s.savedShare)}`);
+  assert.match(v.cards[2].spark.source, /^<svg /);
+  assert.deepEqual(v.cards[3].chip, { text: 'not judged', tone: 'dim' });
+  assert.equal(v.weeks.rows, undefined, 'no figure is worked out per week on the page');
+  assert.match(v.weeks.picture.source, /class="second"/);
+  // Each week's tooltip says its saving as the model gives it, a week that cost more included.
+  const { savedPhrase } = await import('./savings-text.mjs');
+  assert.ok(s.weeks.some((w) => w.saving < 0), 'the fixture has a week that cost more');
+  for (const w of s.weeks) assert.ok(v.weeks.picture.source.includes(savedPhrase(w.saving)), w.week);
+  assert.deepEqual(v.judge, [{ label: 'Judge calls', value: '4' }, { label: 'Time added by the judge', value: '3.6 s · median 0.9 s' }]);
+  assert.deepEqual(v.moves.map((m) => m.name), ['Opus to Haiku', 'Opus to Sonnet', 'Sonnet to Haiku', 'Sonnet to Opus', 'Kept on the session\'s model', 'All tasks']);
+  assert.equal(v.moves.at(-1).saved, savingText(s.movesTotal));
+  assert.equal(v.moves.at(-2).saved, '–');
+  const notes = reportView(data).footnotes.join(' ');
+  for (const limit of LIMITS) assert.ok(notes.includes(limit));
+  const { PRICES_TEXT, leftOutText } = await import('./savings-text.mjs');
+  assert.ok(notes.includes(PRICES_TEXT));
+  assert.ok(notes.includes(`Savings, last 30 days: 7 tasks compared; ${leftOutText(1)}`));
+  assert.doesNotMatch(notes, /median cost per token/);
+  assert.equal(reportView(bare()).savings, null);
+  const none = { ...data.usage, windows: { ...data.usage.windows, [REPORT_WINDOW]: { ...data.usage.windows[REPORT_WINDOW], savings: { user: null, project: null } } } };
+  assert.deepEqual(reportView({ ...data, usage: none }).savings, { title: 'Savings', caption: 'Last 30 days · user level', empty: EMPTY_TEXT });
+});
+
 test('the view names when it was generated and where the data was read', () => {
   const view = reportView(bare());
   assert.equal(view.generated, 'Generated 22 Nov 2026, 15:50 UTC · 15 closed tasks, all time');

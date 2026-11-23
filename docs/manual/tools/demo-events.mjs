@@ -99,6 +99,32 @@ function routing(tier, risky) {
   return { route: 'judge', action, modelTier: tier, before: MODELS[parent], reason: `judge: ${JUDGE_TIER[tier]} at ${conf}`, conf };
 }
 
+// The model of the session that started the subagent: the judge's own figure, or one drawn from the agent's id
+// (not from the generator, so the rest of the data stays as it was).
+const digit = (agentId, i) => parseInt(agentId[i], 16);
+function parentOf(route, agentId) {
+  if (route.route !== 'explicit') return route.before;
+  if (route.modelTier === 'fable') return MODELS.fable;
+  const d = digit(agentId, 1);
+  return MODELS[d < 11 ? 'opus' : d < 14 ? 'sonnet' : 'fable'];
+}
+
+// Dollars per million tokens by kind, invented in the proportions of a price list: what Savings reads back.
+const RATES = {
+  haiku: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  sonnet: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
+  opus: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  fable: { input: 8, output: 40, cacheRead: 0.2, cacheWrite: 10 },
+};
+/** The tokens by kind that cost `cost` on `tier`, in a mix that varies with the agent's id. */
+function usageOf(tier, cost, agentId) {
+  const output = 0.25 + digit(agentId, 2) / 60;
+  const cacheRead = 0.2 + digit(agentId, 3) / 50;
+  const cacheWrite = 0.1;
+  const shares = { input: 1 - output - cacheRead - cacheWrite, output, cacheRead, cacheWrite };
+  return Object.fromEntries(Object.entries(shares).map(([kind, share]) => [kind, Math.round((cost * share * 1e6) / RATES[tier][kind])]));
+}
+
 function task(records, session, at, project, used) {
   let cls = weighted(Object.entries(CLASS_WEIGHTS));
   // A session never repeats a task: a similar start of the same class would read as rework.
@@ -127,13 +153,15 @@ function task(records, session, at, project, used) {
   });
   records.push({
     v: 1, type: 'spawn', ts: iso(at), session, agentId, subagentType, description, class: untagged ? null : cls, risky,
-    model, effort: finalEffort, fork: false, route: route.route, explicitModel: explicit, project: { id: project.id, root: project.root },
+    model, parentModel: parentOf(route, agentId), effort: finalEffort, fork: false, route: route.route, explicitModel: explicit,
+    project: { id: project.id, root: project.root },
   });
   tier = route.modelTier;
   const runMs = (1 + rand() * (cls.startsWith('read') ? 4 : 14)) * MIN;
   const [lo, hi] = COST[tier];
   const cost = round((lo + rand() * (hi - lo)) * EFFORT_COST[finalEffort], 4);
-  const tokens = Math.round(cost * (tier === 'haiku' ? 9e6 : tier === 'sonnet' ? 1.6e6 : 4.5e5));
+  const usage = usageOf(tier, cost, agentId);
+  const tokens = usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
   const files = cls.startsWith('edit') || (cls === 'design-open' && rand() < 0.5)
     ? [`${project.root}/src/${pick(['export', 'records', 'csv', 'paging', 'upload'])}-${hex(4)}.js`, `${project.root}/test/${pick(['export', 'csv', 'paging'])}-${hex(4)}.test.js`]
     : [];
@@ -143,7 +171,7 @@ function task(records, session, at, project, used) {
   if (roll < 0.03) return end; // cancelled: no report before the session ends
   const failed = roll > 1 - (1 - pSuccess) * 0.35;
   const status = failed ? 'failed' : 'completed';
-  records.push({ v: 1, type: 'report', ts: iso(end), session, agentId, subagentType, status, model, effort: finalEffort, costUsd: cost, tokens });
+  records.push({ v: 1, type: 'report', ts: iso(end), session, agentId, subagentType, status, model, effort: finalEffort, costUsd: cost, tokens, usage });
   if (!failed && rand() > pSuccess) {
     // rework: the main session edits one of the subagent's files, or a similar start of the same class follows
     if (files.length > 0) records.push({ v: 1, type: 'signal', kind: 'write', ts: iso(end + (3 + rand() * 15) * MIN), session, file: files[0] });

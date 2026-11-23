@@ -222,6 +222,85 @@ The script opens the page in the system's default browser (`--no-open` writes it
 prints the report's data). On a graphical surface the mod draws that data as a native pane instead
 (`model-router.md`, *Opening the report*).
 
+## Savings: what routing gained (release 0.7)
+
+The measures above say how well each choice worked. Savings answers another question: is the plugin worth its
+cost? It compares what the subagents cost with what the same tasks would have cost on the model they would have
+inherited. Agreed with the user on 2026-11-23, on two mockups (the page and the desktop card).
+
+**The baseline.** Without the plugin a subagent runs on the model of the session or agent that started it
+(`parentModel` on the outcome record, from 0.6). The baseline cost of a task is its cost on that model:
+
+- a task that ran on its parent's tier: its own cost;
+- any other task: its tokens, kind by kind, at the *prices* of the parent's tier.
+
+A total token count is not enough: most of a subagent's tokens are cache reads, which cost a small and different
+fraction of the input price on each tier, so a cost per token says more about the mix of a task than about the
+model (measured on the real logs: `sonnet` came out dearer per token than `opus`). From 0.7 the report record and
+the outcome record carry `usage`, the tokens by kind summed over the subagent's requests: `input`, `output`,
+`cacheRead`, `cacheWrite`.
+
+The plugin holds no price list: a cost is the engine's estimate, at list price or the managed rates. The prices of
+a tier are read back from those estimates: the four rates, one per kind, that best explain `costUsd` from `usage`
+over the outcomes of that tier of the last 90 days, all projects (least squares; a kind whose rate comes out
+negative is fitted as zero and the others again). A tier has prices only with at least 8 such outcomes and a fit
+whose median error is within 10% of the cost; otherwise its tasks have no baseline. So the baseline is in the same
+money as the costs shown everywhere else, and follows a price change by itself.
+
+**Tasks compared.** The closed outcomes of the window and the level, except `cancelled`, that carry a cost, a token
+count by kind (`usage`) and a `parentModel` whose tier is known and has prices. The others are left out and counted once, in the
+footnote. A task is *moved to a cheaper model*, *kept* or *moved to a stronger model* by the place of its tier
+against its parent's in the price order.
+
+**Measures.**
+
+| Measure | Definition |
+|---|---|
+| Per success | cost of the tasks compared / their successes |
+| Per success on the session's model | baseline cost / (tasks compared × FPY of the kept tasks; the FPY of all the tasks compared when fewer than five are kept or none of the kept succeeded) |
+| Saved, as a share | 1 − per success / per success on the session's model. The headline. |
+| Saved | (per success on the session's model − per success) × successes |
+| Spent, and on the session's model | the two sums of cost |
+| Where tasks ran | for moved cheaper, kept and moved stronger: tasks, share, FPY, rework rate, baseline cost − cost |
+| Saved by move | the same per pair of tiers (`opus` to `haiku`), with a total |
+| Spend per week | cost and baseline cost per week (Monday, UTC) |
+| Judge | judge answers of the window: how many, their total and median time (`judge.ms` of the decision records) |
+
+**Quality** *holds* when the FPY of the tasks moved cheaper is at most 5 points under the FPY of the kept tasks,
+otherwise it *drops*; with fewer than five tasks on either side it is not judged.
+
+**Verdict**, one of three:
+
+- `pays off`: at least 100 tasks compared, saved share of 5% or more, and quality does not drop;
+- `costs more`: at least 100 tasks compared and a saved share of −5% or less;
+- `not proven`: anything else. The line says why: too few tasks, a difference within 5%, or quality drops.
+
+The three thresholds are constants of the module, not options.
+
+**Known limits**, said in the footnote of the page:
+
+- The tasks moved cheaper are easier on average than the kept ones, so comparing their FPY favours the plugin. A
+  comparison per class would be fairer; too many starts carry no class today.
+- The baseline changes the model only. What a lower effort saves is not counted.
+- The judge's own cost is not in the log (the engine does not report it for a `$.model.complete` call) and is not
+  subtracted; its time is shown. The time the `choose-model` skill adds to a session is not in the log either.
+
+**Where it shows.** One module, `lib/savings.mjs`, computes the model from outcome and decision records; each
+surface renders it and works nothing out again (`ui-design.md`):
+
+- **The page.** A section *Savings*, first, above the Headline: last 30 days, user level. The verdict line, four
+  cards (per success with the baseline and the saved share; saved with spent of baseline; moved cheaper with a
+  three-part bar; quality), spend per week as paired bars, the judge's figures, and the table of moves.
+- **The terminal.** A view *Savings* of `/model-router`, in the window and level the view is on: the verdict, then
+  one line per measure, with the effort-bar cells for the share moved cheaper.
+- **The card.** A view *Savings* in the card's dropdown, following its scope and window: the verdict as a dot and
+  a sentence, a key-value grid, the three share rows, spend per week as stacked bars (spent, and what the session's
+  model would have added), the table of moves with a total, and the closing line. In the card's words: "Per
+  success", "Right first time", "Redone", "Moved to a cheaper model", "Moved to a stronger model". The card's header
+  summary stays as it is.
+- With no task to compare, every surface says in one line that savings are measured for tasks started from release
+  0.7.0 on.
+
 ## Options
 
 Added to the `userConfig` of `model-router.md`:
@@ -370,3 +449,48 @@ a task with none is not learned.
   call's own model when the call names one, so without this field a start with an explicit model did not say
   whether it ran below, at or above the model it would have inherited. With it, the share of starts moved to a
   cheaper tier and their rework rate can be read from the outcome records alone.
+
+## As built in 0.7
+
+What *Savings* left open, and how the build settles it.
+
+- **Modules.** `lib/savings.mjs` computes the model (numbers only), at the prices `lib/prices.mjs` fits; `lib/savings-text.mjs` holds the words and
+  sentences the three surfaces share; `lib/card-savings.mjs` and `lib/report-savings.mjs` are the card's view and the
+  page's section; the terminal's rows are in `lib/usage-view.mjs`. The windows and weeks moved from
+  `lib/usage-data.mjs` to `lib/windows.mjs`, and the formatters from `lib/usage-view.mjs` to `lib/format.mjs`, so that
+  the new modules import them without a cycle; both old modules still export them. `buildUsageData` adds
+  `savings: { user, project }` to every window, so the terminal, the card and the page read the same model.
+- **Tokens by kind.** The report record sums `input_tokens`, `output_tokens`, `cache_read_input_tokens` and
+  `cache_creation_input_tokens` over the agent's requests into `usage` (`null` when the engine no longer lists the
+  agent); the outcome keeps it only when all four counts are numbers of zero or more (`checkedUsage`), else `null`.
+  Compaction, the slimmed logs and `archive/outcomes.jsonl` keep outcome records whole, so the field needs nothing
+  more; the Log view does not show it.
+- **The fit.** Least squares of the cost on the four counts, per million and each column scaled to unit size, solved
+  by the normal equations with Gaussian elimination and partial pivoting. When rates come out negative, the most
+  negative kind is set to 0 and the rest fitted again, one kind at a time. Two kinds the outcomes cannot tell apart
+  (a pivot under 10⁻¹⁰ of the largest) give the tier no prices rather than a guess. The model's `rates` field keeps
+  its name and holds the prices per tier, in dollars per million tokens of each kind.
+- **Tasks compared** must also have a tier of their own among the four families. A kept task needs its parent's
+  prices too, although its baseline is its own cost, so that every task compared went through the same rule.
+- **Left out** counts the closed tasks of the window (not the cancelled ones) that cannot be compared.
+- **Two more reasons for `not proven`**: at least 100 tasks compared and none right first time (`no-success`), and
+  successes on tasks that carry no cost at all, so there is no baseline per success (`no-cost`).
+- **A share or an amount below zero** is said in words, through the same phrases on every surface: `14% more` per
+  success, `cost $0.160 more`. A week that cost more than its baseline is drawn as such: on the card its baseline in
+  the spent colour with the excess above it in the context card's orange, named by a legend under the chart only
+  then (the legend's bar shows the chart's colours in the proportion drawn, its rows carry no figures); on the page
+  the two bars stand side by side, unclamped, and the tooltip says the week's saving; in the terminal each week's line
+  ends with it.
+- **The fixture** of the views' tests prices its costs at fixed list prices per tier with a mix of kinds that differs
+  per task, and adds eight cancelled tasks 50 days old to the event log, so that opus and sonnet each have the eight
+  recent outcomes a fit needs while no other figure changes.
+- **The judge** counts the decisions of the window whose `judge` carries a time. A judge call that failed logs no
+  answer, so its time is not in the log and not counted. At the project level, as for the headline, the decisions are
+  those of the project's spawns.
+- **Moves** are the pairs of different tiers, moves to a cheaper model first, each from the dearest parent; the kept
+  tasks are a row of their own on the page and are not a move. The total of the moves is the baseline spent less the
+  spent (kept tasks add nothing). The terminal and the card list at most 8 moves and the last 8 weeks.
+- **The card's verdict** is a one-row table, the dot beside the verdict's word and the saved share at the right,
+  followed by the sentence: the shared card kit has no dotted line, and adding one would change both plugins' copies.
+- **Amounts** go through `fmtUsd`, as every other figure: three decimals (`$20.500`), not the mockups' two.
+- **The tab and the view.** The terminal's tab is the last of the row; the card's view stands after Decisions.

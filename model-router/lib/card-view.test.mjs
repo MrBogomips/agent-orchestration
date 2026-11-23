@@ -25,7 +25,52 @@ test('a card state takes only known values and falls back to the defaults', () =
   assert.deepEqual(cardStateOf(null), DEFAULT_CARD);
   assert.deepEqual(cardStateOf({ view: 'trend', window: '24h', level: 'project', group: 'keep', isCollapsed: true }), { view: 'trend', window: '24h', level: 'project', group: 'keep', isCollapsed: true });
   assert.deepEqual(cardStateOf({ view: 'tiles', window: '1y', level: 'x', group: '', isCollapsed: 'yes' }), DEFAULT_CARD);
-  assert.deepEqual(VIEWS.map((v) => v.label), ['Overview', 'Models', 'Task classes', 'Projects', 'Decisions', 'Trend', 'Log']);
+  assert.deepEqual(VIEWS.map((v) => v.label), ['Overview', 'Models', 'Task classes', 'Projects', 'Decisions', 'Savings', 'Trend', 'Log']);
+});
+
+test('Savings: the verdict as a dot and a sentence, the grid, the three share rows, spend per week, the moves and the closing line', () => {
+  const c = card({ view: 'savings' });
+  const s = USAGE.data.windows['30d'].savings.user;
+  assert.deepEqual(kinds(c), ['table', 'note', 'grid', 'shares', 'chart', 'legend', 'table', 'note']);
+  assert.deepEqual(c.blocks[0].rows, [{ tone: 'dim', label: 'Not proven', value: '14% more per success' }]);
+  assert.equal(c.blocks[1].text, '7 tasks compared: a verdict needs 100.');
+  assert.deepEqual(blockOf(c, 'grid').pairs.map((p) => `${p.label}=${p.value}`), [
+    'Per success=$0.110', 'On the session\'s model=$0.096', 'Saved=$0.068 more', 'Spent=$0.550 of $0.481',
+    'Right first time, moved=80%', 'Right first time, kept=100%', 'Quality=Not judged', 'Judge=4 calls · 3.6 s · median 0.9 s',
+    'Tasks compared=7', 'Tasks left out=1',
+  ]);
+  const shares = blockOf(c, 'shares');
+  assert.equal(shares.label, 'Where tasks ran · Last 30 days');
+  assert.deepEqual(shares.rows.map((r) => `${r.name}|${r.amount}|${r.share}|${r.detail}`), [
+    'Moved to a cheaper model|5 tasks|71%|80% right first time · 20% redone · saved $0.092',
+    'Kept on the session\'s model|1 task|14%|100% right first time · 0% redone',
+    'Moved to a stronger model|1 task|14%|0% right first time · 0% redone · cost $0.160 more',
+  ]);
+  const chart = blockOf(c, 'chart');
+  assert.equal(chart.title, 'Spend per week');
+  assert.equal(chart.alt, `Spent $0.550 of $0.481 on the session's model over ${s.weeks.length} weeks`);
+  // A week of the fixture cost more than on the session's model: the legend names the excess.
+  assert.deepEqual(blockOf(c, 'legend').rows.map((r) => r.name), ['Spent', 'What the session\'s model would have added', 'Cost above the session\'s model']);
+  const moves = c.blocks[6];
+  assert.equal(moves.title, 'Saved by move');
+  assert.deepEqual(moves.rows.map((r) => `${r.label}=${r.value}`), [
+    'Opus to Haiku · 1 task · 100% right first time=$0.012', 'Opus to Sonnet · 3 tasks · 67% right first time=$0.067',
+    'Sonnet to Haiku · 1 task · 100% right first time=$0.013', 'Sonnet to Opus · 1 task · 0% right first time=$0.160 more', 'Total=$0.068 more',
+  ]);
+  assert.match(c.blocks.at(-1).text, /^Each task is compared with its cost on the model of the session that started it\. 1 task left out/);
+  assert.equal(c.summary, card({ view: 'overview' }).summary, 'the header summary stays as it is');
+  assert.deepEqual(Object.keys(c.nav).sort(), ['scope', 'view', 'window']);
+  assert.match(textOf(c), /\| Per success \| \$0\.110 \|/);
+  assert.doesNotMatch(JSON.stringify(c), /[▰▱█▁▂▃]|→/);
+});
+
+test('Savings with no task to compare is one line; at the project level it follows the scope', () => {
+  const c = card({ view: 'savings', window: '24h', level: 'project' });
+  assert.equal(c.nav.scope.value, 'project');
+  const empty = { ...USAGE.data, windows: { ...USAGE.data.windows, '7d': { ...USAGE.data.windows['7d'], savings: { user: null, project: null } } } };
+  const none = cardOf({ state: { view: 'savings', window: '7d' }, usage: { data: empty, isLoading: false }, status: STATUS });
+  assert.deepEqual(kinds(none), ['note']);
+  assert.match(none.blocks[0].text, /release 0\.7\.0/);
 });
 
 test('the header says the window\'s quality and cost; the collapsed bar is the tasks by model', () => {

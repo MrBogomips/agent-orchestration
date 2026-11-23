@@ -182,6 +182,22 @@ test('the tasks per day count closed tasks by tier, the days with one only, with
   assert.deepEqual(dailyOf([], T0), []);
 });
 
+test('every window carries the savings of both levels, as lib/savings.mjs works them out', async () => {
+  const { savingsOf } = await import('./savings.mjs');
+  const data = usageData();
+  const all = latestOutcomes(events());
+  const decisions = events().filter((e) => e.type === 'decision');
+  for (const window of ['24h', '7d', '30d', 'all']) {
+    assert.deepEqual(data.windows[window].savings.user, savingsOf({ outcomes: all, decisions, window, now: T0 }));
+    // A decision carries no project: the project level counts the decisions of the project's spawns (none here).
+    assert.deepEqual(data.windows[window].savings.project, savingsOf({ outcomes: all, decisions: [], window, now: T0, projectId: PROJECT.id }));
+  }
+  assert.ok(data.windows['30d'].savings.user.tasks > 0, 'the fixture names the session model of its tasks');
+  assert.ok(data.windows['30d'].savings.user.judge.calls > 0, 'the fixture times its judge');
+  const bare = buildUsageData({ events: events(), user: level(outcomes(), 'user'), grid: GRID, now: T0, halfLifeDays: 30 });
+  assert.equal(bare.windows['7d'].savings.project, null);
+});
+
 test('the usage data carries the tasks per day and the models of the session\'s project alone', () => {
   const data = usageData();
   assert.ok(data.daily.user.length > 0);

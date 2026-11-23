@@ -1,10 +1,11 @@
 // The Model routing card of the desktop app as a plain value: what hooks/card-kit.tsx lays out for the view, the
 // scope and the window picked. One card holds every view: Overview, Models, Task classes, Projects, Decisions,
-// Trend (the quality report) and Log (the event log). Pure: it takes the data scripts/usage.mjs, scripts/report.mjs
+// Savings (lib/card-savings.mjs), Trend (the quality report) and Log (the event log). Pure: it takes the data scripts/usage.mjs, scripts/report.mjs
 // and scripts/log.mjs print, and returns texts already formatted and drawings as SVG markup.
 // See docs/design/model-router.md, "The card on the desktop app", and docs/design/ui-design.md, "The card".
 // Plain ES module with no Node or engine imports, so the mod and node tests load it.
 import { ACCENT, KIND_COLORS, SHADES, SHADE_ORDER, TONE_COLORS, barSvg, chartSvg, heatmapSvg, scaleOf, segmentsSvg } from './card-parts.mjs';
+import { savingsBlocks } from './card-savings.mjs';
 import { fmtBytes, recordLine } from './log-cards.mjs';
 import { EFFORT_LEVELS, familyOf } from './tiers.mjs';
 import { fmtNum, fmtPct, fmtUsd } from './usage-view.mjs';
@@ -12,7 +13,8 @@ import { fmtNum, fmtPct, fmtUsd } from './usage-view.mjs';
 export const CARD_TITLE = 'Model routing';
 export const VIEWS = Object.freeze([
   { value: 'overview', label: 'Overview' }, { value: 'models', label: 'Models' }, { value: 'classes', label: 'Task classes' },
-  { value: 'projects', label: 'Projects' }, { value: 'decisions', label: 'Decisions' }, { value: 'trend', label: 'Trend' }, { value: 'log', label: 'Log' },
+  { value: 'projects', label: 'Projects' }, { value: 'decisions', label: 'Decisions' }, { value: 'savings', label: 'Savings' },
+  { value: 'trend', label: 'Trend' }, { value: 'log', label: 'Log' },
 ]);
 export const SCOPES = Object.freeze([{ value: 'user', label: 'All projects' }, { value: 'project', label: 'This project' }]);
 export const WINDOWS = Object.freeze([
@@ -404,7 +406,7 @@ function logBlocks(log, state) {
 
 /** Which dropdowns a view has: the scope where the figures are per level, the window where they are per window. */
 function navOf(data, state) {
-  const scoped = ['overview', 'models', 'classes', 'decisions'].includes(state.view) && Boolean(data?.project);
+  const scoped = ['overview', 'models', 'classes', 'decisions', 'savings'].includes(state.view) && Boolean(data?.project);
   const windowed = !REPORT_VIEWS.includes(state.view);
   return {
     view: { value: state.view, options: VIEWS },
@@ -417,7 +419,8 @@ function blocksOf({ state, usage, report, log, status }) {
   if (state.view === 'log') return logBlocks(log, state);
   if (REPORT_VIEWS.includes(state.view)) return state.view === 'trend' ? trend(report) : projects(report);
   if (!usage?.data) return [waiting(usage, 'the usage data')];
-  const body = { overview: () => overview(usage.data, state, status), models: () => models(usage.data, state), classes: () => classes(usage.data, state), decisions: () => decisions(usage.data, state) };
+  const body = { overview: () => overview(usage.data, state, status), models: () => models(usage.data, state), classes: () => classes(usage.data, state), decisions: () => decisions(usage.data, state),
+    savings: () => savingsBlocks(windowOf(usage.data, state)?.savings?.[state.level] ?? null, { windowLabel: labelOf(WINDOWS, state.window), weekLabel: dayText }) };
   return [...body[state.view](), ...(usage.error ? [note(`Last read failed: ${usage.error}`, 'warn')] : [])];
 }
 
@@ -452,7 +455,7 @@ export function helpCard() {
     blocks: [
       { kind: 'list', rows: [
         { term: '(nothing)', text: 'The card on Overview, last 7 days, all projects' },
-        { term: 'models  classes  decisions', text: 'The card on that view' },
+        { term: 'models  classes  decisions  savings', text: 'The card on that view' },
         { term: '24h  7d  30d  all', text: 'The card for that window' },
         { term: 'project', text: 'This project only' },
         { term: 'report', text: 'The card on Trend; its last line links the report page' },
