@@ -282,14 +282,26 @@ test('a child start in a master gets the start line under its Bash row, the row 
   engine(on, {}, '/hub')
   on('tool.call', () => ({ result: {} }))
   await $.tool.call({ tool: 'Bash', command: CHILD_START, tool_use_id: 'tu1' } as never)
-  for (const surface of ['terminal', 'desktop'] as const) {
+  const ui = await $.ui.mount({ ...bashRow('tu1', CHILD_START), surface: 'terminal' } as never)
+  expect((await ui.find({ type: 'Text', text: /^ {2}⎿ {2}🔀 / }))?.text).toBe('  ⎿  🔀 opus   ▰▰▰▱ high   -> t42-product')
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
+  expect(drawn).toContain('"color":"#3b82f6"')
+  expect(drawn).toContain('{"color":"#f97316"},"children":["▰▰▰"]')
+  expect(drawn).not.toContain('#14b8a6')
+  await ui.unmount()
+})
+
+test('on the desktop app the start line is one quiet footnote in words, with none of the terminal look', async ($, on) => {
+  engine(on, {}, '/hub')
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: 'Bash', command: CHILD_START, tool_use_id: 'tu1' } as never)
+  for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...bashRow('tu1', CHILD_START), surface } as never)
-    expect((await ui.find({ type: 'Text', text: /^ {2}⎿ {2}🔀 / }))?.text).toBe('  ⎿  🔀 opus   ▰▰▰▱ high   -> t42-product')
     const drawn = JSON.stringify(await ui.drawn())
     expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
-    expect(drawn).toContain('"color":"#3b82f6"')
-    expect(drawn).toContain('{"color":"#f97316"},"children":["▰▰▰"]')
-    expect(drawn).not.toContain('#14b8a6')
+    expect(drawn).toContain('{"type":"Text","props":{"size":"footnote","color":"inactive","wrap":"truncate-end"},"children":["Started t42-product on Opus · high"]}')
+    expect(/[🔀▰▱]|#3b82f6|#f97316/.test(drawn)).toBe(false)
     await ui.unmount()
   }
 })
@@ -489,12 +501,6 @@ test('a failed open is one line in the transcript and the panel stays drawn', as
   expect(world.logs.filter((l) => l.includes('Could not open'))).toEqual([`[session-hub] Could not open ${DEFAULT_RECORD}: No application knows how to open it.`])
 })
 
-const LOG_PANE = {
-  plugin: 'session-hub',
-  component: 'Pane',
-  requestId: 'session-hub-log',
-  props: { title: 'session-hub log', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
-} as const
 const FULL_RECORD = {
   version: 1,
   hub: '/hub',
@@ -509,109 +515,10 @@ const FULL_RECORD = {
 }
 const DESKTOP: Opening = { surfaces: ['desktop'], record: FULL_RECORD }
 
-test('on a graphical surface the panel button opens the log pane, not the file', async ($, on) => {
-  const world = master(on, DESKTOP)
-  await $.tool.call({ tool: 'Bash', command: UPSERT })
-  for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
-    const ui = await $.ui.mount({ ...PANEL, surface })
-    const button = JSON.stringify(await ui.find({ type: 'Button', key: 'log' }))
-    expect(button).toContain('"label":"Log"')
-    expect(button).toContain('"variant":"secondary"')
-    expect(button.includes('"plain":true')).toBe(false)
-    await ui.press({ key: 'log' })
-    await ui.unmount()
-  }
-  expect(world.panes.map((p) => p.id)).toEqual(['session-hub-log', 'session-hub-log', 'session-hub-log'])
-  expect(world.logs.filter((l) => l === '[session-hub] Children record opened beside the chat.').length).toBe(3)
-  expect(world.opened).toEqual([])
-})
-
-test('/session-hub log on a graphical surface opens the log pane and reads the record at its path', async ($, on) => {
-  const world = master(on, DESKTOP)
-  const out = await $.command.run({ ...RUN, args: 'log' })
-  expect(out.text).toBe('Children record opened beside the chat.')
-  expect(out.isTextDisplayOnly).toBe(true)
-  expect(world.panes).toEqual([{ id: 'session-hub-log', title: 'session-hub log', focus: true }] as never)
-  expect(world.reads).toEqual([['--file', DEFAULT_RECORD]])
-  expect(world.opened).toEqual([])
-})
-
-test('the log pane draws the record natively: a card per child and the timeline of starts, messages and requests', async ($, on) => {
-  const world = master(on, DESKTOP)
-  await $.command.run({ ...RUN, args: 'log' })
-  for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
-    const ui = await $.ui.mount({ ...LOG_PANE, surface })
-    expect(await ui.find({ type: 'Text', text: '2 children · 1 live · hub /hub' })).toBeDefined()
-    for (const text of ['Children', 'Timeline', 't42-design', 'not in the session list', 'when (UTC)']) expect(await ui.find({ type: 'Text', text })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: 'started 2026-11-20 09:00 UTC · 1 request' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: 'last message: question · 2026-11-20 10:30 · which branch?' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: 'edit the design tokens → sent to t42-design' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: `Record: ${DEFAULT_RECORD}` })).toBeDefined()
-    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['file', 'refresh'])
-    const drawn = JSON.stringify(await ui.drawn())
-    expect(drawn).toContain('"color":"success"')
-    expect(drawn).toContain('"color":"error"')
-    expect(drawn).toContain('sonnet · medium')
-    expect(/[╭╰│▰▱]/.test(drawn)).toBe(false)
-    expect(drawn.includes('"plain":true')).toBe(false)
-    await ui.unmount()
-  }
-  expect(world.debug.filter((l) => l.includes('log pane'))).toEqual([])
-})
-
-test('Open file is the way out of the log pane, and Refresh reads the record again', async ($, on) => {
-  const world = master(on, { ...DESKTOP, platform: 'linux' })
-  await $.command.run({ ...RUN, args: 'log' })
-  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-  const button = JSON.stringify(await ui.find({ type: 'Button', key: 'file' }))
-  expect(button).toContain('"label":"Open file"')
-  expect(button).toContain('"variant":"secondary"')
-  await ui.press({ key: 'file' })
-  expect(world.opened).toEqual([['xdg-open', DEFAULT_RECORD]])
-  expect(world.logs).toContain(`[session-hub] Children record opened: ${DEFAULT_RECORD}`)
-  await ui.press({ key: 'refresh' })
-  expect(world.reads.length).toBe(2)
-  await ui.unmount()
-})
-
-test('a record that cannot be read is one line in the log pane, with its buttons', async ($, on) => {
-  master(on, { ...DESKTOP, readFails: '[session-hub] the record is not valid JSON' })
-  await $.command.run({ ...RUN, args: 'log' })
-  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: 'Cannot read the children record: [session-hub] the record is not valid JSON' })).toBeDefined()
-  expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['file', 'refresh'])
-  await ui.unmount()
-})
-
-test('a record with no child says what will appear', async ($, on) => {
-  master(on, { ...DESKTOP, record: { version: 1, hub: '/hub', children: [] } })
-  await $.command.run({ ...RUN, args: 'log' })
-  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /^No child in the record yet/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'Timeline' })).toBeUndefined()
-  await ui.unmount()
-})
-
-test('in a session whose app has not attached yet the log pane is kept', async ($, on) => {
-  const world = master(on, { surfaces: [], entrypoint: 'claude-desktop', isPlaced: false })
-  expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe('Children record opened beside the chat.')
-  expect(world.panes.map((p) => p.id)).toEqual(['session-hub-log'])
-  expect(world.opened).toEqual([])
-})
-
 test('a -p run, where nothing is drawn, opens the file as a terminal does', async ($, on) => {
   const world = master(on, { surfaces: [], entrypoint: 'sdk-cli' })
   expect((await $.command.run({ ...RUN, args: 'log' })).text).toBe(`Children record opened: ${DEFAULT_RECORD}`)
   expect(world.panes).toEqual([])
-})
-
-test('a terminal attached beside the app is told that the record is a file there', async ($, on) => {
-  master(on, DESKTOP)
-  await $.command.run({ ...RUN, args: 'log' })
-  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
-  expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['file'])
-  await ui.unmount()
 })
 
 // A tree past the engine's bounds (100,000 characters) is refused whole and the app shows its own empty state: both
@@ -627,47 +534,6 @@ const manyChildren = (n: number) => ({
   })),
 })
 
-async function drawLog($: any, on: On, children: number) {
-  const world = master(on, { surfaces: ['desktop'], record: manyChildren(children) })
-  await $.command.run({ ...RUN, args: 'log' })
-  const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-  const size = treeSize(await ui.drawn())
-  const texts: string[] = (await ui.findAll({ type: 'Text' })).map((t: { text?: unknown }) => String(t.text))
-  const keys: string[] = (await ui.findAll({ type: 'Button' })).map((b: { key?: unknown }) => String(b.key))
-  await ui.unmount()
-  return { world, size, texts, keys, skipped: world.debug.filter((l) => l.startsWith('[session-hub] log pane: ')) }
-}
-
-test('a record of a few children is drawn whole in the log pane, within the bounds', async ($, on) => {
-  const { size, texts, skipped } = await drawLog($, on, 8)
-  expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
-  expect(skipped).toEqual([])
-  expect(texts.some((t) => t.startsWith('The record is too large'))).toBe(false)
-  expect(texts.includes('Timeline')).toBe(true)
-})
-
-test('a record too large for one tree draws each child as one line, with the latest events', async ($, on) => {
-  const { size, texts, keys, skipped } = await drawLog($, on, 70)
-  expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
-  expect(size.chars).toBeLessThan(TREE_BOUNDS.chars)
-  expect(skipped.length).toBe(1)
-  expect(skipped[0]).toMatch(/^\[session-hub\] log pane: full: chars \d+ > 80000$/)
-  expect(texts.some((t) => t.startsWith('The record is too large to draw whole here: each child is one line'))).toBe(true)
-  expect(texts.includes('t69-product')).toBe(true)
-  expect(texts.includes('Timeline')).toBe(true)
-  expect(texts.some((t) => t.startsWith('started 2026-11-20'))).toBe(false)
-  expect(keys).toEqual(['file', 'refresh'])
-})
-
-test('a very large record draws its first children and counts the rest', async ($, on) => {
-  const { size, texts, keys, skipped } = await drawLog($, on, 600)
-  expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
-  expect(skipped.map((l) => l.split(': ')[1])).toEqual(['full', 'brief'])
-  expect(texts.some((t) => t.startsWith('The record is too large to draw here: these are its first children'))).toBe(true)
-  expect(texts.includes('540 more in the file.')).toBe(true)
-  expect(texts.includes('Timeline')).toBe(false)
-  expect(keys).toEqual(['file', 'refresh'])
-})
 
 test('a children panel with very many children draws as many rows as fit and counts the rest', async ($, on) => {
   const world = master(on, { record: manyChildren(400) })
@@ -707,7 +573,7 @@ const startRow = (id: string) => ({
   props: { tool_use_id: id, tool: START_SESSION, input: startInput, isRunning: false, isErrored: false, isInterrupted: false },
 }) as const
 
-test("a child started with the desktop app's session tool gets its start line as a notice in the transcript", async ($, on) => {
+test("in a terminal, a child started with the desktop app's session tool gets its start line as a notice", async ($, on) => {
   const logs: string[] = []
   engine(on, {}, '/hub')
   on('ui.log', (_, e, next) => (logs.push(String((e as { text?: unknown }).text ?? '')), next(e)))
@@ -753,4 +619,140 @@ test('a desktop session start in a child session writes no line and draws only i
   const ui = await $.ui.mount({ ...startRow('tu5'), surface: 'desktop' } as never)
   expect(await ui.find({ type: 'Text', text: /🔀/ })).toBeUndefined()
   expect(logs.filter((l) => l.includes('🔀'))).toEqual([])
+})
+
+// The row of a `/session-hub` answer, as the engine raises it for the transcript.
+const cardRow = (out: { text?: string } | undefined, args = '') =>
+  ({ plugin: 'session-hub', component: 'CommandOutput', requestId: 'row-1', props: { command: 'session-hub', args, text: out?.text ?? '', isErrored: false } }) as const
+const selects = async (ui: any) => Object.fromEntries((await ui.findAll({ type: 'Select' })).map((s: any) => [s.key, s.props?.value ?? s.value]))
+const textsOf = async (ui: any): Promise<string[]> => (await ui.findAll({ type: 'Text' })).map((t: { text?: unknown }) => String(t.text))
+
+test('on the desktop app /session-hub answers the card as markdown and opens no pane and no file', async ($, on) => {
+  const world = master(on, DESKTOP)
+  const out = await $.command.run(RUN)
+  expect(out.isTextDisplayOnly).toBe(true)
+  expect(out.text?.startsWith('**Session hub** · master · 2 children, 1 live')).toBe(true)
+  expect(out.text).toMatch(/\n\nRead \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC · card 1\.$/)
+  expect(world.panes).toEqual([])
+  expect(world.opened).toEqual([])
+  expect(world.reads).toEqual([['--file', DEFAULT_RECORD]])
+})
+
+test('the card draws Children: the grid, a group per status with the first open, the record linked last', async ($, on) => {
+  master(on, DESKTOP)
+  const out = await $.command.run(RUN)
+  for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+    const ui = await $.ui.mount({ ...cardRow(out), surface })
+    const drawn = JSON.stringify(await ui.drawn())
+    expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column",[^}]*"borderStyle":"round","borderDimColor":true/)
+    expect(await selects(ui)).toEqual({ view: 'children' })
+    const texts = await textsOf(ui)
+    for (const text of ['Role', 'Master', 'Hub', 'Repositories', 'Record', 't42-product', 'Sonnet · medium']) expect([text, texts.includes(text)]).toEqual([text, true])
+    // The card's title and each group's name are plain buttons, drawn as bare text.
+    expect((await ui.findAll({ type: 'Button' })).map((b: any) => b.key)).toEqual(['card', 'group:running', 'group:lost'])
+    expect(texts.includes('t42-design')).toBe(false)
+    expect(drawn).toContain(`[children-0123456789abcdef.json](file://${DEFAULT_RECORD})`)
+    expect(/[╭╰│▰▱🔀]|#14b8a6|#3b82f6|"variant"/.test(drawn)).toBe(false)
+    await ui.unmount()
+  }
+})
+
+test('a status group opens on its name; the Record view picks a child and shows its events', async ($, on) => {
+  master(on, DESKTOP)
+  const ui = await $.ui.mount({ ...cardRow(await $.command.run(RUN)), surface: 'desktop' })
+  await ui.press({ key: 'group:lost' })
+  expect(await ui.find({ type: 'Text', text: 't42-design' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'not in the session list' })).toBeDefined()
+  await ui.select({ key: 'view', value: 'record' })
+  expect(await selects(ui)).toEqual({ view: 'record', scope: 'all' })
+  expect(await ui.find({ type: 'Text', text: 'Timeline' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 't42-product · request · edit the design tokens: sent to t42-design' })).toBeDefined()
+  await ui.select({ key: 'scope', value: 't42-design' })
+  expect(await ui.find({ type: 'Text', text: 'started · design' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /edit the design tokens/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('/session-hub log opens the card on Record; the title collapses it to its header and the bar of statuses', async ($, on) => {
+  const world = master(on, DESKTOP)
+  const out = await $.command.run({ ...RUN, args: 'log' })
+  expect(out.text?.split('\n\n')[1]).toBe('Record · All children')
+  expect(world.opened).toEqual([])
+  const ui = await $.ui.mount({ ...cardRow(out, 'log'), surface: 'desktop' })
+  await ui.press({ key: 'card' })
+  expect(await ui.find({ type: 'Select' })).toBeUndefined()
+  const alts = (await ui.findAll({ type: 'Svg' })).map((s: any) => s.props?.alt ?? s.alt)
+  expect(alts).toEqual(['Session hub', 'closed', 'Children by status: Running 1, Lost 1'])
+  await ui.unmount()
+})
+
+test('only the newest card is live; the few before it are a static header and bar, older ones their text', async ($, on) => {
+  master(on, DESKTOP)
+  const outs = []
+  for (let i = 0; i < 7; i += 1) outs.push(await $.command.run(RUN))
+  const newest = await $.ui.mount({ ...cardRow(outs[6]), surface: 'desktop' })
+  expect(await newest.find({ type: 'Select' })).toBeDefined()
+  await newest.unmount()
+  const before = await $.ui.mount({ ...cardRow(outs[5]), surface: 'desktop' })
+  expect(await before.find({ type: 'Button' })).toBeUndefined()
+  expect(await before.find({ type: 'Text', text: /^master · 2 children, 1 live · read \d\d:\d\d UTC$/ })).toBeDefined()
+  await before.unmount()
+  const oldest = await $.ui.mount({ ...cardRow(outs[0]), surface: 'desktop' })
+  expect(JSON.stringify(await oldest.drawn())).toMatch(/^\{"type":"engine"/)
+  await oldest.unmount()
+})
+
+test('in a child the card gives its role and where it writes, by base name; the terminal keeps the text', async ($, on) => {
+  engine(on, { ...CHILD_ENV, SESSION_HUB_REGISTRY: MASTER_RECORD })
+  on('session.surfaces', () => ({ value: ['desktop'] as never }))
+  on('process.run', () => ran(JSON.stringify(FULL_RECORD)))
+  const out = await $.command.run(RUN)
+  expect(out.text?.startsWith('**Session hub** · child of hub')).toBe(true)
+  const ui = await $.ui.mount({ ...cardRow(out), surface: 'desktop' })
+  const texts = await textsOf(ui)
+  for (const text of ['Child of hub', 'repo', 't42.md', 'On']) expect(texts.includes(text)).toBe(true)
+  await ui.unmount()
+  const terminal = await $.ui.mount({ ...cardRow(out), surface: 'terminal' })
+  expect(await terminal.find({ type: 'Select' })).toBeUndefined()
+  await terminal.unmount()
+})
+
+test('help is a small static card; an unknown argument one plain line; a session whose app has not attached gets the card', async ($, on) => {
+  const world = master(on, { surfaces: [], entrypoint: 'claude-desktop', isPlaced: false, record: FULL_RECORD })
+  const help = await $.command.run({ ...RUN, args: 'help' })
+  expect(help.text).toContain('| `log  record` |')
+  const ui = await $.ui.mount({ ...cardRow(help, 'help'), surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: '/session-hub' })).toBeDefined()
+  expect(await ui.find({ type: 'Button' })).toBeUndefined()
+  await ui.unmount()
+  expect((await $.command.run({ ...RUN, args: 'children' })).text).toBe('Unknown argument "children". Try /session-hub help.')
+  expect((await $.command.run(RUN)).text?.startsWith('**Session hub**')).toBe(true)
+  expect(world.panes).toEqual([])
+})
+
+test('a card of very many children stays within the tree budget', async ($, on) => {
+  master(on, { surfaces: ['desktop'], record: manyChildren(600) })
+  const ui = await $.ui.mount({ ...cardRow(await $.command.run(RUN)), surface: 'desktop' })
+  for (const view of ['children', 'record']) {
+    await ui.select({ key: 'view', value: view })
+    const size = treeSize(await ui.drawn())
+    expect(size.chars).toBeLessThan(40000)
+    expect(size.nodes).toBeLessThan(TREE_BUDGET.nodes)
+    expect(size.depth).toBeLessThan(TREE_BOUNDS.depth)
+  }
+  expect((await textsOf(ui)).some((t) => /^\d+ earlier events in the record\.$/.test(t))).toBe(true)
+  await ui.unmount()
+})
+
+test("while the desktop app shows the session its session tool gets no start line and no notice", async ($, on) => {
+  const logs: string[] = []
+  engine(on, {}, '/hub')
+  on('session.surfaces', () => ({ value: ['desktop'] as never }))
+  on('ui.log', (_, e, next) => (logs.push(String((e as { text?: unknown }).text ?? '')), next(e)))
+  on('tool.call', () => ({ result: {} }))
+  await $.tool.call({ tool: START_SESSION, ...startInput, tool_use_id: 'tu4' } as never)
+  expect(logs).toEqual([])
+  const ui = await $.ui.mount({ ...startRow('tu4'), surface: 'desktop' } as never)
+  expect(JSON.stringify(await ui.drawn())).toMatch(/^\{"type":"engine","ref":\d+\}$/)
+  await ui.unmount()
 })

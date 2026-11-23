@@ -80,3 +80,23 @@ export function plainLine(line, options) {
   const p = lineParts(line, options);
   return `${p.icon} ${p.model} ${p.filled}${p.empty} ${p.effort} ${ARROW} ${p.reason}`;
 }
+
+/** The system prompt section that tells the model, where the app draws the line itself, not to write it too. */
+export const DRAWN_LINE_SECTION = Object.freeze({
+  id: 'model-router:route-line',
+  scope: 'session',
+  text:
+    'model-router: in this app the routing line of a subagent (model, effort and reason) is drawn under each Agent ' +
+    'call by the model-router mod. Do not write the 🔀 line yourself before an Agent call; still write it before ' +
+    'starting a child session or a workflow.',
+});
+
+/**
+ * The line as the desktop app draws it, quiet and in words: `{ model: 'Haiku · low', reason }`. The model and
+ * effort are the bright words; the reason loses its leading keyword (`explicit:`, `judge:`, `fixed:`).
+ */
+export function quietLine({ model, effort, reason }) {
+  const name = modelName(model);
+  const text = String(reason ?? '').replace(/^(explicit|judge|fixed): /, '').replace(/^keep: /, 'kept: ');
+  return { model: `${name[0].toUpperCase()}${name.slice(1)} · ${effortOf(effort) ?? NO_EFFORT}`, reason: text };
+}

@@ -330,15 +330,26 @@ describe('the choose-model line under an Agent row', () => {
   test('a routed start shows the model and effort it got, and what the router changed', async ($, on) => {
     world(on)
     await start($)
-    for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...AGENT_ROW, surface: 'terminal' })
+    expect(await routeLine(ui)).toBe('  ⎿  🔀 haiku  ▰▱▱▱ low    -> judge: read-search; lowered from opus')
+    const drawn = JSON.stringify(await ui.drawn())
+    // The engine's own row first, kept whole, then the line.
+    expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
+    expect(drawn).toContain('"color":"#ececec"')
+    expect(drawn).toContain('{"color":"#22c55e"},"children":["▰"]')
+    expect(drawn).toContain('{"color":"#3a3f47"},"children":["▱▱▱"]')
+    await ui.unmount()
+  })
+
+  test('on the desktop app the line is one quiet footnote in words, the model and effort its only bright words', async ($, on) => {
+    world(on)
+    await start($)
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
       const ui = await $.ui.mount({ ...AGENT_ROW, surface })
-      expect(await routeLine(ui)).toBe('  ⎿  🔀 haiku  ▰▱▱▱ low    -> judge: read-search; lowered from opus')
       const drawn = JSON.stringify(await ui.drawn())
-      // The engine's own row first, kept whole, then the line.
       expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
-      expect(drawn).toContain('"color":"#ececec"')
-      expect(drawn).toContain('{"color":"#22c55e"},"children":["▰"]')
-      expect(drawn).toContain('{"color":"#3a3f47"},"children":["▱▱▱"]')
+      expect(drawn).toContain('{"type":"Text","props":{"size":"footnote","color":"inactive","wrap":"truncate-end"},"children":["Routed to ",{"type":"Text","props":{"weight":"medium","color":"text"},"children":["Haiku · low"]}," · read-search; lowered from opus"]}')
+      expect(/[🔀▰▱]|#ececec|#22c55e/.test(drawn)).toBe(false)
       await ui.unmount()
     }
   })
@@ -421,6 +432,25 @@ describe('session start', () => {
     const save = runs.find((r) => String(r.argv.join(' ')).includes('options.json'))
     expect(save.argv).toContain('/home/u/.claude/model-router/options.json')
     expect(JSON.parse(save.init.stdin).reworkWindowMin).toBe(120)
+  })
+})
+
+describe('the routing line the model writes', () => {
+  const COMPOSE = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as const
+
+  test('where the app draws the line, a session section tells the model not to write it before an Agent call', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'] })
+    on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'intro', scope: 'shared' }] }))
+    const { sections } = await $.prompt.compose(COMPOSE as any)
+    expect(sections.map((s: any) => s.id)).toEqual(['intro', 'model-router:route-line'])
+    expect(sections[1]?.scope).toBe('session')
+    expect(sections[1]?.text).toContain('Do not write the 🔀 line yourself before an Agent call')
+  })
+
+  test('in a terminal, and where nothing is drawn, the skill keeps its line: no section', async ($, on) => {
+    world(on, undefined, { surfaces: [], env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' } })
+    on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'intro', scope: 'shared' }] }))
+    expect((await $.prompt.compose(COMPOSE as any)).sections.map((s: any) => s.id)).toEqual(['intro'])
   })
 })
 
@@ -757,200 +787,8 @@ const openRuns = (w: World) => w.runs.filter((r) => r.argv[0] === 'open' || r.ar
 const REPORT_FILE = '/home/u/.claude/model-router/report.html'
 const reportRuns = (w: World) => w.runs.filter((r) => String(r.argv[1]).endsWith('report.mjs')).map((r) => r.argv.slice(2))
 
-const REPORT_PANE = {
-  plugin: 'model-router',
-  component: 'Pane',
-  requestId: 'model-router-report',
-  props: { title: 'model-router report', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
-} as const
 const jsonRuns = (w: World) => reportRuns(w).filter((argv) => argv.includes('--json'))
 const pageRuns = (w: World) => reportRuns(w).filter((argv) => argv.includes('--no-open'))
-
-describe('the report on graphical surfaces', () => {
-  const allTexts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
-
-  test('/model-router report opens the report pane and reads the data; no page is written', async ($, on) => {
-    const w = world(on, undefined, { surfaces: ['desktop'] })
-    const out = await run($, 'report')
-    expect(out.text).toBe('🔀 Report opened beside the chat.')
-    expect(out.isTextDisplayOnly).toBe(true)
-    expect(w.opens).toEqual([{ id: 'model-router-report', title: 'model-router report', focus: true }])
-    expect(jsonRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--json']])
-    expect(pageRuns(w)).toEqual([])
-    expect(openRuns(w)).toEqual([])
-  })
-
-  test('the pane draws the report natively: headline, trend, decisions, classes, projects and the footer', async ($, on) => {
-    const w = world(on, undefined, { surfaces: ['desktop'] })
-    await run($, 'report')
-    const probe = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    await probe.unmount()
-    expect(w.debug).toEqual([])
-    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
-      const ui = await $.ui.mount({ ...REPORT_PANE, surface })
-      const texts = await allTexts(ui)
-      for (const text of ['Headline', 'FPY', '$/success', 'Rework', 'Routed', 'Trend by week', 'FPY by week', '$/success by week', 'Routing decisions', 'Classes · all projects', 'Projects']) {
-        expect(texts.includes(text)).toBe(true)
-      }
-      expect(await ui.find({ type: 'Text', text: /^Generated 20 Nov 2026, 12:00 UTC · / })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /^Last 30 days · user level · / })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /^Read from \/home\/u\/\.claude\/model-router · / })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /decisions logged, all time\.$/ })).toBeDefined()
-      const drawn = JSON.stringify(await ui.drawn())
-      expect(drawn).toContain('edit-specified')
-      expect(drawn).toContain('sonnet·medium')
-      expect(drawn).toContain('★ ')
-      expect(drawn).toContain('○ ')
-      expect(drawn).toContain('/work/shop')
-      expect(drawn).toContain('<svg xmlns=')
-      expect(/[╭╰│▁▂▃▄▅▆▇█░]/.test(drawn)).toBe(false)
-      expect(drawn.includes('n < 5')).toBe(false)
-      expect((await ui.findAll({ type: 'Svg' })).length).toBeGreaterThan(8)
-      expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['page', 'refresh'])
-      await ui.unmount()
-    }
-  })
-
-  test('a narrow pane leaves out the cost per task and the explored share', async ($, on) => {
-    world(on, undefined, { surfaces: ['desktop'] })
-    await run($, 'report')
-    const wide = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    expect((await allTexts(wide)).includes('$/task')).toBe(true)
-    expect((await allTexts(wide)).includes('explored')).toBe(true)
-    await wide.unmount()
-    const narrow = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop', props: { ...REPORT_PANE.props, bodyColumns: 50 } })
-    expect((await allTexts(narrow)).includes('$/task')).toBe(false)
-    expect((await allTexts(narrow)).includes('explored')).toBe(false)
-    expect((await allTexts(narrow)).includes('rework')).toBe(true)
-    await narrow.unmount()
-  })
-
-  test('the Report button of the usage pane opens the report pane', async ($, on) => {
-    const w = world(on)
-    await run($, '')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    await ui.press({ key: 'report' })
-    await ui.unmount()
-    expect(w.opens.map((o) => o.id)).toEqual(['model-router-usage', 'model-router-report'])
-    expect(w.logs).toContain('🔀 Report opened beside the chat.')
-    expect(pageRuns(w)).toEqual([])
-  })
-
-  test('Open as page writes the HTML page and opens it in the default browser; Refresh reads again', async ($, on) => {
-    const w = world(on, undefined, { surfaces: ['desktop'] })
-    await run($, 'report')
-    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    const page = JSON.stringify(await ui.find({ type: 'Button', key: 'page' }))
-    expect(page).toContain('"label":"Open as page"')
-    expect(page).toContain('"variant":"secondary"')
-    await ui.press({ key: 'page' })
-    expect(pageRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--no-open']])
-    expect(openRuns(w)).toEqual([['open', REPORT_FILE]])
-    expect(w.logs).toContain(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
-    await ui.press({ key: 'refresh' })
-    expect(jsonRuns(w).length).toBe(2)
-    await ui.unmount()
-  })
-
-  test('a page the opener cannot open is one line with the path, and the pane stays drawn', async ($, on) => {
-    const w = world(on, undefined, { surfaces: ['desktop'], open: { exitCode: 1, stdout: '', stderr: 'no display' } })
-    await run($, 'report')
-    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    await ui.press({ key: 'page' })
-    expect(w.logs).toContain(`🔀 Report written to ${REPORT_FILE} (not opened: no display)`)
-    expect(await ui.find({ type: 'Text', text: 'Headline' })).toBeDefined()
-    await ui.unmount()
-  })
-
-  test('data that cannot be read is one line in the pane, with its buttons', async ($, on) => {
-    world(on, undefined, { surfaces: ['desktop'], reportData: { exitCode: 1, stdout: '', stderr: 'disk full' } })
-    await run($, 'report')
-    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    expect(await ui.find({ type: 'Text', text: /Could not read the report data: disk full/ })).toBeDefined()
-    expect((await ui.findAll({ type: 'Button' })).map((b) => b.key)).toEqual(['page', 'refresh'])
-    await ui.unmount()
-  })
-
-  test('data the report cannot be built from leaves one readable line, never an empty pane', async ($, on) => {
-    world(on, undefined, { surfaces: ['desktop'], reportData: { exitCode: 0, stdout: JSON.stringify({ levels: [], trend: [{ week: 5 }], decisions: 3, usage: { windows: 7 } }) } })
-    await run($, 'report')
-    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    expect((await ui.findAll({ type: 'Text' })).length).toBeGreaterThan(0)
-    expect((await ui.findAll({ type: 'Button' })).some((b) => b.key === 'page')).toBe(true)
-    await ui.unmount()
-  })
-
-  test('a terminal attached beside the app is told that the report is a page there', async ($, on) => {
-    world(on, undefined, { surfaces: ['desktop'] })
-    await run($, 'report')
-    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
-    expect(await ui.find({ type: 'Svg' })).toBeUndefined()
-    await ui.unmount()
-  })
-})
-
-// A real report (six classes, two projects) drawn whole is a tree of about 150,000 characters. Claude Code refuses
-// a tree past 100,000 and the desktop app then shows its own empty state, "Nothing to show yet".
-describe('a report too large for one tree', () => {
-  const draw = async ($: any, on: On, size: { classes?: number; cells?: number; projects?: number }) => {
-    const w = world(on, undefined, { surfaces: ['desktop'], reportData: { exitCode: 0, stdout: JSON.stringify(bigReportData(size)) } })
-    await run($, 'report')
-    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    const drawn = await ui.drawn()
-    const texts: string[] = (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
-    const keys: string[] = (await ui.findAll({ type: 'Button' })).map((b: any) => b.key)
-    await ui.unmount()
-    return { w, size: treeSize(drawn), texts, keys }
-  }
-  const skipped = (w: World) => w.debug.filter((l) => l.startsWith('[model-router] report pane, '))
-
-  test('the fixture\'s report is drawn whole, within the bounds', async ($, on) => {
-    const w = world(on, undefined, { surfaces: ['desktop'] })
-    await run($, 'report')
-    const ui = await $.ui.mount({ ...REPORT_PANE, surface: 'desktop' })
-    const size = treeSize(await ui.drawn())
-    await ui.unmount()
-    expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
-    expect(size.depth).toBeLessThan(TREE_BOUNDS.depth)
-    expect(skipped(w)).toEqual([])
-  })
-
-  test('six classes and two projects keep the user level whole and draw each project as one line', async ($, on) => {
-    const { w, size, texts, keys } = await draw($, on, { classes: 6, cells: 3, projects: 2 })
-    expect(size.chars).toBeLessThan(TREE_BOUNDS.chars)
-    expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
-    expect(size.nodes).toBeLessThan(TREE_BOUNDS.nodes)
-    expect(skipped(w).length).toBe(1)
-    expect(skipped(w)[0]).toMatch(/^\[model-router\] report pane, full: chars \d{6} > 80000$/)
-    expect(texts.some((t) => t.startsWith('The tables of the projects are too large to draw here'))).toBe(true)
-    expect(texts.includes('Headline') && texts.includes('Trend by week') && texts.includes('Classes · all projects')).toBe(true)
-    expect(texts.some((t) => t.includes('class-6'))).toBe(true)
-    expect(texts.filter((t) => t === 'tier · effort').length).toBe(6)
-    expect(texts.some((t) => t.startsWith('/work/hub/project-2') && t.includes('6 classes · 18 cells'))).toBe(true)
-    expect(keys).toEqual(['page', 'refresh'])
-  })
-
-  test('a larger report draws each class as one line too', async ($, on) => {
-    const { w, size, texts, keys } = await draw($, on, { classes: 12, cells: 4, projects: 2 })
-    expect(size.chars).toBeLessThan(TREE_BUDGET.chars)
-    expect(skipped(w).map((l) => l.split(':')[0])).toEqual(['[model-router] report pane, full', '[model-router] report pane, projects'])
-    expect(texts.some((t) => t.startsWith('The class tables are too large to draw here'))).toBe(true)
-    expect(texts.filter((t) => t === 'tier · effort').length).toBe(0)
-    expect(texts.some((t) => t.startsWith('class-12') && t.includes('4 cells'))).toBe(true)
-    expect(texts.includes('Headline')).toBe(true)
-    expect(keys).toEqual(['page', 'refresh'])
-  })
-
-  test('a report past every level is one line and the page button; a level with far too many rows is never built', async ($, on) => {
-    const { w, size, texts, keys } = await draw($, on, { classes: 200, cells: 2, projects: 6 })
-    expect(size.chars).toBeLessThan(2000)
-    expect(texts).toContain('The report is too large to draw here. Open as page shows it whole.')
-    expect(skipped(w).map((l) => l.split(': ')[1]).slice(0, 2)).toEqual(['2800 rows > 400', '406 rows > 400'])
-    expect(skipped(w)[2]).toMatch(/classes: chars \d+ > 80000$/)
-    expect(keys).toEqual(['page'])
-  })
-})
 
 describe('the report in the terminal', () => {
   test('/model-router report writes the page and opens it in the default browser; no pane is opened', async ($, on) => {
@@ -988,53 +826,6 @@ describe('the report in the terminal', () => {
     const w = world(on, undefined, { surfaces: [], env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' } })
     expect((await run($, 'report')).text).toBe(`🔀 Report opened in the default browser: ${REPORT_FILE}`)
     expect(w.opens).toEqual([])
-  })
-})
-
-describe('a session whose app has not attached its surface yet', () => {
-  const FRESH: Answers = { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' } }
-
-  test('/model-router keeps the pane open and answers one line, not the text view', async ($, on) => {
-    const w = world(on, undefined, FRESH)
-    const out = await run($, '', 80)
-    expect(out.text).toBe('🔀 Usage view opening beside the chat.')
-    expect(out.isTextDisplayOnly).toBe(true)
-    expect(/[╭╰│─]/.test(out.text)).toBe(false)
-    expect(w.opens.map((o) => o.id)).toEqual(['model-router-usage'])
-    expect(w.closes).toEqual([])
-    expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(1)
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
-    expect((await ui.findAll({ type: 'Svg' })).length).toBeGreaterThan(0)
-    await ui.unmount()
-  })
-
-  test('the pane is tried there even under 60 columns', async ($, on) => {
-    const w = world(on, undefined, FRESH)
-    expect((await run($, 'models', 40)).text).toBe('🔀 Usage view opening beside the chat.')
-    expect(w.opens.length).toBe(1)
-  })
-
-  test('/model-router report keeps the report pane open too', async ($, on) => {
-    const w = world(on, undefined, FRESH)
-    expect((await run($, 'report')).text).toBe('🔀 Report opened beside the chat.')
-    expect(w.opens.map((o) => o.id)).toEqual(['model-router-report'])
-    expect(w.closes).toEqual([])
-    expect(pageRuns(w)).toEqual([])
-  })
-
-  test('a -p run, where nothing ever attaches, still prints the text view and closes the pane', async ($, on) => {
-    const w = world(on, undefined, { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' } })
-    const out = await run($, '', 80)
-    expect(out.text).toContain('── Overview')
-    expect(w.closes[0].id).toBe('model-router-usage')
-  })
-
-  test('a terminal too narrow for the pane still prints the text view', async ($, on) => {
-    const w = world(on, undefined, { isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'cli' } })
-    const out = await run($, '', 80)
-    expect(out.text).toContain('── Overview')
-    expect(w.closes[0].id).toBe('model-router-usage')
   })
 })
 
@@ -1096,325 +887,232 @@ describe('the event log in the terminal', () => {
   })
 })
 
-const LOG_PANE = {
-  plugin: 'model-router',
-  component: 'Pane',
-  requestId: 'model-router-log',
-  props: { title: 'model-router log', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
-} as const
-const logRuns = (w: World) => w.runs.filter((r) => String(r.argv[1]).endsWith('log.mjs')).map((r) => r.argv.slice(2))
-const MANY = Array.from({ length: 45 }, (_, i) => ({ v: 1, type: 'signal', kind: 'write', ts: new Date(T0 - i * 60000).toISOString(), session: 'sess-many', file: `/repo/f${i}.ts` }))
+describe('the text view where no pane is placed', () => {
+  test('a -p run, where nothing ever attaches, still prints the text view and closes the pane', async ($, on) => {
+    const w = world(on, undefined, { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' } })
+    const out = await run($, '', 80)
+    expect(out.text).toContain('── Overview')
+    expect(w.closes[0].id).toBe('model-router-usage')
+  })
 
-describe('the log dashboard on graphical surfaces', () => {
-  const DESKTOP: Answers = { surfaces: ['desktop'], files: { [LOG_FILE]: '' } }
-  const keysOf = async (ui: any) => (await ui.findAll({ type: 'Button' })).map((b: any) => b.key)
+  test('a terminal too narrow for the pane still prints the text view', async ($, on) => {
+    const w = world(on, undefined, { isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'cli' } })
+    const out = await run($, '', 80)
+    expect(out.text).toContain('── Overview')
+    expect(w.closes[0].id).toBe('model-router-usage')
+  })
+})
 
-  test('/model-router log opens the log pane and reads the log once, bounded; no file is opened', async ($, on) => {
+// The row of a `/model-router` answer, as the engine raises it for the transcript.
+const cardRow = (out: { text: string }, args = '') =>
+  ({ plugin: 'model-router', component: 'CommandOutput', requestId: 'row-1', props: { command: 'model-router', args, text: out.text, isErrored: false } }) as const
+
+const DESKTOP: Answers = { surfaces: ['desktop'] }
+const GRAPHICAL = ['desktop', 'vscode', 'mobile'] as const
+const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
+const selects = async (ui: any) => Object.fromEntries((await ui.findAll({ type: 'Select' })).map((s: any) => [s.key, s.props?.value ?? s.value]))
+
+describe('the card on the desktop app', () => {
+  test('/model-router answers the card as markdown, for the person only, and opens no pane, page or file', async ($, on) => {
     const w = world(on, undefined, DESKTOP)
-    const out = await run($, 'log')
-    expect(out.text).toBe('🔀 Event log opened beside the chat.')
+    const out = await run($, '')
     expect(out.isTextDisplayOnly).toBe(true)
-    expect(w.opens).toEqual([{ id: 'model-router-log', title: 'model-router log', focus: true }])
-    expect(logRuns(w)).toEqual([['--config-dir', '/home/u/.claude', '--window', '7d', '--type', 'all', '--page', '0']])
+    expect(out.text.startsWith('**Model routing** · ')).toBe(true)
+    expect(out.text).toContain('| Right first time |')
+    expect(out.text).toMatch(/\n\nRead \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC · card 1\.$/)
+    expect(out.text.includes('🔀')).toBe(false)
+    expect(w.opens).toEqual([])
     expect(openRuns(w)).toEqual([])
+    expect(pageRuns(w)).toEqual([])
   })
 
-  test('the pane draws the dashboard natively: counts by type, a chart by day, the latest records and the files', async ($, on) => {
-    const w = world(on, undefined, DESKTOP)
-    await run($, 'log')
-    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
-      const ui = await $.ui.mount({ ...LOG_PANE, surface })
-      expect(await ui.find({ type: 'Text', text: /records · last 7 days · archive included$/ })).toBeDefined()
-      for (const text of ['Records by type', 'By day (UTC)', 'Latest records', 'when (UTC)']) expect(await ui.find({ type: 'Text', text })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: '/home/u/.claude/model-router/events.jsonl · 48.2 kB' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: 'Archive: 1 file · 9.1 kB · outcomes.jsonl (9.1 kB)' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: 'Page 1 of 1 · newest first' })).toBeDefined()
-      const keys = await keysOf(ui)
-      expect(keys.slice(0, 5)).toEqual(['window-24h', 'window-7d', 'window-30d', 'window-all', 'type-all'])
-      expect(keys.includes('type-decision') && keys.includes('type-outcome')).toBe(true)
-      expect(keys.slice(-2)).toEqual(['file', 'refresh'])
-      const drawn = JSON.stringify(await ui.drawn())
-      expect(drawn).toContain('opus → haiku·low')
-      expect(drawn).toContain('<rect class=\\"col\\"')
-      expect(drawn.match(/"variant":"primary"/g)?.length).toBe(2)
-      expect(/[╭╰│▁▂▃▄▅▆▇█░]/.test(drawn)).toBe(false)
-      expect(drawn.includes('"plain":true')).toBe(false)
-      await ui.unmount()
-    }
-    expect(w.debug.filter((l) => l.includes('log pane'))).toEqual([])
-  })
-
-  test('the type and the window buttons read the log again from the newest page', async ($, on) => {
-    const w = world(on, undefined, DESKTOP)
-    await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-    await ui.press({ key: 'type-decision' })
-    expect(logRuns(w).at(-1)).toEqual(['--config-dir', '/home/u/.claude', '--window', '7d', '--type', 'decision', '--page', '0'])
-    expect(await ui.find({ type: 'Text', text: /decision records? of \d+ · last 7 days/ })).toBeDefined()
-    await ui.press({ key: 'window-all' })
-    expect(logRuns(w).at(-1)).toEqual(['--config-dir', '/home/u/.claude', '--window', 'all', '--type', 'decision', '--page', '0'])
-    await ui.press({ key: 'refresh' })
-    expect(logRuns(w).length).toBe(4)
-    await ui.unmount()
-  })
-
-  test('Older and Newer page through the records, each button only where there is a page', async ($, on) => {
-    const w = world(on, undefined, { ...DESKTOP, logRecords: MANY })
-    await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-    expect(await ui.find({ type: 'Text', text: 'Page 1 of 3 · newest first' })).toBeDefined()
-    expect((await keysOf(ui)).includes('newer')).toBe(false)
-    await ui.press({ key: 'older' })
-    expect(logRuns(w).at(-1)?.slice(-2)).toEqual(['--page', '1'])
-    expect(await ui.find({ type: 'Text', text: 'Page 2 of 3 · newest first' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: 'f20.ts' })).toBeDefined()
-    await ui.press({ key: 'older' })
-    expect((await keysOf(ui)).includes('older')).toBe(false)
-    await ui.press({ key: 'newer' })
-    expect(await ui.find({ type: 'Text', text: 'Page 2 of 3 · newest first' })).toBeDefined()
-    await ui.unmount()
-  })
-
-  test('the Log button of the usage pane opens the dashboard, not the file', async ($, on) => {
-    const w = world(on, undefined, { files: { [LOG_FILE]: '' } })
-    await run($, '')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    const button = JSON.stringify(await ui.find({ type: 'Button', key: 'log' }))
-    expect(button).toContain('"label":"Log"')
-    expect(button).toContain('"variant":"secondary"')
-    await ui.press({ key: 'log' })
-    await ui.unmount()
-    expect(w.opens.map((o) => o.id)).toEqual(['model-router-usage', 'model-router-log'])
-    expect(w.logs).toContain('🔀 Event log opened beside the chat.')
-    expect(openRuns(w)).toEqual([])
-  })
-
-  test('Open file is the way out: it opens the log in the default app and writes one line', async ($, on) => {
-    const w = world(on, undefined, { ...DESKTOP, files: { [LOG_FILE]: '', [ARCHIVE_DIR]: '' }, info: { platform: 'linux', isHosted: false } })
-    await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-    const button = JSON.stringify(await ui.find({ type: 'Button', key: 'file' }))
-    expect(button).toContain('"label":"Open file"')
-    expect(button).toContain('"variant":"secondary"')
-    await ui.press({ key: 'file' })
-    expect(openRuns(w)).toEqual([['xdg-open', LOG_FILE]])
-    expect(w.logs).toContain(`🔀 Event log opened: ${LOG_FILE} · rotated logs: ${ARCHIVE_DIR}`)
-    await ui.unmount()
-  })
-
-  test('a file that cannot be opened is one line, and the dashboard stays drawn', async ($, on) => {
-    const w = world(on, undefined, { ...DESKTOP, open: { exitCode: 1, stdout: '', stderr: 'No application knows how to open it.\nSecond line' } })
-    await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-    await ui.press({ key: 'file' })
-    expect(w.logs).toContain(`🔀 Could not open ${LOG_FILE}: No application knows how to open it.`)
-    expect(await ui.find({ type: 'Text', text: 'Latest records' })).toBeDefined()
-    await ui.unmount()
-  })
-
-  test('a log that cannot be read is one line in the pane, with its buttons', async ($, on) => {
-    world(on, undefined, { ...DESKTOP, logData: { exitCode: 1, stdout: '', stderr: 'permission denied' } })
-    await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-    expect(await ui.find({ type: 'Text', text: /Could not read the log: permission denied/ })).toBeDefined()
-    expect(await keysOf(ui)).toEqual(['file', 'refresh'])
-    await ui.unmount()
-  })
-
-  test('an empty log says what will appear', async ($, on) => {
-    world(on, undefined, { ...DESKTOP, logRecords: [] })
-    await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-    expect((await ui.findAll({ type: 'Text', text: /^No record \(last 7 days\)\. Records appear here/ })).length).toBeGreaterThan(0)
-    await ui.unmount()
-  })
-
-  test('in a session whose app has not attached yet the pane is kept open', async ($, on) => {
-    const w = world(on, undefined, { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' } })
-    expect((await run($, 'log')).text).toBe('🔀 Event log opened beside the chat.')
-    expect(w.opens.map((o) => o.id)).toEqual(['model-router-log'])
-    expect(w.closes).toEqual([])
-  })
-
-  test('a terminal attached beside the app is told that the log is a file there', async ($, on) => {
+  test('the row draws as one card: the header, the three dropdowns and the Overview, with none of the terminal look', async ($, on) => {
     world(on, undefined, DESKTOP)
-    await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: /drawn on graphical surfaces/ })).toBeDefined()
-    expect(await keysOf(ui)).toEqual(['file'])
-    await ui.unmount()
-  })
-})
-
-describe('/model-router usage view on graphical surfaces', () => {
-  const GRAPHICAL = ['desktop', 'vscode', 'mobile'] as const
-  const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((t: any) => String(t.text))
-
-  test('Overview draws native cards with SVG charts, and none of the terminal text art', async ($, on) => {
-    world(on)
-    await run($, 'overview 30d')
+    const out = await run($, '')
     for (const surface of GRAPHICAL) {
-      const ui = await $.ui.mount({ ...PANE, surface })
-      expect(await ui.find({ type: 'Text', text: '🔀 model-router' })).toBeDefined()
-      for (const label of ['FPY', '$/success', 'Rework', 'Routed']) expect((await texts(ui)).includes(label)).toBe(true)
-      expect(await ui.find({ type: 'Text', text: /^75%$/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: '▼ 25 pts' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /routing on/ })).toBeDefined()
-      const svgs = await ui.findAll({ type: 'Svg' })
-      // Three sparklines, four model bars and three routing bars.
-      expect(svgs.length).toBe(10)
-      const drawn = JSON.stringify(await ui.drawn())
-      expect(drawn).toContain('FPY by 3 days, latest')
-      expect(drawn).toContain('<svg xmlns=')
-      expect(drawn).toContain('"color":"error"')
-      expect(/[╭╰│▁▂▃▄▅▆▇█░]/.test(drawn)).toBe(false)
-      expect(drawn.includes('weak')).toBe(false)
-      expect(await ui.find({ type: 'Text', text: /Tab\/⇧Tab/ })).toBeUndefined()
+      const ui = await $.ui.mount({ ...cardRow(out), surface })
+      const drawn = await ui.drawn()
+      // One bordered box, the card; nothing bordered inside it.
+      expect(JSON.stringify(drawn)).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column",[^}]*"borderStyle":"round","borderDimColor":true/)
+      expect(JSON.stringify(drawn).match(/"borderStyle"/g)?.length).toBe(1)
+      expect(await selects(ui)).toEqual({ view: 'overview', scope: 'user', window: '7d' })
+      for (const text of ['Right first time', 'Per success', 'Redone', 'Tasks scored', 'Most used', 'Busiest day', 'Routing', 'Total']) expect((await texts(ui)).includes(text)).toBe(true)
+      expect(await ui.find({ type: 'Button', key: 'card' })).toBeDefined()
+      const json = JSON.stringify(drawn)
+      expect(/[╭╰│▁▂▃▄▅▆▇█░▰▱🔀]|#14b8a6|"variant":"primary"/.test(json)).toBe(false)
+      expect(json.includes('"type":"Progress"')).toBe(false)
       await ui.unmount()
     }
   })
 
-  test('the controls are native buttons, the active ones primary', async ($, on) => {
-    world(on)
-    await run($, 'classes 30d')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    const keys = (await ui.findAll({ type: 'Button' })).map((b) => b.key)
-    expect(keys).toEqual(['tab-overview', 'tab-models', 'tab-classes', 'tab-decisions', 'window-24h', 'window-7d', 'window-30d', 'window-all', 'level-user', 'level-project', 'report', 'refresh', 'log'])
-    const drawn = JSON.stringify(await ui.drawn())
-    expect(drawn.match(/"variant":"primary"/g)?.length).toBe(3)
-    expect(drawn.includes('"plain":true')).toBe(false)
+  test('the terminal keeps its row: no card is drawn there', async ($, on) => {
+    world(on, undefined, DESKTOP)
+    const out = await run($, '')
+    const ui = await $.ui.mount({ ...cardRow(out), surface: 'terminal' })
+    expect(await ui.find({ type: 'Select' })).toBeUndefined()
     await ui.unmount()
   })
 
-  test('the buttons switch tab, window and level', async ($, on) => {
-    world(on)
-    await run($, '')
-    for (const surface of GRAPHICAL) {
-      const ui = await $.ui.mount({ ...PANE, surface })
-      expect(await ui.find({ type: 'Text', text: /^Last 7 days · user level · 7 tasks scored · vs the 7 days before$/ })).toBeDefined()
-      await ui.press({ key: 'tab-models' })
-      await ui.press({ key: 'window-30d' })
-      expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 30 days · 8 closed tasks')
-      await ui.press({ key: 'tab-classes' })
-      await ui.press({ key: 'level-project' })
-      expect((await ui.find({ type: 'Text', text: /^Classes ·/ }))?.text).toContain('project /work/shop')
-      expect(await ui.find({ type: 'Text', text: 'Recommendations' })).toBeDefined()
-      await ui.press({ key: 'tab-decisions' })
-      expect((await ui.find({ type: 'Text', text: /^Decisions ·/ }))?.text).toContain('latest 5 of 5')
-      expect((await texts(ui)).filter((t: string) => t.includes('● downgrade')).length).toBe(3)
-      await ui.press({ key: 'tab-overview' })
-      await ui.press({ key: 'level-user' })
-      await ui.press({ key: 'window-7d' })
-      await ui.unmount()
-    }
-  })
-
-  test('under five scored tasks one banner says so, and no card does', async ($, on) => {
-    world(on)
-    await run($, 'overview 24h')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    expect(await ui.find({ type: 'Text', text: '2 tasks scored — figures are indicative under 5' })).toBeDefined()
-    expect(JSON.stringify(await ui.drawn()).includes('weak')).toBe(false)
+  test('the view, scope and window dropdowns redraw the card; a report view reads the report and writes its page', async ($, on) => {
+    const w = world(on, undefined, DESKTOP)
+    const ui = await $.ui.mount({ ...cardRow(await run($, '')), surface: 'desktop' })
+    await ui.select({ key: 'view', value: 'models' })
+    expect(await ui.find({ type: 'Text', text: 'Share of tasks · Last 7 days' })).toBeDefined()
+    await ui.select({ key: 'window', value: '30d' })
+    expect(await ui.find({ type: 'Text', text: 'Share of tasks · Last 30 days' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'Sonnet' })).toBeDefined()
+    await ui.select({ key: 'scope', value: 'project' })
+    expect((await selects(ui)).scope).toBe('project')
+    expect(jsonRuns(w)).toEqual([])
+    await ui.select({ key: 'view', value: 'trend' })
+    expect(await ui.find({ type: 'Text', text: 'Right first time per week' })).toBeDefined()
+    expect(jsonRuns(w).length).toBe(1)
+    expect(pageRuns(w).length).toBe(1)
+    expect(openRuns(w)).toEqual([])
+    const link = await ui.find({ type: 'Markdown' })
+    expect(String(link?.props?.text ?? JSON.stringify(link))).toContain(`[report.html](file://${REPORT_FILE})`)
     await ui.unmount()
   })
 
-  test('the ring, a click and the arrows are left to the app: every control is reached and the body scrolls', async ($, on) => {
-    world(on)
-    const landed: any[] = []
-    on('ui.focus', ($, e) => {
-      landed.push((e as any).element ?? (e as any).key)
-      return {}
-    })
-    const scrolled: any[] = []
-    on('ui.scroll', ($, e) => {
-      scrolled.push(e)
-      return {}
-    })
-    const person = (element: string) =>
-      $.ui.focus({ requestId: 'model-router-usage', component: 'Pane', element, origin: { kind: 'person' } } as any)
-    await run($, 'decisions')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    await person('tab-decisions')
-    // Tab off the last tab goes on to the windows, not back to the first tab; the tab stays.
-    await person('window-24h')
-    expect(landed.at(-1)).toBe('window-24h')
-    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
-    // A click on Refresh from an end tab presses Refresh and moves no ring.
-    await person('tab-decisions')
-    await person('refresh')
-    const moves = landed.length
-    await ui.press({ key: 'refresh' })
-    expect(landed.at(-1)).toBe('refresh')
-    expect(landed.length).toBe(moves)
-    expect(await ui.find({ type: 'Text', text: /^Decisions ·/ })).toBeDefined()
-    // An arrow scrolls the body: the window is not stepped.
-    await $.ui.scroll({ requestId: 'model-router-usage', component: 'Pane', by: 1, offset: 0, bodyRows: 40, contentRows: 80, origin: { kind: 'person' } } as any)
-    expect(scrolled.length).toBe(1)
-    await ui.press({ key: 'tab-models' })
-    expect((await ui.find({ type: 'Text', text: /^Models ·/ }))?.text).toContain('last 7 days')
+  test('/model-router report and log open the same card on Trend and on Log', async ($, on) => {
+    const w = world(on, undefined, { ...DESKTOP, files: { [LOG_FILE]: '' } })
+    const report = await run($, 'report')
+    expect(report.text.split('\n\n')[1]).toBe('Trend · All time')
+    expect(openRuns(w)).toEqual([])
+    const log = await run($, 'log')
+    expect(log.text.split('\n\n')[1]).toBe('Log · Last 24 hours')
+    expect(log.text).toMatch(/card 2\.$/)
+    expect(openRuns(w)).toEqual([])
+    const ui = await $.ui.mount({ ...cardRow(log, 'log'), surface: 'desktop' })
+    expect(await selects(ui)).toEqual({ view: 'log', window: '24h' })
+    expect(JSON.stringify(await ui.drawn())).toContain('[events.jsonl](file:///home/u/.claude/model-router/events.jsonl)')
     await ui.unmount()
   })
 
-  test('Refresh reads again and Report writes the page', async ($, on) => {
-    const w = world(on)
-    await run($, '')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    await ui.press({ key: 'refresh' })
-    expect(w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length).toBe(2)
-    await ui.press({ key: 'report' })
-    expect(w.logs).toContain('🔀 Report opened beside the chat.')
+  test('the Log view reads the latest records of its first kind, and of a kind picked; the card before keeps its window', async ($, on) => {
+    const w = world(on, undefined, { ...DESKTOP, files: { [LOG_FILE]: '' } })
+    const logRuns = () => w.runs.filter((r) => String(r.argv[1]).endsWith('log.mjs')).map((r) => `${r.argv[r.argv.indexOf('--window') + 1]}:${r.argv[r.argv.indexOf('--type') + 1]}`)
+    const first = await run($, 'log')
+    const ui = await $.ui.mount({ ...cardRow(first, 'log'), surface: 'desktop' })
+    await ui.select({ key: 'window', value: '7d' })
+    const kinds = logRuns()
+    expect(kinds[0]).toBe('24h:all')
+    expect(kinds.filter((k) => k === '7d:all').length).toBe(1)
+    expect(kinds.at(-1)?.startsWith('7d:') && kinds.at(-1) !== '7d:all').toBe(true)
+    const open = (await ui.findAll({ type: 'Button' })).map((b: any) => b.key).filter((k: string) => k.startsWith('group:'))
+    await ui.press({ key: open[1] })
+    expect(logRuns().at(-1)).toBe(`7d:${open[1].slice(6)}`)
     await ui.unmount()
-  })
-
-  test('a failed read is one line in place of the cards', async ($, on) => {
-    world(on, undefined, { usage: { exitCode: 1, stdout: '', stderr: 'no node' } })
-    await run($, '')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    expect((await ui.find({ type: 'Text', text: /Could not read/ }))?.text).toContain('no node')
-    expect((await ui.findAll({ type: 'Svg' })).length).toBe(0)
-    await ui.unmount()
-  })
-
-  test('the minimized pane shows the headline figure and its trend', async ($, on) => {
-    world(on)
-    await run($, 'overview 30d')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { ...PANE.props, placement: 'widget' } })
-    expect((await ui.find({ type: 'Text', text: /^75%/ }))?.text).toContain('FPY · 30d')
-    expect((await ui.findAll({ type: 'Svg' })).length).toBe(1)
-    expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
-    await ui.unmount()
-  })
-
-  test('data neither rendering can draw leaves one readable line, never an empty pane', async ($, on) => {
-    const w = world(on, undefined, { usage: { exitCode: 0, stdout: JSON.stringify({ ...usageData(), windows: { '7d': { models: 'none' } } }) } })
-    await run($, '')
-    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-    expect(await ui.find({ type: 'Text', text: /Could not draw the usage view/ })).toBeDefined()
-    expect(w.debug.some((l) => l.includes('graphical view'))).toBe(true)
-    await ui.unmount()
-  })
-})
-
-describe('the log dashboard: what a row and the chart say', () => {
-  const RECENT = [
-    { v: 1, type: 'signal', kind: 'write', ts: new Date(T0 - 2 * 3600000).toISOString(), session: 'sess-recent', file: '/private/tmp/claude-501/-Users-someone/notes.md' },
-    { v: 1, type: 'session-end', ts: new Date(T0 - 3600000).toISOString(), session: 'sess-recent', reason: 'other' },
-  ]
-
-  test('the last 24 hours are charted by hour; a file is its name; a session end says so', async ($, on) => {
-    world(on, undefined, { surfaces: ['desktop'], files: { [LOG_FILE]: '' }, logRecords: RECENT })
     await run($, 'log')
-    const ui = await $.ui.mount({ ...LOG_PANE, surface: 'desktop' })
-    expect(await ui.find({ type: 'Text', text: 'By day (UTC)' })).toBeDefined()
-    await ui.press({ key: 'window-24h' })
-    expect(await ui.find({ type: 'Text', text: 'By hour (UTC)' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: 'By day (UTC)' })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: 'notes.md' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: 'session ended' })).toBeDefined()
-    const drawn = JSON.stringify(await ui.drawn())
-    expect(drawn.includes('/private/tmp')).toBe(false)
-    expect(drawn.includes('-Users-someone')).toBe(false)
-    expect(drawn).toContain('20 Nov 10:00: 1 record')
+    const before = await $.ui.mount({ ...cardRow(first, 'log'), surface: 'desktop' })
+    expect(await before.find({ type: 'Text', text: /· last 7 days · read \d\d:\d\d UTC$/ })).toBeDefined()
+    await before.unmount()
+  })
+
+  test('a group opens and closes on its name; one group is open at a time', async ($, on) => {
+    world(on, undefined, DESKTOP)
+    const ui = await $.ui.mount({ ...cardRow(await run($, 'decisions 30d')), surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: /^Nov 20, 11:20 · Opus to Sonnet · medium$/ })).toBeDefined()
+    await ui.press({ key: 'group:keep' })
+    expect(await ui.find({ type: 'Text', text: /^Nov 20, 11:20/ })).toBeUndefined()
+    await ui.press({ key: 'group:keep' })
+    expect(await ui.find({ type: 'Text', text: /^Nov 20, 11:20/ })).toBeUndefined()
+    await ui.press({ key: 'group:downgrade' })
+    expect(await ui.find({ type: 'Text', text: /^Nov 20, 11:20/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the title collapses the card to its header and one segmented bar, and opens it again', async ($, on) => {
+    world(on, undefined, DESKTOP)
+    const ui = await $.ui.mount({ ...cardRow(await run($, '30d')), surface: 'desktop' })
+    await ui.press({ key: 'card' })
+    expect(await ui.find({ type: 'Select' })).toBeUndefined()
+    const svgs = (await ui.findAll({ type: 'Svg' })).map((s: any) => s.props?.alt ?? s.alt)
+    expect(svgs).toEqual(['Model routing', 'closed', 'Tasks by model: Opus 12.5%, Sonnet 62.5%, Haiku 25.0%'])
+    await ui.press({ key: 'card' })
+    expect(await ui.find({ type: 'Select', key: 'view' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('only the newest card is live; the few before it are a static header and bar, older ones their text', async ($, on) => {
+    world(on, undefined, DESKTOP)
+    const outs = []
+    for (let i = 0; i < 7; i += 1) outs.push(await run($, ''))
+    const newest = await $.ui.mount({ ...cardRow(outs[6]), surface: 'desktop' })
+    expect(await newest.find({ type: 'Select' })).toBeDefined()
+    await newest.unmount()
+    const before = await $.ui.mount({ ...cardRow(outs[5]), surface: 'desktop' })
+    expect(await before.find({ type: 'Select' })).toBeUndefined()
+    expect(await before.find({ type: 'Button' })).toBeUndefined()
+    expect(await before.find({ type: 'Text', text: /^75% right first time · \$0\.097 · read \d\d:\d\d UTC$|^.* · read \d\d:\d\d UTC$/ })).toBeDefined()
+    await before.unmount()
+    const oldest = await $.ui.mount({ ...cardRow(outs[0]), surface: 'desktop' })
+    expect(JSON.stringify(await oldest.drawn())).toMatch(/^\{"type":"engine"/)
+    await oldest.unmount()
+  })
+
+  test('a reported subagent reads the usage data again for the newest card', async ($, on) => {
+    const w = world(on, undefined, DESKTOP)
+    await run($, '')
+    const usageRuns = () => w.runs.filter((r) => String(r.argv[1]).endsWith('usage.mjs')).length
+    const before = usageRuns()
+    await start($)
+    await $.agent.report({ agentId: 'ag1', parentAgentId: undefined, subagentType: 'general-purpose', status: 'completed', text: 'done' } as any)
+    // The read runs after the report has gone on, so as not to hold it up.
+    await new Promise((done) => (globalThis as any).setTimeout(done, 50))
+    expect(usageRuns()).toBe(before + 1)
+  })
+
+  test('a card whose data cannot be read says so on the card; an answer that is no card keeps its text', async ($, on) => {
+    world(on, undefined, { ...DESKTOP, usage: { exitCode: 1, stdout: '', stderr: 'boom' } })
+    const out = await run($, '')
+    expect(out.text).toContain('Could not read the usage data: boom')
+    const ui = await $.ui.mount({ ...cardRow(out), surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: 'Could not read the usage data: boom' })).toBeDefined()
+    await ui.unmount()
+    const off = await run($, 'off')
+    expect(off.text).toBe('Routing turned off for this session.')
+    const row = await $.ui.mount({ ...cardRow(off, 'off'), surface: 'desktop' })
+    expect(JSON.stringify(await row.drawn())).toMatch(/^\{"type":"engine"/)
+    await row.unmount()
+  })
+
+  test('help is a small static card; an unknown argument one plain line', async ($, on) => {
+    world(on, undefined, DESKTOP)
+    const help = await run($, 'help')
+    expect(help.text).toContain('| `report` |')
+    const ui = await $.ui.mount({ ...cardRow(help, 'help'), surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: '/model-router' })).toBeDefined()
+    expect(await ui.find({ type: 'Button' })).toBeUndefined()
+    await ui.unmount()
+    expect((await run($, 'nonsense')).text).toBe('Unknown argument "nonsense". Try /model-router help.')
+  })
+
+  test('a session whose app has not attached yet answers the card too, and opens no pane', async ($, on) => {
+    const w = world(on, undefined, { surfaces: [], isPlaced: false, env: { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop' } })
+    const out = await run($, '', 40)
+    expect(out.text.startsWith('**Model routing**')).toBe(true)
+    expect(w.opens).toEqual([])
+  })
+
+  test('every view of a card is within the tree budget', async ($, on) => {
+    world(on, undefined, { ...DESKTOP, files: { [LOG_FILE]: '' }, reportData: { exitCode: 0, stdout: JSON.stringify(bigReportData({ classes: 40, cells: 6, projects: 30 })) } })
+    const ui = await $.ui.mount({ ...cardRow(await run($, '30d')), surface: 'desktop' })
+    for (const view of ['overview', 'models', 'classes', 'projects', 'decisions', 'trend', 'log']) {
+      await ui.select({ key: 'view', value: view })
+      const size = treeSize(await ui.drawn())
+      expect(size.chars).toBeLessThan(40000)
+      expect(size.nodes).toBeLessThan(TREE_BUDGET.nodes)
+      expect(size.depth).toBeLessThan(TREE_BOUNDS.depth)
+    }
+    await ui.unmount()
+  })
+
+  test('a pane drawn on a graphical surface says the view is the card', async ($, on) => {
+    world(on)
+    await run($, '')
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect(await ui.find({ type: 'Text', text: /is a card in the conversation/ })).toBeDefined()
     await ui.unmount()
   })
 })

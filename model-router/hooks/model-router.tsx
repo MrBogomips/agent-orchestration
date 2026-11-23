@@ -10,18 +10,18 @@ import type { ReportCache, RouteLineState, UsageCache, UsageView } from '../type
 import { buildJudgePrompt, parseJudgeAnswer } from '../lib/judge.mjs'
 import { projectId } from '../lib/project-id.mjs'
 import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky, routeCase } from '../lib/route.mjs'
-import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, routeReason } from '../lib/route-line.mjs'
+import { ARROW, DRAWN_LINE_SECTION, EMPTY_COLOR, ROUTE_ICON, lineParts, quietLine, routeReason } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
-import { LOG_PANE } from '../lib/log-cards.mjs'
 import { failText, logPaths, openPlan, openerArgv, whyNot } from '../lib/open-log.mjs'
-import { REPORT_PANE, REPORT_PANE_TITLE, hostKind, isGraphical as isGraphicalSurface, reportLine } from '../lib/open-report.mjs'
+import { hostKind, isGraphical as isGraphicalSurface, reportLine } from '../lib/open-report.mjs'
 import { promptGate } from '../lib/prompt-gate.mjs'
+import { textOf } from '../lib/card-parts.mjs'
+import { helpCard } from '../lib/card-view.mjs'
 import { DEFAULT_VIEW, MIN_COLUMNS, helpText, parseArgs, textView } from '../lib/usage-view.mjs'
 import { isArrowScroll, ringTarget, stepWindow, tabKey, tabOfKey } from '../lib/usage-nav.mjs'
-import { renderLogPane, showLogPane } from './log-pane'
-import type { LogDeps } from './log-pane'
-import { drawReportPane } from './report-desktop'
+import { hasCard, openCard, renderCard } from './router-card'
+import type { CardDeps } from './router-card'
 import { drawUsagePane } from './usage-pane'
 
 const PROMPT_CHARS = 2000
@@ -273,13 +273,17 @@ async function loadReport($: any, ctx: Ctx): Promise<{ [key: string]: unknown }>
   return data
 }
 
-/** Reads the report's data again into the pane's state; an error is kept for the pane to show, never thrown. */
+/**
+ * Reads the report's data into the card's state and writes the HTML page its Trend view links; an error is kept
+ * for the card to show, never thrown. A page that cannot be written leaves the view without its link.
+ */
 async function refreshReport($: any, ctx: Ctx, force = false) {
   if (!force && (await read($, reportState)).isLoading) return
   await update($, reportState, (r) => ({ ...r, isLoading: true }))
   try {
     const data = await loadReport($, ctx)
-    await update($, reportState, () => ({ data, isLoading: false }))
+    const page = await guarded($, 'report page', () => writeReport($, ctx), undefined)
+    await update($, reportState, () => ({ data, isLoading: false, ...(page ? { page } : {}) }))
   } catch (err) {
     await update($, reportState, (r) => ({ ...r, isLoading: false, error: errorText(err) }))
   }
@@ -345,33 +349,15 @@ async function openPage($: any, ctx: Ctx): Promise<string> {
   return failed ? reportLine('none', file, failed) : reportLine('browser', file)
 }
 
-/**
- * Shows the report: as a native pane on a graphical host (`onGraphical`: the press came from a graphical drawing),
- * as the HTML page in the default browser anywhere else. A pane that is not placed yet is kept: an app attaches
- * its surface at its first draw, and the pane is drawn then.
- */
-async function showReport($: any, ctx: Ctx, onGraphical = false): Promise<string> {
-  if (!onGraphical && (await hostOf($)) !== 'graphical') return openPage($, ctx)
-  await $.ui.open({ id: REPORT_PANE, title: REPORT_PANE_TITLE, focus: true })
-  await refreshReport($, ctx, true)
-  return reportLine('pane')
-}
-
-/** What the log pane needs for one event: the config folder and the action that opens the log file. */
-async function logDepsOf($: any, ctx: Ctx): Promise<LogDeps> {
-  return { configDir: await configDirOf($, ctx), openFile: () => openLog($, ctx) }
-}
-
-/**
- * Shows the log: a dashboard pane on a graphical host (`onGraphical`: the press came from a graphical drawing),
- * the file in the system's default app anywhere else. Never throws.
- */
-async function showLog($: any, ctx: Ctx, onGraphical = false): Promise<string> {
-  if (!onGraphical && (await hostOf($)) !== 'graphical') return openLog($, ctx)
-  try {
-    return await showLogPane($, await logDepsOf($, ctx))
-  } catch (err) {
-    return `Could not open the event log pane: ${errorText(err)}`
+/** What the card needs for one event (hooks/router-card.tsx): the data as last read, and how to read it again. */
+async function cardDepsOf($: any, ctx: Ctx, opts: Options): Promise<CardDeps> {
+  return {
+    usage: () => read($, usageState),
+    report: () => read($, reportState),
+    status: await statusOf($, opts),
+    configDir: await configDirOf($, ctx),
+    readUsage: () => refreshUsage($, ctx, true),
+    readReport: () => refreshReport($, ctx, true),
   }
 }
 
@@ -380,21 +366,31 @@ const display = (text: string) => ({ text, isTextDisplayOnly: true as const })
 const say = (text: string) => display(`${ROUTE_ICON} ${text}`)
 
 /**
- * Opens the usage view. Where no pane can be placed it answers its rows as text: a terminal too narrow, a `-p`
- * run. On a graphical host a pane that is not placed yet is kept, not replaced by the text: the app attaches its
- * surface at its first draw, and the pane is drawn then.
+ * What `/model-router` answers where an app hosts the session: the card's text, which the render hook of the row
+ * draws as the card (hooks/router-card.tsx). No pane is opened, no file and no page: the report is the Trend view
+ * and the event log the Log view. One-line answers carry no icon there.
+ */
+async function answerCard($: any, ctx: Ctx, opts: Options, asked: any) {
+  if (asked.kind === 'help') return display(textOf(helpCard()))
+  if (asked.kind === 'unknown') return display(`Unknown argument "${asked.word}". Try /model-router help.`)
+  const ask = asked.kind === 'report' ? { view: 'trend' } : asked.kind === 'log' ? { view: 'log' } : { view: asked.tab, window: asked.window, level: asked.level }
+  return display(await openCard($, await cardDepsOf($, ctx, opts), ask))
+}
+
+/**
+ * Opens the usage view in a terminal. Where no pane can be placed it answers its rows as text: a terminal too
+ * narrow, a `-p` run.
  */
 async function openView($: any, ctx: Ctx, opts: Options, asked: { tab: string | null; window: string | null; level: string | null }, columns: number) {
   const view: UsageView = { tab: asked.tab ?? DEFAULT_VIEW.tab, window: asked.window ?? DEFAULT_VIEW.window, level: asked.level ?? DEFAULT_VIEW.level }
   await update($, viewState, () => view)
-  const onGraphical = (await hostOf($)) === 'graphical'
-  if (columns >= MIN_COLUMNS || onGraphical) {
+  if (columns >= MIN_COLUMNS) {
     const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true, rows: PANE_ROWS })
-    if (opened.isPlaced || onGraphical) {
+    if (opened.isPlaced) {
       // A pane that was already open keeps its ring where it was: move it to the tab asked for.
-      if (opened.isPlaced) void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
+      void $.ui.focus({ requestId: PANE, key: tabKey(view.tab) }).catch(() => undefined)
       await refreshUsage($, ctx, true)
-      return say(opened.isPlaced ? 'Usage view opened (Esc closes it).' : 'Usage view opening beside the chat.')
+      return say('Usage view opened (Esc closes it).')
     }
     await $.ui.close({ id: PANE }).catch(() => undefined)
   }
@@ -527,27 +523,42 @@ export const register: Register = (on, options) => {
     return started
   })
 
-  // The log dashboard (hooks/log-pane.tsx, drawn by hooks/log-desktop.tsx).
-  on('ui.render', { component: 'Pane', requestId: LOG_PANE }, async ($, e) => renderLogPane($, e, await logDepsOf($, ctx)))
-
   on('command.run', { command: 'model-router' }, async ($, e) => {
     const asked = parseArgs(e.args)
+    const onGraphical = (await hostOf($)) === 'graphical'
     if (asked.kind === 'toggle') {
       await update($, enabled, () => asked.on)
-      return say(`Routing turned ${asked.on ? 'on' : 'off'} for this session.`)
+      const turned = `Routing turned ${asked.on ? 'on' : 'off'} for this session.`
+      return onGraphical ? display(turned) : say(turned)
     }
+    if (onGraphical) return answerCard($, ctx, opts, asked)
     if (asked.kind === 'help') return display(helpText())
     if (asked.kind === 'unknown') return display(`${ROUTE_ICON} Unknown argument "${asked.word}".\n\n${helpText()}`)
     if (asked.kind === 'report') {
       try {
-        return say(await showReport($, ctx))
+        return say(await openPage($, ctx))
       } catch (err) {
         return say(`Could not write the report: ${errorText(err)}`)
       }
     }
-    if (asked.kind === 'log') return say(await showLog($, ctx))
+    if (asked.kind === 'log') return say(await openLog($, ctx))
     return openView($, ctx, opts, asked, e.presentation?.columns ?? 80)
-  }).catch(($, e, next) => ({ text: `${ROUTE_ICON} Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? "unknown error"}`, isTextDisplayOnly: true as const }))
+  }).catch(async ($, e, next) => {
+    // The terminal's line carries the identity; the desktop app's is plain (docs/design/ui-design.md).
+    const why = `Could not read the usage data: ${next.error?.message?.slice(0, 200) ?? next.error?.kind ?? 'unknown error'}`
+    const onGraphical = (await guarded($, 'command.run', () => hostOf($), 'terminal')) === 'graphical'
+    return onGraphical ? display(why) : say(why)
+  })
+
+  // The card of a `/model-router` answer on a graphical surface (hooks/router-card.tsx). Where there is no card
+  // to draw, and on any failure, the row keeps its text.
+  on('ui.render', { component: 'CommandOutput', props: { command: 'model-router' } }, async ($, e, next) => {
+    if (!isGraphicalSurface(e.surface)) return next(e)
+    return (await renderCard($, e, await cardDepsOf($, ctx, opts))) ?? next(e)
+  }).catch(($, e, next) => {
+    logFailure($, 'ui.render CommandOutput', next.error)
+    return next(e)
+  })
 
   // Keys of the usage view (lib/usage-nav.mjs says what the engine routes to a pane). Tab and Shift+Tab move the
   // focus ring along the tab row, wrapping at its ends, and the tab follows the ring. Up and Down arrive as a
@@ -598,7 +609,7 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Drawn by hooks/usage-pane.tsx: rows in the terminal, native cards and charts on a graphical surface.
+  // Drawn by hooks/usage-pane.tsx: rows in the terminal. A graphical surface has the card instead, and is told so.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const setView = (patch: Partial<UsageView>) => update($, viewState, (v) => ({ ...v, ...patch }))
     const state = { view: await read($, viewState), usage: await read($, usageState), status: await statusOf($, opts) }
@@ -607,10 +618,10 @@ export const register: Register = (on, options) => {
       setWindow: (window) => setView({ window }),
       setLevel: (level) => setView({ level }),
       refresh: () => refreshUsage($, ctx),
-      openLog: async () => $.ui.log(`${ROUTE_ICON} ${await showLog($, ctx, isGraphicalSurface(e.surface))}`),
+      openLog: async () => $.ui.log(`${ROUTE_ICON} ${await openLog($, ctx)}`),
       report: async () => {
         try {
-          $.ui.log(`${ROUTE_ICON} ${await showReport($, ctx, isGraphicalSurface(e.surface))}`)
+          $.ui.log(`${ROUTE_ICON} ${await openPage($, ctx)}`)
         } catch (err) {
           $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
         }
@@ -620,27 +631,23 @@ export const register: Register = (on, options) => {
     return drawn.tree
   })
 
-  // The report pane (hooks/report-desktop.tsx): the report's view model in native cards and charts. Its page
-  // button writes the HTML page and opens it in the default browser, as `o` does in the terminal.
-  on('ui.render', { component: 'Pane', requestId: REPORT_PANE }, async ($, e) =>
-    drawReportPane($, e, await read($, reportState), {
-      refresh: () => refreshReport($, ctx),
-      openPage: async () => {
-        try {
-          $.ui.log(`${ROUTE_ICON} ${await openPage($, ctx)}`)
-        } catch (err) {
-          $.ui.log(`${ROUTE_ICON} Could not write the report: ${errorText(err)}`)
-        }
-      },
-    }))
-
-  // The choose-model line under an Agent call's row: `🔀 opus ▰▰▰▱ high -> reason`, in colour, with what the
-  // subagent actually got. The row is kept as it is; with no line yet, or on any error, only the row is drawn.
+  // The choose-model line under an Agent call's row, with what the subagent actually got. In the terminal:
+  // `🔀 opus ▰▰▰▱ high -> reason`, in colour. On a graphical surface one quiet line in words, the model and effort
+  // its only bright words. The row is kept as it is; with no line yet, or on any error, only the row is drawn.
   on('ui.render', { component: 'ToolUse', props: { tool: 'Agent' } }, async ($, e, next) => {
     const line = await read($, memberOf(routeLines, e))
     const row = await next(e)
     if (!line) return row
     const { Box, Text } = $.ui.resolve(e)
+    if (isGraphicalSurface(e.surface)) {
+      const quiet = quietLine(line)
+      return (
+        <Box flexDirection="column">
+          {row}
+          <Text size="footnote" color="inactive" wrap="truncate-end">Routed to <Text weight="medium" color="text">{quiet.model}</Text>{quiet.reason ? ` · ${quiet.reason}` : ''}</Text>
+        </Box>
+      )
+    }
     const p = lineParts(line, { pad: true })
     return (
       <Box flexDirection="column">
@@ -660,6 +667,19 @@ export const register: Register = (on, options) => {
     )
   }).catch(($, e, next) => {
     logFailure($, 'ui.render ToolUse', next.error)
+    return next(e)
+  })
+
+  // Where an app draws the session, the line under each Agent row is the mod's, in words; the choose-model skill
+  // would also have the model write its terminal-style line above the row. A session section tells the model that
+  // the line is drawn for it. Without the mod, or in a terminal, there is no section and the skill's line stays.
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+    const sections = composed.sections.filter((s) => s.id !== DRAWN_LINE_SECTION.id)
+    if ((await guarded($, 'prompt.compose', () => hostOf($), 'terminal')) !== 'graphical') return { sections }
+    return { sections: [...sections, { ...DRAWN_LINE_SECTION }] }
+  }).catch(($, e, next) => {
+    logFailure($, 'prompt.compose', next.error)
     return next(e)
   })
 
@@ -746,6 +766,8 @@ export const register: Register = (on, options) => {
     firstFire($, fired, 'agent.report')
     prompts.reported(Date.now())
     if (opts.measure) await appendEvents($, ctx, [await reportOf($, e)])
+    // The newest card follows its data: a subagent that reported changes the figures.
+    if (await guarded($, 'agent.report', () => hasCard($), false)) void refreshUsage($, ctx).catch(() => undefined)
     return next(e)
   }).catch(($, e, next) => {
     logFailure($, 'agent.report', next.error)

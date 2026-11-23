@@ -3,6 +3,40 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.4.0
+
+2026-11-23 · pull request #85
+
+### Changed
+
+- In the Claude desktop app `/model-router` is one card in the conversation, drawn like the app's own `/stats` and
+  `/context` cards: a view dropdown (Overview, Models, Task classes, Projects, Decisions, Trend, Log) at the left,
+  the scope and the window at the right, and a title that folds the card to its header and one bar of tasks by
+  model. Overview has a heatmap of tasks per day, Models a row per model with each effort level's count and
+  right-first-time rate, Trend the weekly quality and cost as bar charts, Log the event log by kind and over time.
+- `/model-router report` and `/model-router log` open the same card on Trend and on Log. Trend links the HTML report
+  page in its last line; Log links `events.jsonl`. The report and log panes are gone.
+- Only the newest card follows its data, redrawn as subagents report; the few before it keep their header and bar.
+- The line under an Agent call is one quiet line in words there, `Routed to Haiku · low …`; the 🔀 icon, the teal
+  accent and the model and effort colours are the terminal's only.
+- The terminal is unchanged: the usage view, the report page and the log file open as before.
+
+## session-hub 0.5.0
+
+2026-11-23 · pull request #85
+
+### Changed
+
+- In the Claude desktop app `/session-hub` is one card in the conversation with two views: Children, the children
+  by status with their model and effort in words, what the session list says and their last message; and Record,
+  the children record as counts and its latest events, narrowed to one child with a dropdown. `/session-hub log`
+  opens it on Record and links the record file. The newest card follows the 30-second refresh. The log pane is gone,
+  and no pane opens beside the chat.
+- While the desktop app shows the session, a child started with the app's session tool gets no start line and no
+  notice: the app's own session card names it, and nothing a plugin adds shows under that card. A launch under a
+  Bash row is one quiet line in words there.
+- The terminal is unchanged: the children panel, the table and the record file open as before.
+
 ## model-router 0.3.15
 
 2026-11-22 · pull request #82

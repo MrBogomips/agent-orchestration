@@ -9,7 +9,7 @@ Picks the model and the effort level for sessions and for subagents. Works in an
 | `model-router:choose-model` | skill | Holds the grid. The agent uses it whenever it starts a subagent or a session, and passes model and effort explicitly. |
 | `model-router:setup` | skill | Writes a *Model routing* section in the project's instruction file with project defaults and exceptions, after the user confirms. |
 | `model-router` | mod | At a subagent's start, acts only when no model was given. Logs every decision. |
-| `/model-router` | command (mod) | Opens the usage view, a tabbed dialog pane (overview, models, classes, decisions); falls back to text where no pane can be placed. Turns the router on or off for the session. See *Command*. |
+| `/model-router` | command (mod) | In a terminal, opens the usage view, a tabbed dialog pane (overview, models, classes, decisions), with a text fallback where no pane can be placed; on the desktop app, draws the Model routing card in the transcript. Turns the router on or off for the session. See *Command*. |
 | Decision log | file | `decision` records in `~/.claude/model-router/events.jsonl` (under the active config folder); see `model-router-quality-loop.md`. |
 | Options | `userConfig` | Tier models, thresholds, judge timeout, on/off switches. |
 | `model-router:report` | skill | Compacts the quality data and opens a local report page. See `model-router-quality-loop.md`. |
@@ -272,9 +272,9 @@ failure) of the window; at the project level they count the project's tasks and 
 | ↓, ↑ | Next or previous window (24h, 7d, 30d, all), cycling |
 | `d` `w` `m` `a` | Window: last 24 hours, 7 days, 30 days, all |
 | `p` | Level: the user's data or this project's |
-| `o` | Open the report: the HTML page in the terminal (`scripts/report.mjs`), the report pane on a graphical surface; where it opened is written as a line in the session (*Opening the report*) |
+| `o` | Open the report: the HTML page (`scripts/report.mjs`); where it opened is written as a line in the session (*Opening the report*) |
 | `r` | Refresh: run compaction and read again |
-| `l` | Open the event log: the file in the system's default app in the terminal (*Opening the log*), the log dashboard on a graphical surface (*The log dashboard*) |
+| `l` | Open the event log: the file in the system's default app (*Opening the log*) |
 | Page Up, Page Down, wheel | Scroll the content |
 | Esc | Close |
 
@@ -294,7 +294,7 @@ pane (spike S15 in `spikes.md`). How the other keys are wired, in `lib/usage-nav
   a press within 500 ms of a wrap undoes the wrap, which a click off the row from an end tab would cause.
 
 **Arguments.** `/model-router models 30d` opens on that tab and window; tab, window (`24h`, `7d`, `30d`, `all`)
-and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` opens the report, as a page from a terminal and as a native pane on a graphical surface, and answers where it opened (*Opening the report*). `help`, and any argument the
+and level (`user`, `project`) may come in any order. `on` and `off` turn routing on or off for the session. `report` opens the report, as a page from a terminal and as the card's Trend view on the desktop app (*Opening the report*). `help`, and any argument the
 command does not know, print the list of arguments and keys.
 
 **Text fallback.** Where no pane can be placed (headless or `claude -p`, a terminal narrower than 60 columns, or
@@ -326,68 +326,55 @@ dropped come from this session's `report` records, with total tokens only. The w
 with a minimum layout at 60 columns and 80 headless. Bars take what is left after the fixed columns, between 6
 and 20 cells. Lines that cannot fit are cut with `…`.
 
-**Graphical surfaces.** The rows above are text art for a monospace terminal: box characters, block sparklines
-and columns padded with spaces. Claude Desktop, the editor and the phones draw proportional type, where none of
-that lines up, so on any surface but `terminal` whose element table has `Svg` the same hook draws a native layout
-from the same data. The terminal's rendering is unchanged.
+**The card on the desktop app.** The rows above are text art for a monospace terminal. On the desktop app, and on
+any surface but the terminal, `/model-router` is one card in the transcript, "Model routing", in the grammar of the
+app's own `/stats` and `/context` cards (`ui-design.md`, *Graphical surfaces: the card*). No pane, no page and no
+file is opened: the report is the card's Trend view and the event log its Log view.
 
-- **Split.** `lib/usage-cards.mjs` builds the view model of a tab from the data (`cardsView`): pills, subtitle,
-  banner, KPI cards, table rows, chips, empty states. It takes every format and every status from
-  `lib/usage-view.mjs` and `lib/usage-tiles.mjs`, so a figure reads the same in both renderings.
-  `lib/usage-svg.mjs` draws the charts as SVG strings. The hooks module keeps the state and the actions;
-  `hooks/usage-pane.tsx` picks the rendering, `hooks/usage-desktop.tsx` lays the model out and
-  `hooks/usage-terminal.tsx` draws the rows.
-- **Keys.** The terminal's key handling (the ring that follows the tabs and wraps, the press that moves the ring
-  back, the arrows that step the window) is off while the pane is drawn graphically: the `ui.focus`, `ui.press`
-  and `ui.scroll` hooks hand the event on unchanged, so Tab reaches every control, a click presses what was
-  clicked and the body scrolls. These events do not name a surface, so the hooks go by the last drawing.
-- **Header.** The title in the accent at heading size, and the status as three pills (a dot in the accent when
-  on, muted when off). Under it the tabs, the windows and the level as native Buttons, the active one of each
-  group `variant: "primary"`; the level is two Buttons, `level-user` and `level-project`. The other Buttons keep
-  the terminal's element keys (`tab-…`, `window-…`, `report`, `refresh`, `log`) and hotkeys; `p` is on the level that is
-  not shown.
-- **Sample size.** Under five scored tasks one banner says so (`2 tasks scored — figures are indicative under
-  5`), and no card carries a `weak` mark. With five or more there is no banner. At the project level of a session
-  with no project id the banner says that instead, and there are no cards and no classes.
-- **KPI cards.** Four cards in a row from 70 body columns, two by two below: a caption label, the figure at
-  title size with tabular digits, a status chip (a coloured dot and the word; muted for a neutral status such as
-  the cost's `no prior`), the change against the window
-  before (`▼ 25 pts`, `▲ 12%`) and a sparkline. The routed card shows the count and `3 down · 0 up · 1 kept`.
-- **Sparklines.** One per rate and cost, over the window's buckets: a 2 px line on a soft area, the last point
-  dotted, a faint baseline. A bucket with no closed task breaks the line; a point with no neighbour is a dot.
-  A series of up to three values is drawn as one bar per value instead, since so few points make no line.
-  FPY and rework are drawn on a fixed 0 to 100% scale, the cost from zero to its highest bucket. Each bucket has
-  a `<title>` tooltip (`11-20: 50% · 2 tasks`), shown where the surface draws the SVG as interactive (the
-  desktop app). For this the series of `lib/usage-data.mjs` also carries each bucket's rework rate.
-- **Tables.** Models, classes, session and routing are rows of fixed-share columns with tabular digits, the
-  FPY as an SVG bar coloured by the same thresholds (grey under five tasks; a share above zero is at least one
-  pixel wide). Classes are one card per class with
-  its cells under it, the recommended cell starred, and the recommendations in a callout bordered in the accent.
-  Decisions are a compact table with one chip per action: downgrade green, upgrade in the accent, forced-risk
-  amber, error red, keep and explicit muted.
-- **Empty states.** A section with nothing to show says what will appear there and when, in one line.
-- **Footer.** The freshness note, and Report, Refresh and Log as native Buttons. No key hints.
-- **Colours.** Text, chips and borders name the theme's own colours (`success`, `warning`, `error`,
-  `inactive`), so they follow light and dark. An SVG is drawn as an image and cannot read the app's colours, and
-  the API does not say which mode is on: the charts use fixed mid-tones that read on both grounds (line
-  `#0d9488`, good `#16a34a`, fair `#d97706`, bad `#dc2626`, grey `#8b8b8b`, tracks at 25% opacity).
-- **Minimized.** In the desktop app's `widget` seat the pane draws the title, the FPY figure and its sparkline,
-  with no controls.
-- **Limits.** An SVG source is capped at 131,072 characters: over it a sparkline drops its tooltips, then its
-  marks. A tree past the budget of `lib/tree-bounds.mjs` is replaced by one line that names `/model-router report`
-  (a refused tree would leave the app's empty state); the log dashboard does the same, with its file button. If the view model cannot be built the hook logs why and draws the terminal's rows; if those cannot be
-  built either it draws one line (`Could not draw the usage view: …`). The pane is never left empty.
+- **How.** `command.run` answers the card as Markdown (what the app copies, and what a surface without the hook
+  shows), its last line the stamp `Read <time> UTC · card <n>.` A `ui.render` hook on the command's `CommandOutput`
+  row reads the stamp and draws the card in the row's place. The host decides, as for the pane: `hostKind` of
+  `lib/open-report.mjs` says graphical when only graphical surfaces are attached, or when none is yet and
+  `CLAUDE_CODE_ENTRYPOINT` names an app (anything but unset, `cli` or `sdk…`; the desktop app attaches its surface
+  only at its first draw). The terminal path is unchanged.
+- **Split.** `lib/card-view.mjs` builds the card as a plain value from the data `scripts/usage.mjs`,
+  `scripts/report.mjs --json` and `scripts/log.mjs` print; `lib/card-parts.mjs` draws its pictures as SVG and its
+  text; `hooks/card-kit.tsx` lays it out (both shared with `session-hub`, `shared-contract.md`); `hooks/router-card.tsx`
+  keeps the card's state and does the reads.
+- **Header.** The route icon, "Model routing" (the press that collapses the card), the window's right first time and
+  cost per success at the right, a chevron. Collapsed: the header and one bar of the window's tasks by model.
+- **Dropdowns.** The view at the left: Overview, Models, Task classes, Projects, Decisions, Trend, Log. At the right
+  the scope (All projects, This project; on Overview, Models, Task classes and Decisions, in a session with a
+  project) and the window (Last 24 hours, Last 7 days, Last 30 days, All time; Trend and Projects are all time).
+  `/model-router models 30d project` opens on that view, window and scope; `report` on Trend, `log` on Log for the
+  last 24 hours.
 
-**A session whose app has not attached yet.** The Claude desktop app attaches its surface to the session only at
-its first draw. A `/model-router` typed as the first command of a session therefore finds `$.session.surfaces()`
-empty and gets `isPlaced: false` from `$.ui.open`, exactly as a `claude -p` run does. The mod tells the two apart
-by `hostKind` (`lib/open-report.mjs`): a terminal when one is attached; a graphical host when only graphical
-surfaces are, or when none is and `CLAUDE_CODE_ENTRYPOINT` names an app (anything but unset, `cli` or `sdk…`);
-headless otherwise. On a graphical host the pane is kept open, whatever the width the command reports, the data is
-read, and the answer is one line (`Usage view opening beside the chat.`): the pane is drawn when the app attaches.
-The text view is for a terminal too narrow for the pane and for a headless run, where the pane is closed again.
-The API has no call that says an app hosts the session, hence the environment variable; its value in the desktop
-app is to be confirmed there.
+| View | Shows |
+|---|---|
+| Overview | A heatmap of tasks per day over 22 weeks; a grid of right first time, per success, redone, tasks scored, most used, busiest day; the Routing table (the window's decisions by kind, a total); a sample-size notice under five tasks; one sentence on the change from the window before; the router's switches. |
+| Models | One share row per model family (Opus darkest to Haiku lightest): tasks and share, a bar, and a detail line with right first time, cost per success and each effort level's count and right-first-time rate; tasks per day stacked by model (7 or 30 bars); most used and tasks scored. |
+| Task classes | A share row per class (at most 8), the detail giving right first time, cost per success, the grid's cell and, where the data favours another, that cell. |
+| Projects | A share row per project of the learned data (at most 8), with right first time and cost per success. |
+| Decisions | A segmented bar and legend of the window's decisions by kind; a group per kind, the first open with its latest 6 (when, models, effort, class). |
+| Trend | Right first time per week and cost per success per week, a bar chart each (the last 8 weeks); best and cheapest week; the last line links the HTML report page, written for it (`report.html`, a `file:` link). |
+| Log | The records of the window by kind as a segmented bar and legend; records per hour (24 hours) or per day; a group per kind, the first open with its latest 5; the last line links `events.jsonl` with its size and archive count. A read of the log is bounded (`scripts/log.mjs`, below). |
+
+- **Live.** Only the newest card of the session follows its data: a subagent that reports reads the usage data
+  again and the card redraws; a pick reads what the view needs (the report for Projects and Trend, the log for Log
+  and each group of it). The five cards before it keep their header and bar, drawn static; older ones are their
+  text. The mod numbers its cards itself, since the app reports no `onScreen`.
+- **Bounds.** A card draws one view, its rows capped; it still goes through `firstThatFits`: the view, the view
+  without its charts, the header and bar. Past those, or on any failure, the row keeps its text.
+- **The line under an Agent row** is one footnote on the desktop app: `Routed to Haiku · low · read-search; lowered
+  from opus`, the model and effort the only bright words; the terminal keeps its coloured line.
+  The `choose-model` skill also has the model write its own `🔀` line before each start; on the desktop app that
+  repeated the routing above the row, in terminal glyphs. Where the host is graphical the mod adds a session section
+  to the system prompt (`prompt.compose`, `DRAWN_LINE_SECTION` of `lib/route-line.mjs`) saying the line is drawn for
+  it, and the skill tells the model not to write it before an `Agent` call when that section is there. A child
+  session or a workflow still gets the model's line; with mods off, or in a terminal, nothing changes.
+- **A pane** of the usage view drawn on a graphical surface says in one line that the view is the card.
+- **Not in the card**: the 🔀 icon, the teal accent, the tier and effort colours (`shared-contract.md`), buttons,
+  hotkeys, sparklines and KPI tiles.
 
 **Failure.** The command fails open like the rest of the mod: a hook error, a script that fails or times out,
 or unreadable output answers one short line (`Could not read the usage data: …`; the engine shows it under the
@@ -395,10 +382,9 @@ plugin's name) and never throws to the engine. `report` that fails or takes more
 `Could not write the report: …`. The pane draws a note in place of the rows when it has no data; after a failed
 refresh the earlier rows stay, with a warning under them. A second `r` while a read runs is ignored.
 
-**Opening the log.** Every pane offers its plugin's own log (`ui-design.md`); model-router's is the event log,
+**Opening the log.** The terminal's view offers its plugin's own log; model-router's is the event log,
 `<config dir>/model-router/events.jsonl`. In a terminal, and in a headless run, the `l` key and `/model-router log`
-open the file; on a graphical host they and the Log button open *The log dashboard*, below, whose *Open file*
-button does what follows. It is decided in `lib/open-log.mjs`:
+open the file, as follows; on the desktop app the log is the card's Log view, whose last line links the file. It is decided in `lib/open-log.mjs`:
 
 - The API has no call that opens a file, and a `Link` opens what the surface chooses (on a remote surface only
   `https:`), so the mod runs the system's opener with `$.process.run`, the path as one argument and no shell:
@@ -417,74 +403,27 @@ button does what follows. It is decided in `lib/open-log.mjs`:
 Only these two paths are ever passed to an opener. `/model-router log` used to be an alias of
 `/model-router decisions`; from 0.3.13 it opens the log.
 
-**The log dashboard.** On a graphical host (`hostKind`, above) the log is a third pane, `model-router-log`
-(`$.ui.open({ id, title: 'model-router log', focus: true })`), a pane like the report's and kept the same way when
-the app has not attached yet. `ui-design.md` asks for it: a rich view is a mod pane, and a JSON log is a dashboard.
+**The bounded read of the log.** `scripts/log.mjs --window <w> --type <t> --page <n>` makes one pass over the log
+with `scanLog`, archive included, and holds nothing of it itself: every record goes to the collector of
+`lib/log-data.mjs`, which counts the records of the window by type, the matching ones by hour or day, and keeps the
+newest 1,000 matching records, each cut to the fields of its type (`slimRecord`). It prints one page of twenty,
+newest first, with the counts. Memory and output are the same for a log of any length; the pass is read-only and
+takes at most 20 seconds. A prompt's text and a task's description are not among the kept fields, so they never
+reach the card. The card's Log view reads it (`hooks/router-card.tsx`) and `lib/log-cards.mjs` writes each record as
+a line.
 
-- **A bounded read.** `scripts/log.mjs --window <w> --type <t> --page <n>` makes one pass over the log with
-  `scanLog`, archive included, and holds nothing of it itself: every record goes to the collector of
-  `lib/log-data.mjs`, which counts the records of the window by type, the matching ones by day, and keeps the newest
-  1,000 matching records, each cut to the fields of its type (`slimRecord`). It prints one page of twenty, newest
-  first, with the counts, the page count and whether older matching records exist beyond the 1,000. Memory and
-  output are the same for a log of any length; the pass itself is read-only and takes at most 20 seconds. A prompt's
-  text and a task's description are not among the kept fields, so they never reach the pane.
-- **What it shows** (`logView` of `lib/log-cards.mjs`, drawn by `hooks/log-desktop.tsx`): the title and
-  `<n> records · <window> · archive included`; the windows 24h, 7d, 30d and all as native Buttons; *Records by
-  type*, a row per type with a Button that filters on it, a share bar and the count (`all` first); *By day (UTC)*,
-  an SVG column chart of the matching records over the window's days (the last thirty for `all`); for the 24-hour
-  window it is *By hour (UTC)*, over its 24 hours, since one bar for the day says nothing; each has a tooltip
-  per day; *Latest records*, a table of when (UTC), type, the first eight characters of the session, a chip (a
-  decision's action, an outcome's result, a signal's kind) and the type's fields (a decision's models, subagent
-  type and reason; a spawn's type, class, model and route; an outcome's class, tier, cost and why; a report's
-  status, model, tokens and cost; a signal's file, by its name alone, since `slimRecord` keeps no path; for a
-  `session-end`, `session ended` and its reason unless it is the engine's `other`); the page and *Newer* and *Older* Buttons, each drawn only where
-  there is a page; then the log's path and size, the archive's file count, size and newest names, and when the log
-  was read.
-- **Controls.** A window or a type reads again from the newest page; *Refresh* (`refresh`, `r`) reads the same
-  query again; *Open file* (`file`, `o`) opens the log as in the terminal and writes its line. The query (window,
-  type, page) and the data are kept in `$.state` (`log`). The app owns focus and scrolling.
-- **Failure.** A log that cannot be read is one line in place of the dashboard; a view or a tree that cannot be
-  built leaves one line and the file button; a terminal that draws this pane gets one line and the file button.
-  The answer of the command is `Event log opened beside the chat.`
+**Opening the report.** In a terminal and in a headless run, `/model-router report`, the `o` key and the Report
+button write the HTML page and open it; on the desktop app the report is the card's Trend view, whose last line
+links the page:
 
-The glue is `hooks/log-pane.tsx`; its `ui.render` hook is added in `hooks/model-router.tsx`, since a hook is added
-only by `on(...)` in the hooks module itself and `$` is not handed to a function held in a value.
-
-**Opening the report.** `/model-router report`, the `o` key and the Report button show the report where the
-session is shown (`showReport`; `hostKind` of `lib/open-report.mjs`, above):
-
-- **On a graphical host**, a second pane, `model-router-report` (`$.ui.open({ id, title: 'model-router report',
-  focus: true })`), drawn by `hooks/report-desktop.tsx` from `reportView` of `lib/report-cards.mjs`, the view model
-  the page is written from. Its data comes from `scripts/report.mjs --json`, which compacts and prints the report's
-  data without writing a page, and is kept in `$.state` (`report`). Top to bottom: the title and when the data was
-  read; the 30-day headline with the usage view's own notice, KPI cards and models table (the same functions of
-  `usage-desktop.tsx`); the weekly trend as two SVG charts, side by side from 70 body columns, and the weeks as a
-  table; the routing decisions as chips; one card per task class with a row per cell (tasks, FPY bar and figure,
-  rework, $/task, $/success, explored; ★ the recommended cell, ○ and muted text a row under five tasks; under 70
-  columns $/task and explored are left out, as on the narrow page); the projects, one line when the only project
-  repeats the user level, else a heading and its cards per project; the footnotes and where the data was read.
-  The footer has two native Buttons: **Open as page** (`page`, `o`), which writes the HTML page and opens it as in
-  the terminal, and **Refresh** (`refresh`, `r`). The app owns focus and scrolling. A pane not placed yet is kept
-  (a session whose app has not attached). **Size.** A report drawn whole grows with its classes and projects, and a
-  real one (six classes, two projects) is a tree of about 150,000 characters, past the engine's 100,000
-  (`ui-design.md`, *The size of a tree*): the app then showed its own empty state. `drawReportPane` therefore builds
-  the tree at three levels of detail (`DETAILS` of `lib/report-cards.mjs`) and returns the first within the budget
-  of `lib/tree-bounds.mjs`: `full`; `projects`, each project as one line (its classes and cells counted);
-  `classes`, each class of the user level as one line too (its grid cell, its recommendation, its cells counted).
-  A level drawn in brief says so in one line and names *Open as page*; a level of more than 400 rows is not built;
-  past every level the pane is one line and the page button. Each level passed over is one debug line with its
-  size. Data that cannot be read is one line in place of the content; a model
-  or a tree that cannot be built leaves one line and the page button. The answer is `Report opened beside the chat.`
 - **In a terminal, and in a headless run**, the HTML page: written with `scripts/report.mjs --no-open`, then opened
   in the system's default browser with `open <page>` on macOS or `xdg-open <page>` on Linux, through
   `$.process.run`. Not on a hosted session or a platform with no known opener. The answer is `Report opened in the
   default browser: <path>`, or `Report written to <path> (not opened: <reason>)`.
 
-A press of Report in a pane drawn on a graphical surface opens the report pane whatever else is attached. The
-desktop app's Browser pane is not used: tried on the app, it drew the page, which lies outside the project folder,
-as a still image in the light theme, and its tool needed a permission. The skill and the script run from a shell
-open the default browser themselves. A terminal that draws the report pane (one attached beside the app) gets one
-line and the page button.
+The desktop app's Browser pane is not used: tried on the app, it drew the page, which lies outside the project
+folder, as a still image in the light theme, and its tool needed a permission. The skill and the script run from a
+shell open the default browser themselves.
 
 **With mods off** there is no command; the `model-router:report` skill builds the same page from the same code.
 
@@ -500,7 +439,8 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.3.13 | The usage view opens the event log: the `l` key, the Log button, `/model-router log`. The report page is redrawn after `ui-design.md`. |
 | 0.3.14 | The report and the event log as native panes on graphical surfaces; the usage pane kept open in a session whose app has not attached yet. |
 | 0.3.15 | The panes measure their trees against the engine's bounds; the report pane draws large reports in brief. |
-| 0.4 | Adaptive selection from the quality data (`model-router-quality-loop.md`). |
+| 0.4.0 | On the desktop app `/model-router` is one card in the transcript, with every view (the report as Trend, the log as Log); the report and log panes are gone. |
+| later | Adaptive selection from the quality data (`model-router-quality-loop.md`, which plans it as 0.4). |
 
 ## Open points
 

@@ -1,25 +1,14 @@
-// The log dashboard as a view model: what the pane of a graphical surface draws from the data scripts/log.mjs
-// prints (lib/log-data.mjs). Pure: texts already formatted, charts as SVG strings.
-// See docs/design/model-router.md, "The log dashboard".
+// A record of the event log as one line: when, its type, a leading word with its tone, and the fields that matter
+// for its type. Pure: texts already formatted. The Log view of the card (lib/card-view.mjs) draws these lines.
+// See docs/design/model-router.md, "The Log view".
 // Plain ES module with no Node or engine imports, so the mod and node tests load it.
-import { LOG_WINDOWS, MAX_KEPT } from './log-data.mjs';
 import { ACTION_TONES } from './usage-cards.mjs';
-import { BAR_SIZE, COLORS, COLUMNS_SIZE, barSvg, columnsSvg } from './usage-svg.mjs';
 import { familyOf } from './tiers.mjs';
-import { WINDOW_TITLES, fmtNum, fmtTokens, fmtUsd } from './usage-view.mjs';
+import { fmtTokens, fmtUsd } from './usage-view.mjs';
 
-/** The log pane, and the keys and labels of its controls. */
-export const LOG_PANE = 'model-router-log';
-export const LOG_PANE_TITLE = 'model-router log';
-export const FILE_KEY = 'file';
-export const FILE_LABEL = 'Open file';
-export const ALL_TYPES = 'all';
-const ARCHIVE_SHOWN = 6;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const OUTCOME_TONES = Object.freeze({ success: 'good', rework: 'fair', failure: 'bad' });
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-const plural = (n, word) => `${fmtNum(n)} ${word}${n === 1 ? '' : 's'}`;
 const model = (m) => (m ? (familyOf(m) === 'other' ? String(m) : familyOf(m)) : '?');
 const join = (parts) => parts.filter((p) => p !== null && p !== undefined && p !== '').join(' · ');
 
@@ -31,11 +20,6 @@ export function fmtBytes(n) {
   if (n < 1e9) return `${(n / 1e6).toFixed(1)} MB`;
   return `${(n / 1e9).toFixed(1)} GB`;
 }
-
-const dayLabel = (day) => {
-  const t = new Date(`${day}T00:00:00Z`);
-  return Number.isNaN(t.getTime()) ? String(day) : `${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]}`;
-};
 
 // What a record says beyond its type, by type: the fields the log keeps for it, in reading order.
 const DETAILS = Object.freeze({
@@ -63,73 +47,5 @@ export function recordLine(r) {
     when, type, session: typeof r?.session === 'string' ? r.session.slice(0, 8) : '',
     lead: Object.hasOwn(LEADS, type) ? LEADS[type](r) : null,
     detail: Object.hasOwn(DETAILS, type) ? DETAILS[type](r) : '',
-  };
-}
-
-function filesLine(files) {
-  const log = files?.log;
-  const archive = files?.archive;
-  const names = (archive?.files ?? []).slice(0, ARCHIVE_SHOWN).map((f) => `${f.name} (${fmtBytes(f.bytes)})`);
-  const more = (archive?.count ?? 0) - names.length;
-  return {
-    log: isNum(log?.bytes) ? `${log.path} · ${fmtBytes(log.bytes)}` : `${log?.path ?? 'events.jsonl'} · not written yet`,
-    archive: archive?.count
-      ? `Archive: ${plural(archive.count, 'file')} · ${fmtBytes(archive.bytes)} · ${names.join(', ')}${more > 0 ? ` and ${more} more` : ''}`
-      : 'Archive: none yet (the log is rotated into it from 32 MB).',
-  };
-}
-
-function typeRows(data) {
-  const total = data.total ?? 0;
-  const row = (type, n) => ({
-    type, count: fmtNum(n), isActive: data.query.type === type,
-    bar: { source: barSvg(total ? n / total : 0, { ...BAR_SIZE, color: COLORS.accent }), alt: `${fmtNum(n)} of ${fmtNum(total)} records`, ...BAR_SIZE },
-  });
-  return [row(ALL_TYPES, total), ...(data.byType ?? []).map((t) => row(t.type, t.n))];
-}
-
-/** A bucket's key as the chart names it: `20 Nov` for a day, `20 Nov 14:00` for an hour. */
-const bucketLabel = (key) => (String(key).length > 10 ? `${dayLabel(String(key).slice(0, 10))} ${String(key).slice(11, 13)}:00` : dayLabel(key));
-/** The chart's title for a window: by hour for the last 24 hours, by day for the others. */
-export const chartTitle = (unit) => (unit === 'hour' ? 'By hour (UTC)' : 'By day (UTC)');
-
-function bucketChart(data) {
-  const unit = data.series?.unit === 'hour' ? 'hour' : 'day';
-  const points = data.series?.points ?? [];
-  if (!points.some((p) => p.n > 0)) return null;
-  const what = data.query.type === ALL_TYPES ? 'record' : `${data.query.type} record`;
-  const [first, last] = [bucketLabel(points[0].key), bucketLabel(points.at(-1).key)];
-  return {
-    title: chartTitle(unit), first, last,
-    picture: {
-      source: columnsSvg(points.map((p) => p.n), { ...COLUMNS_SIZE, color: COLORS.line, labels: points.map((p) => `${bucketLabel(p.key)}: ${plural(p.n, what)}`) }),
-      alt: `${plural(data.matched ?? 0, what)} by ${unit}, ${first} to ${last}`, ...COLUMNS_SIZE, isInteractive: true,
-    },
-  };
-}
-
-/**
- * Everything the log pane draws: `data` is what scripts/log.mjs printed. `{ subtitle, files, windows, types,
- * chartTitle, chart, rows, paging, empty, read }`; `chart` is null with nothing to chart, `empty` says why there is no row.
- */
-export function logView(data) {
-  const q = data.query;
-  const windowTitle = WINDOW_TITLES[q.window] ?? q.window;
-  const of = q.type === ALL_TYPES ? plural(data.total, 'record') : `${plural(data.matched, `${q.type} record`)} of ${fmtNum(data.total)}`;
-  const rows = (data.records ?? []).map(recordLine);
-  return {
-    subtitle: `${of} · ${windowTitle} · archive included`,
-    files: filesLine(data.files),
-    windows: Object.keys(LOG_WINDOWS).map((w) => ({ window: w, isActive: w === q.window })),
-    types: typeRows(data),
-    chartTitle: chartTitle(data.series?.unit),
-    chart: bucketChart(data),
-    rows,
-    paging: {
-      label: `Page ${q.page + 1} of ${data.pages} · newest first${data.isCut ? ` · the latest ${fmtNum(MAX_KEPT)} can be paged` : ''}`,
-      hasNewer: q.page > 0, hasOlder: q.page < data.pages - 1,
-    },
-    empty: rows.length ? null : data.total ? `No ${q.type} record (${windowTitle}).` : `No record (${windowTitle}). Records appear here as subagents start and report.`,
-    read: `Log read ${String(data.generatedAt ?? '').slice(0, 16).replace('T', ' ')} UTC.`,
   };
 }

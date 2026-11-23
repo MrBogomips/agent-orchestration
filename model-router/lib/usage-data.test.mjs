@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GRID, LIVE, PROJECT, SESSION, T0, events, level, outcomes, usageData } from './usage-fixture.mjs';
-import { agedCells, buildUsageData, classesOf, decisionsOf, headlineOf, inWindow, kpisOf, latestOutcomes, modelRows, seriesOf, sessionAgents, tally, trendOf } from './usage-data.mjs';
+import { agedCells, buildUsageData, dailyOf, DAYS_KEPT, classesOf, decisionsOf, headlineOf, inWindow, kpisOf, latestOutcomes, modelRows, seriesOf, sessionAgents, tally, trendOf } from './usage-data.mjs';
 import { emptyLevel, metrics } from './aggregate.mjs';
 
 test('the all window of Classes is the report page\'s classes for the same level', () => {
@@ -129,7 +129,7 @@ test('the headline counts scored tasks, FPY, rework, cost per success and routed
   assert.equal(h.current.reworkRate, 0.125);
   assert.deepEqual(h.current.routed, { total: 5, downgrade: 3, upgrade: 0, keep: 1 });
   // The 30 days before: the one task 40 days ago, a success at $0.05.
-  assert.deepEqual(h.previous, { closed: 1, fpy: 1, reworkRate: 0, costPerSuccess: 0.05, routed: { total: 0, downgrade: 0, upgrade: 0, keep: 0 } });
+  assert.deepEqual(h.previous, { closed: 1, fpy: 1, reworkRate: 0, costPerSuccess: 0.05, routed: { total: 0, downgrade: 0, upgrade: 0, keep: 0 }, actions: {} });
 });
 
 test('all time has no window before it to compare with', () => {
@@ -148,7 +148,7 @@ test('the project level counts its own tasks, and the decisions of its spawns on
 });
 
 test('kpisOf of nothing is empty, not an error', () => {
-  assert.deepEqual(kpisOf([], []), { closed: 0, fpy: null, reworkRate: null, costPerSuccess: null, routed: { total: 0, downgrade: 0, upgrade: 0, keep: 0 } });
+  assert.deepEqual(kpisOf([], []), { closed: 0, fpy: null, reworkRate: null, costPerSuccess: null, routed: { total: 0, downgrade: 0, upgrade: 0, keep: 0 }, actions: {} });
 });
 
 test('the series cuts a window into equal buckets, oldest first, with gaps where nothing closed', () => {
@@ -163,4 +163,28 @@ test('the series cuts a window into equal buckets, oldest first, with gaps where
   const all = seriesOf(list, 'all', T0);
   assert.equal(all.unit, 'week');
   assert.equal(all.points.length, 12);
+});
+
+test('the tasks per day count closed tasks by tier, the days with one only, within the days kept', () => {
+  const DAY = 86400000;
+  const at = (ago) => new Date(T0 - ago).toISOString();
+  const list = [
+    { outcome: 'success', tier: 'haiku', ts: at(1000), reportTs: at(1000) },
+    { outcome: 'rework', tier: 'opus', ts: at(2000), reportTs: at(2000) },
+    { outcome: 'open', tier: 'opus', ts: at(3000), reportTs: at(3000) },
+    { outcome: 'success', tier: 'sonnet', ts: at(3 * DAY), reportTs: at(3 * DAY) },
+    { outcome: 'success', tier: 'sonnet', ts: at((DAYS_KEPT + 1) * DAY), reportTs: at((DAYS_KEPT + 1) * DAY) },
+  ];
+  assert.deepEqual(dailyOf(list, T0), [
+    { day: '2026-11-17', n: 1, tiers: { sonnet: 1 } },
+    { day: '2026-11-20', n: 2, tiers: { haiku: 1, opus: 1 } },
+  ]);
+  assert.deepEqual(dailyOf([], T0), []);
+});
+
+test('the usage data carries the tasks per day and the models of the session\'s project alone', () => {
+  const data = usageData();
+  assert.ok(data.daily.user.length > 0);
+  assert.ok(Array.isArray(data.daily.project));
+  assert.ok(Array.isArray(data.windows['30d'].projectModels));
 });

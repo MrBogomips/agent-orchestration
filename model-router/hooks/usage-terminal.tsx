@@ -10,7 +10,16 @@ import { tabKey, windowKey } from '../lib/usage-nav.mjs'
 import { COLORS } from '../lib/usage-svg.mjs'
 import { TAB_TITLES, TABS, WINDOW_KEYS } from '../lib/usage-view.mjs'
 import type { Row } from '../lib/usage-view.mjs'
-import type { UsageActions } from './usage-desktop'
+
+/** What the view's controls do: each is a closure of the hook that draws it. */
+export type UsageActions = {
+  setTab: (tab: string) => unknown
+  setWindow: (window: string) => unknown
+  setLevel: (level: string) => unknown
+  report: () => unknown
+  refresh: () => unknown
+  openLog: () => unknown
+}
 
 type TerminalElements = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>
 

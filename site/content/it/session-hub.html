@@ -45,7 +45,7 @@
     <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td>Hook <code>PreToolUse</code> su <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>. In una sessione figlia blocca qualsiasi modifica il cui percorso reale esce dalla radice di scrittura.</td></tr>
     <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>Legge e aggiorna il registro delle sessioni figlie in modo atomico e sicuro.</td></tr>
     <tr><td><code>session-hub</code></td><td>mod</td><td>Nella sessione figlia attiva la protezione sugli invii, il controllo sulla shell, la marcatura dell'origine dei messaggi e la riga dello scope. Nel master aggiunge il pannello delle sessioni figlie. Richiede le mod attive.</td></tr>
-    <tr><td><code>/session-hub</code></td><td>comando</td><td>Mostra ruolo e scope della sessione corrente; nel master riepiloga anche le sessioni figlie e apre il pannello. Registrato dalla mod.</td></tr>
+    <tr><td><code>/session-hub</code></td><td>comando</td><td>Mostra ruolo e scope della sessione corrente; nel master riepiloga anche le sessioni figlie e, nel terminale, apre il pannello. Nell'app desktop di Claude risponde con una card nella conversazione. Registrato dalla mod.</td></tr>
   </tbody>
 </table>
 <p>Nella pratica quotidiana non dovrai quasi mai invocare una skill per nome. Ti basta esprimerti in linguaggio naturale — ad esempio <em>"avvia una sessione figlia in product per T-42"</em>, <em>"configura session-hub in questo hub"</em> o <em>"cosa stanno facendo le sessioni figlie?"</em> — e Claude Code carica automaticamente la skill adatta.</p>
@@ -195,21 +195,54 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 <h3>La riga dello scope</h3>
 <p>Nelle sessioni lunghe può capitare che le istruzioni iniziali vengano compattate o azzerate. Con le mod attive, <code>session-hub</code> mantiene sempre visibili ruolo e scope (nella sessione figlia) o il registro (nel master) nel system prompt, e reinvia lo stesso testo come contesto al primo turno dopo l'avvio, dopo una compattazione e dopo <code>/clear</code>.</p>
 
-<h2 id="panel">8. Controllare lo stato: <code>/session-hub</code> e il pannello laterale</h2>
+<h2 id="panel">8. Controllare lo stato: <code>/session-hub</code>, il pannello e la card</h2>
 <p>Per avere il quadro completo delle sessioni figlie senza interrompere il lavoro dell'agente, la mod registra il comando <code>/session-hub</code>. La sua risposta è visibile solo a te e non viene inviata al modello.</p>
+<p>Nel terminale:</p>
 <ul>
   <li><strong>Nel master</strong>, stampa il percorso del registro e la tabella riassuntiva delle sessioni figlie, aprendo anche il pannello dedicato accanto alla chat. Ogni riga mostra lo stato registrato, lo stato in tempo reale dall'elenco delle sessioni, modello, effort e ultimo messaggio; il pannello si aggiorna ogni 30 secondi e a ogni esecuzione di <code>/session-hub</code>. Il pannello usa gli stessi colori di <code>model-router</code>: il modello in grassetto nel colore della sua fascia, l'effort come barra di quattro celle (<code>▰▰▰▱ high</code>) nel colore del suo livello, lo stato in verde se la sessione lavora, in giallo se attende, è stata abbandonata o non compare nell'elenco, in rosso se è persa. Nella tabella del comando la barra c'è, i colori no.</li>
   <li><strong>In una sessione figlia</strong>, riepiloga ruolo, radice di scrittura, file di handoff, registro e stato delle protezioni.</li>
 </ul>
-<figure class="shot">
-  <img src="{{img:sh-panel-live}}" alt="Il pannello delle sessioni figlie accanto alla chat del master, con una riga per ogni sessione figlia in esecuzione" loading="lazy">
-  <figcaption>Il pannello delle sessioni figlie accanto alla chat del master in un hub attivo.</figcaption>
-</figure>
-<figure class="shot">
-  <img src="{{img:sh-panel}}" alt="Il pannello delle sessioni figlie: per ciascuna lo stato, lo stato in tempo reale, il modello, l&#x27;effort e l&#x27;ultimo messaggio" loading="lazy">
-  <figcaption>Le righe del pannello: stato nel registro, stato in tempo reale dall'elenco delle sessioni, modello ed effort, ultimo messaggio. <span class="badge demo">Dati dimostrativi</span></figcaption>
-</figure>
-<p>Quando il master avvia le sessioni figlie con un comando <code>Bash</code>, sotto la riga del comando compare una riga per ciascuna figlia, con gli stessi colori: modello, effort e nome, per esempio <code>⎿  🔀 opus   ▰▰▰▱ high   -&gt; t123-product</code>. La mod li legge dal comando di avvio scritto da <code>spawn</code>; un comando che non indica né modello né effort non ha questa riga.</p>
+<p>Sotto le righe, il pannello offre il registro delle sessioni figlie, il log di <code>session-hub</code>: il tasto <code>l</code> lo apre. Lo stesso fa <code>/session-hub log</code>, che apre il registro con l'app predefinita del sistema e ne scrive il percorso; senza registro lo dice e non apre nulla, e in una sessione figlia apre il registro del suo master.</p>
+<p>Nell'app desktop di Claude non si apre nessun pannello accanto alla chat: <code>/session-hub</code> risponde con una card nella conversazione, disegnata come la card <code>/context</code> dell'app. L'intestazione riporta il ruolo e, nel master, quante sessioni figlie ci sono e quante sono attive; un clic sul titolo richiude la card all'intestazione e a una barra con le sessioni figlie divise per stato. Un menu a sinistra sceglie la vista:</p>
+<ul>
+  <li><strong>Children</strong> (<code>/session-hub</code>): ruolo, hub, repository e registro, poi le sessioni figlie raggruppate per stato (in esecuzione, in attesa di te, concluse, abbandonate, perse). Ogni figlia mostra modello ed effort a parole (<code>Sonnet · medium</code>), cosa dice l'elenco delle sessioni e il suo ultimo messaggio. Un clic sul nome di un gruppo lo apre. In una sessione figlia la card mostra invece il master, la radice di scrittura, l'handoff e lo stato delle protezioni.</li>
+  <li><strong>Record</strong> (<code>/session-hub log</code>): quante sessioni figlie, eventi e richieste, quando è partita la prima e gli ultimi sette eventi; un menu a destra li restringe a una sola figlia.</li>
+</ul>
+<p>Le due viste leggono lo stesso registro, ma rispondono a domande diverse. <strong>Children</strong> è lo stato attuale: una riga per sessione figlia, con stato, modello ed effort e quello che dice di lei l'elenco delle sessioni attive. <strong>Record</strong> è la storia: cosa è successo e quando, con i conteggi e una sequenza di avvii, ultimi messaggi e richieste con il loro esito, dal più recente. Children dice chi sta lavorando; Record dice che cosa è successo finora.</p>
+<p>L'ultima riga della card collega il file del registro. La card più recente segue l'aggiornamento ogni 30 secondi; le precedenti conservano intestazione e barra.</p>
+<div class="tabs">
+  <input type="radio" name="sh-panel" id="sh-panel-tui" checked><label for="sh-panel-tui">Terminale</label>
+  <input type="radio" name="sh-panel" id="sh-panel-desktop"><label for="sh-panel-desktop">App desktop</label>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:sh-panel-live}}" alt="Il pannello delle sessioni figlie accanto alla chat del master, con una riga per ogni sessione figlia in esecuzione" loading="lazy">
+      <figcaption>Il pannello delle sessioni figlie accanto alla chat del master in un hub attivo.</figcaption>
+    </figure>
+  </div>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:sh-desktop-children}}" alt="Nell&#x27;app desktop di Claude, la card Session hub sulla vista Children: ruolo, hub, repository e registro, e le sessioni figlie raggruppate per stato" loading="lazy">
+      <figcaption>La card Session hub sulla vista Children.</figcaption>
+    </figure>
+  </div>
+</div>
+<div class="tabs">
+  <input type="radio" name="sh-record" id="sh-record-tui" checked><label for="sh-record-tui">Terminale</label>
+  <input type="radio" name="sh-record" id="sh-record-desktop"><label for="sh-record-desktop">App desktop</label>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:sh-panel}}" alt="Il pannello delle sessioni figlie: per ciascuna lo stato, lo stato in tempo reale, il modello, l&#x27;effort e l&#x27;ultimo messaggio" loading="lazy">
+      <figcaption>Le righe del pannello: stato nel registro, stato in tempo reale dall'elenco delle sessioni, modello ed effort, ultimo messaggio. <span class="badge demo">Dati dimostrativi</span></figcaption>
+    </figure>
+  </div>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:sh-desktop-record}}" alt="Nell&#x27;app desktop di Claude, la card Session hub sulla vista Record: i conteggi del registro e gli ultimi eventi, con il menu per scegliere una sessione figlia" loading="lazy">
+      <figcaption>La vista Record: i conteggi e gli ultimi eventi del registro.</figcaption>
+    </figure>
+  </div>
+</div>
+<p>Quando il master avvia le sessioni figlie con un comando <code>Bash</code>, sotto la riga del comando compare una riga per ciascuna figlia, con gli stessi colori: modello, effort e nome, per esempio <code>⎿  🔀 opus   ▰▰▰▱ high   -&gt; t123-product</code>. La mod li legge dal comando di avvio scritto da <code>spawn</code>; un comando che non indica né modello né effort non ha questa riga. Nell'app desktop la riga è sobria e a parole, <code>Started t123-product on Opus · high</code>. Una figlia avviata con lo strumento <code>start_session</code> dell'app desktop non ha alcuna riga: la nomina già la card di sessione dell'app, e sotto quella card non compare nulla di ciò che aggiunge una mod.</p>
 <p>Ecco un esempio dell'output di <code>/session-hub</code> eseguito dentro una sessione figlia:</p>
 <pre><code>Role: child of "hub"
 Write root: /w/repo
@@ -224,7 +257,7 @@ Guards: on (scope guard, shell check, send guard)</code></pre>
   <img src="{{img:sh-help}}" alt="Output di /session-hub help" loading="lazy">
   <figcaption>Output di <code>/session-hub help</code>.</figcaption>
 </figure>
-<p>Tutti i dati mostrati dal comando e dal pannello provengono dal registro delle sessioni figlie mantenuto dal master.</p>
+<p>Tutti i dati mostrati dal comando, dal pannello e dalla card provengono dal registro delle sessioni figlie mantenuto dal master.</p>
 
 <h2 id="record">9. Il registro delle sessioni figlie</h2>
 <p>Per tenere traccia dello stato dell'hub senza sporcare alcun repository git con file temporanei, il master salva un unico file JSON per hub fuori dalla cartella dell'hub stesso:</p>
