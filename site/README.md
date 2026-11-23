@@ -57,7 +57,7 @@ Placeholders, replaced at build time (an unknown one stops the build):
 Building blocks from `src/site.css`: `<figure class="shot">` (a screenshot with a `<figcaption>`),
 `<figure class="diagram">`, `<figure class="illus">` (an illustration), `<div class="note|tip|warn">`,
 `<span class="badge">` and `<span class="badge demo">` (marks demonstration data), `.steps`, `.cards.three`,
-`.cards.two`, `.timeline`, `.tabs` (a CSS-only switch, for example Herdr and tmux), `.cta-band`.
+`.cards.two`, `.timeline`, `.tabs` (a CSS switch, for example Herdr and tmux; a small script in `src/layout.html` keeps every switch with the same choices, such as Terminale and App desktop, on the same choice across the site, matched by the last part of each input's `id`), `.cta-band`.
 
 Tone: a colleague explaining the system during a knowledge transfer. Technical and exact, in full sentences,
 saying why as well as what; no marketing filler, no invented facts. Every claim must match the plugins' READMEs,
