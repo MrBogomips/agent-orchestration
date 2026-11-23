@@ -20,6 +20,13 @@ const write = (agentId, min, file) => ({ type: 'signal', kind: 'write', ts: at(m
 const prompt = (min, text) => ({ type: 'signal', kind: 'prompt', ts: at(min), session: 's1', text });
 const now = (min) => T0 + min * 60000;
 
+test('an outcome carries the model of the session that started the task, or null when the spawn has none', () => {
+  const events = [spawn('a1', 0, { parentModel: 'claude-opus-5-5' }), report('a1', 2), spawn('a2', 0), report('a2', 2)];
+  const { outcomes } = computeOutcomes(events, { ...OPTS, now: now(40) });
+  assert.equal(outcomes.find((o) => o.agentId === 'a1').parentModel, 'claude-opus-5-5');
+  assert.equal(outcomes.find((o) => o.agentId === 'a2').parentModel, null);
+});
+
 test('a completed task with no rework signal is a success once the window closes', () => {
   const events = [spawn('a1', 0), write('a1', 1, '/repo/src/auth.ts'), report('a1', 2)];
   const open = computeOutcomes(events, { ...OPTS, now: now(10) });

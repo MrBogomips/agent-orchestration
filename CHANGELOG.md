@@ -14,6 +14,8 @@ listed newest first. The format follows Keep a Changelog, and both plugins use s
   tier and its decision's reason ends with `held to deep`. A `frontier` answer never lowers a start, so a subagent of a `fable`
   session keeps `fable` on it. Risky work still goes to the deep tier.
 - Options `frontierModel` (default `fable`) and `minFrontierConfidence` (default 0.7).
+- The spawn and outcome records of the event log carry `parentModel`, the model of the session that started the
+  subagent, so the log shows which starts ran on a cheaper tier than the one they would have inherited.
 
 ## model-router 0.4.1
 

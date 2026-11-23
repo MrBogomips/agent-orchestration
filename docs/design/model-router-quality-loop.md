@@ -1,7 +1,8 @@
 # `model-router` quality loop
 
 Status: agreed with the user, 2026-11-20. Extends `model-router.md`. The spikes it depended on (S11–S13) were run
-for release 0.2 and hold (`spikes.md`); "As built in 0.2" and "As built in 0.3" at the end record the builder's choices.
+for release 0.2 and hold (`spikes.md`); "As built in 0.2", "As built in 0.3" and "As built in 0.5" at the end record the
+builder's choices.
 
 ## Why
 
@@ -361,3 +362,11 @@ a task with none is not learned.
 - **Windows.** The page shows the aged aggregates only. The terminal adds windows of 24 hours, 7 and 30 days over
   the closed outcomes (by report time, or by outcome time for a task with no report), folded without aging. Under
   its `all` window, Classes shows the page's numbers; Models adds up outcomes without aging in every window.
+
+## As built in 0.5
+
+- **The starting session's model.** The spawn record and the outcome record carry `parentModel`, the model of the
+  session or agent that started the subagent (`null` in records written before 0.5). A decision's `before` is the
+  call's own model when the call names one, so without this field a start with an explicit model did not say
+  whether it ran below, at or above the model it would have inherited. With it, the share of starts moved to a
+  cheaper tier and their rework rate can be read from the outcome records alone.

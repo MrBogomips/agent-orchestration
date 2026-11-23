@@ -485,7 +485,8 @@ async function recordStart($: any, ctx: Ctx, e: any, planned: Pending | null, de
   records.push({
     type: 'spawn', ts: now(), session, agentId: started.agentId, parentAgentId: e.parentAgentId, name: e.name,
     subagentType: e.subagentType, description: e.description, class: planned?.cls ?? tag.cls,
-    risky: planned?.risky ?? tag.risky, model: started.model, effort: planned?.effort ?? null, fork: e.fork,
+    risky: planned?.risky ?? tag.risky, model: started.model, parentModel: e.parentModel ?? null,
+    effort: planned?.effort ?? null, fork: e.fork,
     route: planned?.route ?? 'unseen', explicitModel: Boolean(e.model), project,
   })
   await appendEvents($, ctx, records)
