@@ -62,3 +62,8 @@ test('the wrapper normalizes the role like the guard does', () => {
 test('the guard has a watchdog shorter than the hook timeout', () => {
   assert.ok(entry.hooks[0].timeout >= 10, 'timeout of at least 10 s');
 });
+
+// Issue #89: Git Bash on Windows rewrites a POSIX-looking SESSION_HUB_SCOPE_ROOT before the guard reads it.
+test('the command keeps Git Bash from rewriting the session-hub variables', () => {
+  assert.ok(command.startsWith('MSYS2_ENV_CONV_EXCL="SESSION_HUB_${MSYS2_ENV_CONV_EXCL:+;$MSYS2_ENV_CONV_EXCL}" node '), command);
+});

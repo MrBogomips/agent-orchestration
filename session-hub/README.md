@@ -37,7 +37,7 @@ session is left alone by the hook. The variables are:
 |---|---|
 | `SESSION_HUB_ROLE` | `child` |
 | `SESSION_HUB_MASTER` | the master's session name |
-| `SESSION_HUB_SCOPE_ROOT` | absolute path of the write root |
+| `SESSION_HUB_SCOPE_ROOT` | absolute path of the write root (on Windows, a Windows path such as `C:/hub/repo`) |
 | `SESSION_HUB_HANDOFF` | absolute path of the handoff file |
 | `SESSION_HUB_REGISTRY` | absolute path of the children record |
 | `SESSION_HUB_GUARDS` | `on` or `off`; absent means `on` |

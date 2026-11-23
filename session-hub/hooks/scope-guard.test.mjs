@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, linkSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { evaluate, resolveTarget } from './scope-guard.mjs';
+import { evaluate, isUnder, resolveTarget } from './scope-guard.mjs';
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), 'scope-guard.mjs');
 
@@ -241,6 +241,51 @@ describe('evaluate', () => {
 describe('resolveTarget', () => {
   test('resolves symbolic links in existing parts and keeps the rest', () => {
     assert.equal(resolveTarget(join(root, 'escape', 'new', 'x.txt')), join(outside, 'new', 'x.txt'));
+  });
+
+  // Issue #89: on Windows the drive was walked as a folder, so C:\repo\a.md became C:\\C:\repo\a.md.
+  describe('on Windows', () => {
+    const disk = new Map([
+      ['C:\\', 'C:\\'],
+      ['C:\\Users', 'C:\\Users'],
+      ['C:\\Users\\me', 'C:\\Users\\me'],
+      ['C:\\Users\\me\\repo', 'C:\\Users\\me\\repo'],
+      ['C:\\Users\\me\\link', 'D:\\elsewhere'],
+      ['D:\\', 'D:\\'],
+      ['D:\\elsewhere', 'D:\\elsewhere'],
+      ['\\\\server\\share\\', '\\\\server\\share\\'],
+    ]);
+    const windows = {
+      path: win32,
+      exists: (p) => disk.has(p),
+      realpath: (p) => {
+        if (!disk.has(p)) throw new Error(`ENOENT ${p}`);
+        return disk.get(p);
+      },
+    };
+
+    test('starts from the drive, not from a folder named after it', () => {
+      assert.equal(resolveTarget('C:\\Users\\me\\repo\\a.md', windows), 'C:\\Users\\me\\repo\\a.md');
+    });
+
+    test('accepts forward slashes, dots and new folders', () => {
+      assert.equal(resolveTarget('C:/Users/me/repo/./src/../new/a.md', windows), 'C:\\Users\\me\\repo\\new\\a.md');
+    });
+
+    test('follows a link to another drive', () => {
+      assert.equal(resolveTarget('C:\\Users\\me\\link\\a.md', windows), 'D:\\elsewhere\\a.md');
+    });
+
+    test('keeps a network share as its root', () => {
+      assert.equal(resolveTarget('\\\\server\\share\\dir\\a.md', windows), '\\\\server\\share\\dir\\a.md');
+    });
+
+    test('a file under the root is under it, a sibling folder with the same prefix is not', () => {
+      assert.equal(isUnder('C:\\Users\\me\\repo\\a.md', 'C:\\Users\\me\\repo', win32), true);
+      assert.equal(isUnder('C:\\Users\\me\\repo', 'C:\\Users\\me\\repo', win32), true);
+      assert.equal(isUnder('C:\\Users\\me\\repo2\\a.md', 'C:\\Users\\me\\repo', win32), false);
+      assert.equal(isUnder('C:\\C:\\Users\\me\\repo\\a.md', 'C:\\Users\\me\\repo', win32), false);
+    });
   });
 });
 
