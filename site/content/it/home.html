@@ -151,11 +151,29 @@
       <p style="margin-top: 24px"><a class="arrow" href="{{link:model-router}}">Scopri come funziona <code>model-router</code> →</a></p>
     </div>
     <div class="stack">
-      <figure class="shot">
-        <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>chiamate Agent</span></div>
-        <img src="{{img:mr-agent-lines}}" alt="Tre chiamate Agent, ciascuna con una riga colorata sotto che mostra il modello, la barra dell'effort, l'effort e il motivo della scelta" loading="lazy">
-        <figcaption>Tre chiamate <code>Agent</code>, ciascuna con una riga colorata che mostra modello, barra dell'effort, livello di effort e motivo della scelta.</figcaption>
-      </figure>
+      <div class="tabs">
+        <input type="radio" name="home-lines" id="home-lines-tui" checked><label for="home-lines-tui">Terminale</label>
+        <input type="radio" name="home-lines" id="home-lines-desktop"><label for="home-lines-desktop">App desktop</label>
+        <div class="tab">
+          <figure class="shot">
+            <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>chiamate Agent</span></div>
+            <img src="{{img:mr-agent-lines}}" alt="Tre chiamate Agent, ciascuna con una riga colorata sotto che mostra il modello, la barra dell'effort, l'effort e il motivo della scelta" loading="lazy">
+            <figcaption>Tre chiamate <code>Agent</code>, ciascuna con una riga colorata che mostra modello, barra dell'effort, livello di effort e motivo della scelta.</figcaption>
+          </figure>
+        </div>
+        <div class="tab">
+          <figure class="shot">
+            <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>app desktop di Claude</span></div>
+            <img src="{{img:mr-desktop-agent-lines}}" alt="Nell'app desktop di Claude, chiamate Agent con sotto ciascuna una riga attenuata che dice a parole modello, effort e motivo" loading="lazy">
+            <figcaption>Nell'app desktop di Claude la stessa informazione è una riga sobria, a parole.</figcaption>
+          </figure>
+          <figure class="shot">
+            <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>/model-router</span></div>
+            <img src="{{img:mr-desktop-overview}}" alt="Nell'app desktop di Claude, la card Model routing sulla vista Overview: mappa di calore dei compiti per giorno, cifre principali e decisioni di routing" loading="lazy">
+            <figcaption><code>/model-router</code> nell'app desktop: una card nella conversazione, con le viste scelte da un menu.</figcaption>
+          </figure>
+        </div>
+      </div>
       <div class="metrics">
         <div><span class="k">Successo al primo tentativo</span><span class="v">FPY</span></div>
         <div><span class="k">Tasso di rilavorazione</span><span class="v">↻</span></div>

@@ -33,7 +33,7 @@
   <text x="770" y="376" class="d-cap">write root: prototype/</text>
 
   <!-- you and the sessions -->
-  <g class="d-edge dashed cyan"><path d="M220 81C270 70 310 64 356 64" marker-end="url(#c)"/></g>
+  <g class="d-edge dashed cyan"><path d="M220 81C284 81 292 66 356 66" marker-end="url(#c)"/></g>
   <text x="140" y="32" class="d-elabel ink">reviews the prototype</text>
   <text x="140" y="48" class="d-elabel ink">through the master</text>
   <g class="d-edge cyan"><path d="M148 240C190 250 196 346 226 346" marker-start="url(#c)" marker-end="url(#c)"/></g>
@@ -42,21 +42,21 @@
 
   <!-- the flow -->
   <g class="d-edge strong dashed">
-    <path d="M400 296C400 210 440 160 452 112" marker-end="url(#s)"/>
-    <path d="M850 292C850 170 760 70 624 66" marker-end="url(#s)"/>
+    <path d="M447 296V112" marker-end="url(#s)"/>
+    <path d="M813 296V78Q813 66 801 66H624" marker-end="url(#s)"/>
   </g>
-  <g class="d-edge strong"><path d="M560 108C580 190 690 210 712 292" marker-end="url(#s)"/></g>
+  <g class="d-edge strong"><path d="M533 108V192Q533 200 541 200H719Q727 200 727 208V292" marker-end="url(#s)"/></g>
 
-  <circle cx="404" cy="230" r="12" class="d-fill"/><text x="404" y="235" class="d-num">1</text>
-  <text x="384" y="190" class="d-elabel d-end">tells the master:</text>
-  <text x="384" y="206" class="d-elabel d-end">“the prototype needs</text>
-  <text x="384" y="222" class="d-elabel d-end">the new field”</text>
+  <circle cx="447" cy="230" r="12" class="d-fill"/><text x="447" y="235" class="d-num">1</text>
+  <text x="427" y="190" class="d-elabel d-end">tells the master:</text>
+  <text x="427" y="206" class="d-elabel d-end">“the prototype needs</text>
+  <text x="427" y="222" class="d-elabel d-end">the new field”</text>
 
-  <circle cx="616" cy="184" r="12" class="d-fill"/><text x="616" y="189" class="d-num">2</text>
-  <text x="600" y="226" class="d-elabel d-end">sends a follow-up</text>
-  <text x="600" y="242" class="d-elabel d-end">to the prototype</text>
+  <circle cx="630" cy="200" r="12" class="d-fill"/><text x="630" y="205" class="d-num">2</text>
+  <text x="700" y="228" class="d-elabel d-end">sends a follow-up</text>
+  <text x="700" y="244" class="d-elabel d-end">to the prototype</text>
 
-  <circle cx="820" cy="175" r="12" class="d-fill"/><text x="820" y="180" class="d-num">3</text>
+  <circle cx="813" cy="175" r="12" class="d-fill"/><text x="813" y="180" class="d-num">3</text>
   <text x="906" y="24" class="d-elabel d-end">asks back with a question</text>
   <text x="906" y="40" class="d-elabel d-end">or a request of its own</text>
 

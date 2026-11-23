@@ -96,11 +96,23 @@
 <p>Prima di ogni avvio, l'agente rende esplicita la scelta su una riga — simbolo <code>🔀</code>, modello, barra dell'effort a quattro tacche, livello di effort e motivo in meno di dodici parole:</p>
 <pre><code>🔀 opus ▰▰▰▱ high -&gt; review with unknown cause, going up
 🔀 haiku ▰▱▱▱ low -&gt; mechanical rename, easy to check</code></pre>
-<p>Con la mod attiva, la stessa riga compare a colori sotto ogni chiamata <code>Agent</code>, indicando cosa ha ricevuto davvero il subagent e perché (<code>explicit</code>, <code>fixed</code>, <code>judge: &lt;class&gt;; lowered from opus</code> / <code>raised from</code> / <code>kept</code>, <code>judge: risky work; raised from &lt;tier&gt;</code>, oppure <code>keep: &lt;why&gt;</code>).</p>
-<figure class="shot">
-  <img src="{{img:mr-agent-lines}}" alt="Tre chiamate Agent con sotto ciascuna la riga colorata 🔀 che mostra modello, barra dell&#x27;effort, effort e motivo" loading="lazy">
-  <figcaption>Il modello in grassetto, colorato in base al livello; la barra e l'effort colorati per intensità, dal verde per <code>low</code> al rosso per <code>xhigh</code>; il motivo attenuato. <span class="badge demo">Dati dimostrativi</span></figcaption>
-</figure>
+<p>Con la mod attiva, la stessa riga compare a colori sotto ogni chiamata <code>Agent</code>, indicando cosa ha ricevuto davvero il subagent e perché (<code>explicit</code>, <code>fixed</code>, <code>judge: &lt;class&gt;; lowered from opus</code> / <code>raised from</code> / <code>kept</code>, <code>judge: risky work; raised from &lt;tier&gt;</code>, oppure <code>keep: &lt;why&gt;</code>). Nell'app desktop di Claude è una riga sobria, a parole e con i colori dell'app: <code>Routed to Haiku · low</code> seguito dal motivo.</p>
+<div class="tabs">
+  <input type="radio" name="mr-lines" id="mr-lines-tui" checked><label for="mr-lines-tui">Terminale</label>
+  <input type="radio" name="mr-lines" id="mr-lines-desktop"><label for="mr-lines-desktop">App desktop</label>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-agent-lines}}" alt="Tre chiamate Agent con sotto ciascuna la riga colorata 🔀 che mostra modello, barra dell&#x27;effort, effort e motivo" loading="lazy">
+      <figcaption>Il modello in grassetto, colorato in base al livello; la barra e l'effort colorati per intensità, dal verde per <code>low</code> al rosso per <code>xhigh</code>; il motivo attenuato. <span class="badge demo">Dati dimostrativi</span></figcaption>
+    </figure>
+  </div>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-desktop-agent-lines}}" alt="Nell&#x27;app desktop di Claude, chiamate Agent con sotto ciascuna una riga attenuata: Routed to, modello ed effort, motivo" loading="lazy">
+      <figcaption>Nell'app desktop la riga dice a parole modello, effort e motivo, senza simboli né colori propri.</figcaption>
+    </figure>
+  </div>
+</div>
 <p>Fin qui abbiamo visto le scelte prese a monte. Ma cosa succede quando un subagent parte senza alcun modello specificato? Entra in gioco il judge.</p>
 
 <h2 id="judge">Come funziona il judge</h2>
@@ -269,21 +281,24 @@ listed here follows the grid.
   <li><strong>Aspetta la chiusura della finestra di rilavorazione</strong> (30 minuti dopo il resoconto del subagent, oppure a fine sessione).</li>
   <li><strong>Apri <code>/model-router</code></strong> oppure chiedi il <em>report di model-router</em>. All'apertura la vista esegue la compattazione per un massimo di 3 secondi; premi <code>r</code> per aggiornare.</li>
 </ol>
-<p>Una volta chiusi i primi compiti, puoi consultare i dati dal terminale o nel browser.</p>
+<p>Una volta chiusi i primi compiti, puoi consultare i dati dal terminale, nell'app desktop di Claude o nel browser.</p>
 
 <h2 id="view">La vista d'uso e il report</h2>
-<p>Controllare le metriche non sporca la conversazione né consuma contesto: <code>/model-router</code> apre una vista interattiva simile alle impostazioni di Claude Code, visibile solo a te e mai letta dal modello. Include quattro schede, un intervallo temporale (<code>24h</code>, <code>7d</code>, <code>30d</code>, <code>all</code>) e un livello di osservazione (<code>user</code> o <code>project</code>).</p>
+<p>Controllare le metriche non sporca la conversazione né consuma contesto: quello che <code>/model-router</code> mostra è visibile solo a te e il modello non lo legge mai. Cambia la forma, a seconda di dove lavori: nel terminale si apre una vista interattiva simile alle impostazioni di Claude Code; nell'app desktop di Claude compare una card nella conversazione, disegnata come le card <code>/stats</code> e <code>/context</code> dell'app.</p>
 <table>
   <thead><tr><th>Comando</th><th>Cosa fa</th></tr></thead>
   <tbody>
-    <tr><td><code>/model-router</code></td><td>Apre la vista d'uso su <code>Overview</code>, ultimi 7 giorni, livello utente</td></tr>
-    <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Apre direttamente sulla scheda, finestra e livello indicati, in qualsiasi ordine</td></tr>
+    <tr><td><code>/model-router</code></td><td>Apre la vista d'uso, o la card nell'app desktop, su <code>Overview</code>, ultimi 7 giorni, tutti i progetti</td></tr>
+    <tr><td><code>/model-router [overview|models|classes|decisions] [24h|7d|30d|all] [user|project]</code></td><td>Apre direttamente sulla vista, finestra e livello indicati, in qualsiasi ordine</td></tr>
     <tr><td><code>/model-router on</code>, <code>off</code></td><td>Attiva o disattiva il routing per la sessione corrente</td></tr>
-    <tr><td><code>/model-router report</code></td><td>Genera e apre la pagina HTML del report, stampandone il percorso</td></tr>
+    <tr><td><code>/model-router report</code></td><td>Nel terminale genera la pagina HTML del report, la apre nel browser predefinito e ne stampa il percorso; nell'app desktop apre la card sulla vista Trend</td></tr>
+    <tr><td><code>/model-router log</code></td><td>Nel terminale apre il log degli eventi (<code>events.jsonl</code>) con l'app predefinita del sistema e ne stampa il percorso; nell'app desktop apre la card sulla vista Log</td></tr>
     <tr><td><code>/model-router help</code></td><td>Elenca argomenti e scorciatoie da tastiera</td></tr>
   </tbody>
 </table>
-<p>La scheda <strong>Overview</strong> si apre con quattro riquadri di sintesi:</p>
+
+<h3>Nel terminale</h3>
+<p>La vista ha quattro schede, un intervallo temporale (<code>24h</code>, <code>7d</code>, <code>30d</code>, <code>all</code>) e un livello di osservazione (<code>user</code> o <code>project</code>). La scheda <strong>Overview</strong> si apre con quattro riquadri di sintesi:</p>
 <ul>
   <li><strong>FPY</strong>: 🟢 dall'85%, 🟡 dal 70%, 🔴 sotto;</li>
   <li><strong>Costo per successo</strong>: 🟢 più economico o 🔴 più caro rispetto alla finestra precedente;</li>
@@ -291,32 +306,100 @@ listed here follows the grid.
   <li><strong>Avvii instradati</strong>: <code>↓</code> downgrade, <code>↑</code> upgrade, <code>=</code> mantenuti.</li>
 </ul>
 <p>Se un riquadro si basa su meno di cinque compiti mostra <code>⚪ weak</code>: troppo pochi dati per trarre conclusioni.</p>
-<figure class="shot">
-  <img src="{{img:mr-overview}}" alt="La scheda Overview: stato, riquadri KPI, grafici sparkline, barre FPY per livello ed effort, subagent e decisioni di routing della sessione corrente" loading="lazy">
-  <figcaption>Overview: riquadri KPI, sparkline e barre FPY degli ultimi 7 giorni, seguiti dai subagent e dalle decisioni di questa sessione. <span class="badge demo">Dati dimostrativi</span></figcaption>
-</figure>
-<figure class="shot">
-  <img src="{{img:mr-models}}" alt="La scheda Models: per livello ed effort, compiti chiusi, token, costo, FPY e costo per compito riuscito" loading="lazy">
-  <figcaption>Models: per livello ed effort, compiti chiusi, token, costo, FPY con barra, costo per compito riuscito e ID dei modelli osservati. <span class="badge demo">Dati dimostrativi</span></figcaption>
-</figure>
-<figure class="shot">
-  <img src="{{img:mr-classes}}" alt="La scheda Classes: per classe di attività, scelta della griglia, miglior cella misurata, avvisi e celle" loading="lazy">
-  <figcaption>Classes: per ogni classe di attività, scelta della griglia accanto alla miglior cella misurata, indicatori di segnale debole e singole celle (<code>*</code> indica quella consigliata). <span class="badge demo">Dati dimostrativi</span></figcaption>
-</figure>
-<figure class="shot">
-  <img src="{{img:mr-decisions}}" alt="La scheda Decisions: le ultime dodici decisioni di routing con azione, modello prima e dopo, tipo di subagent e motivo" loading="lazy">
-  <figcaption>Decisions: le ultime dodici decisioni di routing di tutte le sessioni (UTC); <code>•</code> indica quelle della sessione corrente. <span class="badge demo">Dati dimostrativi</span></figcaption>
-</figure>
-<p><strong>Scorciatoie da tastiera</strong> attive appena si apre la vista: <code>Tab</code> e <code>Maiusc+Tab</code> cambiano scheda, <code>↓</code> e <code>↑</code> scorrono la finestra temporale, <code>d</code> <code>w</code> <code>m</code> <code>a</code> la selezionano direttamente, <code>p</code> alterna tra livello utente e progetto, <code>o</code> apre il report, <code>r</code> aggiorna, <code>Esc</code> chiude.</p>
+<p><strong>Scorciatoie da tastiera</strong> attive appena si apre la vista: <code>Tab</code> e <code>Maiusc+Tab</code> cambiano scheda, <code>↓</code> e <code>↑</code> scorrono la finestra temporale, <code>d</code> <code>w</code> <code>m</code> <code>a</code> la selezionano direttamente, <code>p</code> alterna tra livello utente e progetto, <code>o</code> apre il report, <code>l</code> apre il log degli eventi, <code>r</code> aggiorna, <code>Esc</code> chiude.</p>
 <figure class="shot">
   <img src="{{img:mr-help}}" alt="/model-router help: gli argomenti e i tasti della vista d&#x27;uso" loading="lazy">
   <figcaption><code>/model-router help</code>.</figcaption>
 </figure>
-<p>Se preferisci una vista più ampia, la pagina del report presenta gli stessi numeri — calcolati con la stessa aggregazione — accompagnati dall'andamento settimanale e da una scheda per ciascuna classe di attività. Viene salvata in <code>&lt;config dir&gt;/model-router/report.html</code> e aperta in locale.</p>
+
+<h3>Nell'app desktop</h3>
+<p>Nessun pannello si apre accanto alla chat e nessuna pagina si apre da sola: tutto sta in una card, che segue i colori dell'app in chiaro e in scuro. L'intestazione riporta, per la finestra scelta, la quota di compiti riusciti al primo tentativo e il costo per successo; un clic sul titolo richiude la card alla sola intestazione e a una barra con i compiti divisi per modello. A sinistra un menu sceglie la vista; a destra due menu scelgono l'ambito (tutti i progetti o questo) e la finestra temporale.</p>
+<ul>
+  <li><strong>Overview</strong>: una mappa di calore dei compiti per giorno su 22 settimane, le cifre principali, le decisioni di routing per tipo e una frase sulla variazione rispetto al periodo precedente.</li>
+  <li><strong>Models</strong>: una riga per modello, dal blu più scuro di Opus al più chiaro di Haiku, con la quota di compiti; sotto, il successo al primo tentativo, il costo per successo e, per ogni livello di effort, quanti compiti e con quale esito. Segue un grafico dei compiti per giorno, diviso per modello.</li>
+  <li><strong>Task classes</strong> e <strong>Projects</strong>: una riga per classe di attività o per progetto, con le stesse cifre.</li>
+  <li><strong>Decisions</strong>: le decisioni del router per tipo (verso un modello più economico, verso uno più forte, mantenuto, modello indicato nella chiamata); un clic sul nome di un tipo ne mostra le ultime.</li>
+  <li><strong>Trend</strong>: successo al primo tentativo e costo per successo per settimana, come barre. L'ultima riga collega la pagina HTML del report.</li>
+  <li><strong>Log</strong>: i record del log degli eventi per tipo e nel tempo, con gli ultimi di ciascun tipo; l'ultima riga collega <code>events.jsonl</code>. Il testo dei prompt non compare mai.</li>
+</ul>
+<p>Solo la card più recente si aggiorna da sola, man mano che i subagent consegnano il loro resoconto; le precedenti conservano intestazione e barra.</p>
+
+<h3>Le stesse viste, nei due ambienti</h3>
+<p>Overview, Models, Decisions e il report, ciascuno nel terminale e nell'app desktop:</p>
+<div class="tabs">
+  <input type="radio" name="mr-overview" id="mr-overview-tui" checked><label for="mr-overview-tui">Terminale</label>
+  <input type="radio" name="mr-overview" id="mr-overview-desktop"><label for="mr-overview-desktop">App desktop</label>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-overview}}" alt="Nel terminale, la scheda Overview: stato, riquadri KPI, grafici sparkline, barre FPY per livello ed effort, subagent e decisioni di routing della sessione corrente" loading="lazy">
+      <figcaption>Overview: riquadri KPI, sparkline e barre FPY degli ultimi 7 giorni, seguiti dai subagent e dalle decisioni di questa sessione. <span class="badge demo">Dati dimostrativi</span></figcaption>
+    </figure>
+  </div>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-desktop-overview}}" alt="Nell&#x27;app desktop, la card Model routing sulla vista Overview: mappa di calore dei compiti per giorno, cifre principali e decisioni di routing" loading="lazy">
+      <figcaption>La card sulla vista Overview, con la mappa di calore dei compiti per giorno.</figcaption>
+    </figure>
+  </div>
+</div>
+<div class="tabs">
+  <input type="radio" name="mr-models" id="mr-models-tui" checked><label for="mr-models-tui">Terminale</label>
+  <input type="radio" name="mr-models" id="mr-models-desktop"><label for="mr-models-desktop">App desktop</label>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-models}}" alt="Nel terminale, la scheda Models: per livello ed effort, compiti chiusi, token, costo, FPY e costo per compito riuscito" loading="lazy">
+      <figcaption>Models: per livello ed effort, compiti chiusi, token, costo, FPY con barra, costo per compito riuscito e ID dei modelli osservati. <span class="badge demo">Dati dimostrativi</span></figcaption>
+    </figure>
+  </div>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-desktop-models}}" alt="Nell&#x27;app desktop, la vista Models: una riga per modello con la quota di compiti, il dettaglio per livello di effort e i compiti per giorno divisi per modello" loading="lazy">
+      <figcaption>Models: una riga per modello e i compiti per giorno, divisi per modello.</figcaption>
+    </figure>
+  </div>
+</div>
+<div class="tabs">
+  <input type="radio" name="mr-decisions" id="mr-decisions-tui" checked><label for="mr-decisions-tui">Terminale</label>
+  <input type="radio" name="mr-decisions" id="mr-decisions-desktop"><label for="mr-decisions-desktop">App desktop</label>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-decisions}}" alt="Nel terminale, la scheda Decisions: le ultime dodici decisioni di routing con azione, modello prima e dopo, tipo di subagent e motivo" loading="lazy">
+      <figcaption>Decisions: le ultime dodici decisioni di routing di tutte le sessioni (UTC); <code>•</code> indica quelle della sessione corrente. <span class="badge demo">Dati dimostrativi</span></figcaption>
+    </figure>
+  </div>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-desktop-decisions}}" alt="Nell&#x27;app desktop, la vista Decisions: una barra divisa per tipo di decisione, la legenda e le ultime decisioni del tipo aperto" loading="lazy">
+      <figcaption>Decisions: le decisioni per tipo, con le ultime del tipo aperto.</figcaption>
+    </figure>
+  </div>
+</div>
+<div class="tabs">
+  <input type="radio" name="mr-report" id="mr-report-tui" checked><label for="mr-report-tui">Terminale</label>
+  <input type="radio" name="mr-report" id="mr-report-desktop"><label for="mr-report-desktop">App desktop</label>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-report}}" alt="La pagina del report di model-router: andamento settimanale di FPY e costo per compito riuscito, e decisioni del router per azione" loading="lazy">
+      <figcaption>La parte superiore della pagina del report, aperta nel browser. <span class="badge demo">Dati dimostrativi</span></figcaption>
+    </figure>
+  </div>
+  <div class="tab">
+    <figure class="shot">
+      <img src="{{img:mr-desktop-report}}" alt="Nell&#x27;app desktop, la vista Trend: successo al primo tentativo e costo per successo per settimana come barre, con il collegamento alla pagina del report" loading="lazy">
+      <figcaption>La vista Trend, che collega la pagina del report nell'ultima riga.</figcaption>
+    </figure>
+  </div>
+</div>
+<p>La scheda Classes del terminale ha la sua controparte nella vista Task classes. Il log degli eventi, che nel terminale si apre come file, nell'app desktop è la vista Log:</p>
 <figure class="shot">
-  <img src="{{img:mr-report}}" alt="La pagina del report di model-router: andamento settimanale di FPY e costo per compito riuscito, e decisioni del router per azione" loading="lazy">
-  <figcaption>La parte superiore della pagina del report. <span class="badge demo">Dati dimostrativi</span></figcaption>
+  <img src="{{img:mr-desktop-log}}" alt="Nell&#x27;app desktop, la vista Log: i record per tipo in una barra con legenda, i record per giorno e gli ultimi record del tipo aperto" loading="lazy">
+  <figcaption>La vista Log sugli ultimi 7 giorni: i record per tipo e per giorno, e gli ultimi esiti.</figcaption>
 </figure>
+<figure class="shot">
+  <img src="{{img:mr-classes}}" alt="Nel terminale, la scheda Classes: per classe di attività, scelta della griglia, miglior cella misurata, avvisi e celle" loading="lazy">
+  <figcaption>Terminale, scheda Classes: per ogni classe di attività, scelta della griglia accanto alla miglior cella misurata, indicatori di segnale debole e singole celle (<code>*</code> indica quella consigliata). <span class="badge demo">Dati dimostrativi</span></figcaption>
+</figure>
+<p>Se preferisci una vista più ampia, la pagina del report presenta gli stessi numeri, calcolati con la stessa aggregazione, accompagnati dall'andamento settimanale e da una scheda per ciascuna classe di attività. Viene salvata in <code>&lt;config dir&gt;/model-router/report.html</code>: dal terminale si apre nel browser predefinito, nell'app desktop la collega la vista Trend.</p>
 <p>Per capire come si riempiono queste viste nella pratica, seguiamo l'evoluzione dal primo avvio al primo mese.</p>
 
 <h2 id="real-session">Una sessione reale</h2>

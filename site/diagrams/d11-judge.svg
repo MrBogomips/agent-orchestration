@@ -68,7 +68,7 @@
   <text x="490" y="508" class="d-label">Never max</text>
   <g class="d-edge">
     <path d="M160 550V576" marker-end="url(#a)"/>
-    <path d="M685 550C685 564 460 562 460 576" marker-end="url(#a)"/>
+    <path d="M685 550V556Q685 562 679 562H466Q460 562 460 568V576" marker-end="url(#a)"/>
     <path d="M600 616H616" marker-end="url(#a)"/>
   </g>
 

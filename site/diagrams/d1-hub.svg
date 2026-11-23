@@ -21,7 +21,7 @@
   <!-- you and the sessions -->
   <g class="d-edge cyan">
     <path d="M84 204C100 120 200 72 324 72" marker-start="url(#c)" marker-end="url(#c)"/>
-    <path d="M112 282C150 292 170 334 204 334" marker-start="url(#c)" marker-end="url(#c)"/>
+    <path d="M112 282C158 282 158 325 204 325" marker-start="url(#c)" marker-end="url(#c)"/>
   </g>
   <text x="150" y="58" class="d-elabel ink">asks and decides</text>
   <text x="16" y="380" class="d-elabel ink">works hands-on</text>
@@ -39,7 +39,7 @@
   <text x="484" y="158" class="d-elabel">sends it [master] messages</text>
 
   <!-- a child asks the master -->
-  <g class="d-edge dashed strong"><path d="M876 248C876 150 760 64 616 64" marker-end="url(#s)"/></g>
+  <g class="d-edge dashed strong"><path d="M860 250V84Q860 72 848 72H616" marker-end="url(#s)"/></g>
   <text x="906" y="24" class="d-elabel d-end">asks the master for a change</text>
   <text x="906" y="40" class="d-elabel d-end">in another repository</text>
 

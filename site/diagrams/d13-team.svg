@@ -23,9 +23,9 @@
   <text x="460" y="170" class="d-note">keeps the record and the panel</text>
 
   <g class="d-edge strong">
-    <path d="M390 190C390 212 155 206 155 228" marker-start="url(#s)" marker-end="url(#s)"/>
     <path d="M460 190V228" marker-start="url(#s)" marker-end="url(#s)"/>
-    <path d="M530 190C530 212 765 206 765 228" marker-start="url(#s)" marker-end="url(#s)"/>
+    <path d="M460 210H161Q155 210 155 216V228" marker-end="url(#s)"/>
+    <path d="M460 210H759Q765 210 765 216V228" marker-end="url(#s)"/>
   </g>
 
   <!-- design -->

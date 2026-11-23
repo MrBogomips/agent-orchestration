@@ -36,9 +36,10 @@
   <text x="410" y="396" class="d-title">Ask the judge</text>
   <text x="410" y="418" class="d-note">one call to the fast tier, 8 s at most</text>
   <g class="d-edge">
-    <path d="M320 432C320 452 165 446 165 466" marker-end="url(#a)"/>
-    <path d="M440 432V466" marker-end="url(#a)"/>
-    <path d="M520 432C520 452 745 446 745 466" marker-end="url(#a)"/>
+    <path d="M410 432V450"/>
+    <path d="M410 450H181Q175 450 175 456V466" marker-end="url(#a)"/>
+    <path d="M410 450H454Q460 450 460 456V466" marker-end="url(#a)"/>
+    <path d="M460 450H739Q745 450 745 456V466" marker-end="url(#a)"/>
   </g>
   <rect x="40" y="470" width="270" height="56" rx="12" class="d-node"/>
   <text x="175" y="494" class="d-title">Lower the model</text>

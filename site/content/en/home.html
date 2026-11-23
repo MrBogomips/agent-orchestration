@@ -1,10 +1,10 @@
-<!-- translated-from: it/home.html sha256:76e4a0ad23a5 -->
+<!-- translated-from: it/home.html sha256:65b928a4a310 -->
 <section class="hero">
   <div class="wrap hero-grid">
     <div class="hero-copy">
       <p class="eyebrow">Two plugins for Claude Code</p>
       <h1>Multiple sessions. Multiple repositories. <em>The right model for every task.</em></h1>
-      <p class="lede">Work in parallel across multiple repositories without file conflicts and without wasting tokens. <b>session-hub</b> pairs a master session with a child session for each repository — each isolated in its own scope — while you step into the session you know best. <b>model-router</b> assigns the right model and effort to every delegated task and measures on your machine whether the choice paid off on the first try.</p>
+      <p class="lede">Work in parallel across multiple repositories without file conflicts or wasted tokens. <b>session-hub</b> pairs a master session with a dedicated child session for each repository — each isolated within its own scope — while you step into whichever session fits your role best. <b>model-router</b> assigns the right model and effort to every delegated task and measures on your machine whether that choice paid off on the first try.</p>
       <div class="ctas">
         <a class="btn btn-primary" href="{{link:quickstart}}">Get started →</a>
         <a class="btn btn-ghost" href="{{link:scenarios}}">Explore scenarios</a>
@@ -14,7 +14,7 @@
 <span class="prompt">&gt;</span> /plugin install model-router@mrbogomips</code></pre>
     </div>
     <figure class="illus">
-      <img src="{{img:illus-hero}}" alt="Illustration: a master session connected to multiple child sessions in parallel, each working in its own repository">
+      <img src="{{img:illus-hero}}" alt="Illustration: a master session connected to multiple child sessions running in parallel, each working in its own repository">
     </figure>
   </div>
 </section>
@@ -22,23 +22,23 @@
 <section class="band">
   <div class="wrap">
     <p class="eyebrow">What it looks like</p>
-    <h2>The master on the left, child sessions working alongside it.</h2>
-    <p class="sub">Here the master received a task spanning two repositories: it started a child session in each one, side by side, and coordinates their progress. Each child is a full Claude Code session, opened in its own repository with its instructions, skills, and agents already loaded.</p>
+    <h2>The master on the left, child sessions at work beside it.</h2>
+    <p class="sub">Here the master took on a task spanning two repositories: it launched a child session in each one, side by side, and coordinates their progress. Every child session is a full Claude Code session opened directly in its own repository, with its instructions, skills, and agents already loaded.</p>
     <div class="tabs" style="margin-top: 32px">
       <input type="radio" name="home-hub" id="home-hub-herdr" checked><label for="home-hub-herdr">Herdr</label>
       <input type="radio" name="home-hub" id="home-hub-tmux"><label for="home-hub-tmux">tmux</label>
       <div class="tab">
         <figure class="shot">
           <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>herdr · hub</span></div>
-          <img src="{{img:hub-herdr}}" alt="Herdr with the master session on the left and two child sessions on the right, each in its own repository" loading="lazy">
+          <img src="{{img:hub-herdr}}" alt="Herdr showing the master session on the left and two child sessions on the right, each in its own repository" loading="lazy">
           <figcaption>In Herdr: the master on the left, two child sessions on the right. <code>spawn</code> opened their panes, set the role variables, and started each child session with its own handoff.</figcaption>
         </figure>
       </div>
       <div class="tab">
         <figure class="shot">
           <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>tmux · hub</span></div>
-          <img src="{{img:hub-tmux}}" alt="tmux with the master session in the left pane and two child sessions in the right panes" loading="lazy">
-          <figcaption>The same hub in tmux: the first child session opens to the right of the master, the second right below it.</figcaption>
+          <img src="{{img:hub-tmux}}" alt="tmux showing the master session in the left pane and two child sessions in the right panes" loading="lazy">
+          <figcaption>The same hub in tmux: the first child session opens to the right of the master, and the second right below it.</figcaption>
         </figure>
       </div>
     </div>
@@ -52,18 +52,18 @@
     <div class="cards three">
       <article class="card">
         <span class="num">01</span>
-        <h3>One agent for all repositories</h3>
-        <p>Each agent loads the instructions, skills, and definitions from the folder where it starts. If you work on backend, frontend, and documentation from a single session at the hub root, you lose each repository's specific rules.</p>
+        <h3>One agent across all repositories</h3>
+        <p>An agent loads instructions, skills, and definitions from the directory where it starts. If you work across backend, frontend, and docs from a single session at the hub root, you lose each repository's own rules.</p>
       </article>
       <article class="card">
         <span class="num">02</span>
         <h3>Multiple agents, no boundaries</h3>
-        <p>Multiple active sessions end up stepping on each other's toes in the same files. You need real technical boundaries, not just prompt recommendations: who can write where, who can talk to whom, and how to handle out-of-scope requests.</p>
+        <p>Concurrent sessions end up stepping on each other's toes over the same files. You need hard technical boundaries, not polite prompt reminders: who can write where, who can talk to whom, and how out-of-scope requests are handled.</p>
       </article>
       <article class="card">
         <span class="num">03</span>
         <h3>One model for everything</h3>
-        <p>Without a shared rule, every agent launches all subagents with its own model. Trivial lookups run on the most expensive model, while delicate reviews end up on one that is too light and come back to be redone.</p>
+        <p>Without a shared policy, every agent spawns all subagents on its own model. Trivial lookups burn tokens on the most expensive model, while tricky reviews land on a lightweight one and come back needing rework.</p>
       </article>
     </div>
   </div>
@@ -73,26 +73,26 @@
   <div class="wrap feature-grid">
     <div>
       <p class="eyebrow">session-hub</p>
-      <h2>You work in your session. The master coordinates the others in parallel.</h2>
-      <p class="sub">You step directly into the session that concerns you — design, prototype, or code — while the master starts the other child sessions, collects their updates, and routes what none of them can handle alone.</p>
+      <h2>You work in your session. The master coordinates the rest in parallel.</h2>
+      <p class="sub">Jump straight into the session you care about — design, prototype, or code — while the master launches the other child sessions, gathers their updates, and routes anything no single session can handle alone.</p>
       <ul class="ticks">
-        <li><b>Real write boundaries, not recommendations.</b> A hook blocks any edit to files outside the child session's write root, after resolving symlinks and <code>..</code>. It fails closed and explains why.</li>
-        <li><b>Requests go up, never sideways.</b> If a child session needs a change in another repository, it does not touch it: it sends an <code>out-of-scope</code> request to the master.</li>
-        <li><b>Messages, never authorizations.</b> With mods enabled, any message received from another session — including the master — is marked as information, never as an order or an implicit permission.</li>
-        <li><b>Children record and live panel.</b> The master keeps the children record outside the hub; the live panel shows each child's status, model, effort, and last message.</li>
+        <li><b>Hard write boundaries, not suggestions.</b> A hook blocks any file edit outside a child session's write root after resolving symlinks and <code>..</code> segments. It fails closed and explains why.</li>
+        <li><b>Requests go up, never sideways.</b> When a child session needs a change in another repository, it doesn't touch those files — it sends an <code>out-of-scope</code> request up to the master.</li>
+        <li><b>Messages, never permissions.</b> With mods enabled, any message coming from another session — including the master — is tagged strictly as information, never as an implicit command or authorization.</li>
+        <li><b>Live record and panel.</b> The master keeps the child session record outside the hub, while the live panel shows each child session's status, model, effort, and latest message.</li>
       </ul>
       <p style="margin-top: 24px"><a class="arrow" href="{{link:session-hub}}">See how <code>session-hub</code> works →</a></p>
     </div>
     <div class="stack">
       <figure class="shot">
         <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>child sessions panel</span></div>
-        <img src="{{img:sh-panel-live}}" alt="The session-hub child sessions panel next to the master chat, with one row per child session showing status, model, effort, and last message" loading="lazy">
-        <figcaption>The <code>session-hub</code> child sessions panel next to the master chat, with status, model, effort, and last message.</figcaption>
+        <img src="{{img:sh-panel-live}}" alt="The session-hub child sessions panel beside the master chat, with one row per child session showing status, model, effort, and latest message" loading="lazy">
+        <figcaption>The <code>session-hub</code> child sessions panel next to the master chat, showing status, model, effort, and latest message.</figcaption>
       </figure>
       <figure class="shot">
         <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>/session-hub</span></div>
-        <img src="{{img:sh-master}}" alt="The /session-hub command in the master: the child sessions table with status, live status, model, effort, and last message" loading="lazy">
-        <figcaption>The <code>/session-hub</code> command in the master: the child sessions table with status, live status, model, effort, and last message.</figcaption>
+        <img src="{{img:sh-master}}" alt="The /session-hub command in the master: the child sessions table with status, live state, model, effort, and latest message" loading="lazy">
+        <figcaption>The <code>/session-hub</code> command in the master: a table of child sessions with status, live state, model, effort, and latest message.</figcaption>
       </figure>
     </div>
   </div>
@@ -101,38 +101,38 @@
 <section class="band">
   <div class="wrap">
     <p class="eyebrow">Ways of working</p>
-    <h2>Each person in the session they know, one master to coordinate.</h2>
-    <p class="sub">The same operating model scales from a solo practitioner wearing multiple hats to an entire product team. Four concrete scenarios, each with its own repositories, roles, and boundaries.</p>
+    <h2>Everyone in the session they know best, one master coordinating.</h2>
+    <p class="sub">The same operating model scales from a solo practitioner wearing multiple hats to a full product team. Four real-world scenarios, each with its own repositories, roles, and boundaries.</p>
     <div class="cards two">
       <a class="card" href="{{link:scenarios}}#double-hat">
         <span class="num">01</span>
         <h3>Wearing two hats</h3>
-        <p>One person works as both analyst and UI/UX designer: writing the analysis while a child session builds the prototype from it.</p>
-        <span class="arrow">Read the scenario →</span>
+        <p>One person works as both analyst and UI/UX designer, writing the analysis while a child session builds the prototype from it.</p>
+        <span class="arrow">Read scenario →</span>
       </a>
       <a class="card" href="{{link:scenarios}}#three-hats">
         <span class="num">02</span>
         <h3>Developer, analyst, designer</h3>
-        <p>Three repositories (product, design, and prototype), three child sessions in parallel, and one person stepping in where their input is needed.</p>
-        <span class="arrow">Read the scenario →</span>
+        <p>Three repositories (product, design, and prototype), three child sessions in parallel, and one person stepping in wherever human judgment is needed.</p>
+        <span class="arrow">Read scenario →</span>
       </a>
       <a class="card" href="{{link:scenarios}}#pair">
         <span class="num">03</span>
-        <h3>AI pair programming, evolved</h3>
-        <p>Two colleagues, each paired with an agent in their own session, with a master coordinating the work between them.</p>
-        <span class="arrow">Read the scenario →</span>
+        <h3>Next-level AI pair programming</h3>
+        <p>Two teammates, each paired with an agent in their own session, with a master coordinating work between them.</p>
+        <span class="arrow">Read scenario →</span>
       </a>
       <a class="card" href="{{link:scenarios}}#team">
         <span class="num">04</span>
         <h3>The AI-mediated product team</h3>
-        <p>A Product Manager in the master; analyst, architect, and designer on design and prototype; a Builder on the product.</p>
-        <span class="arrow">Read the scenario →</span>
+        <p>A Product Manager in the master; analyst, architect, and designer across design and prototype; a Builder on the product.</p>
+        <span class="arrow">Read scenario →</span>
       </a>
     </div>
     <figure class="shot" style="margin-top: 40px">
       <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>herdr · product team</span></div>
-      <img src="{{img:team-herdr}}" alt="Herdr: the Product Manager's master session presents a decision, with the design, prototype, and product child sessions on the right" loading="lazy">
-      <figcaption>The product team at work in Herdr: the master brings the Product Manager the decisions they own — such as approving an API or merging feature branches — while the design, prototype, and product child sessions wait in their panes on the right.</figcaption>
+      <img src="{{img:team-herdr}}" alt="Herdr: the Product Manager's master session surfacing a decision, with the design, prototype, and product child sessions on the right" loading="lazy">
+      <figcaption>The product team at work in Herdr: the master brings Product Manager decisions — such as approving an API or merging feature branches — to the surface, while the design, prototype, and product child sessions wait in their panes on the right.</figcaption>
     </figure>
   </div>
 </section>
@@ -142,25 +142,43 @@
     <div>
       <p class="eyebrow">model-router</p>
       <h2>The right model for every task, measured in the field.</h2>
-      <p class="sub">Stop picking model and effort by gut feel. A clear grid decides before each launch, and local measurement shows you what it really costs to get a valid result on the first try.</p>
+      <p class="sub">Stop guessing models and effort levels. A clear routing grid decides before every launch, and local tracking shows what it actually costs to get a working result on the first try.</p>
       <ul class="ticks">
-        <li><b>An essential grid.</b> Four model tiers, four effort questions, six task classes. At every launch the agent states the model, effort, and reason for the choice.</li>
-        <li><b>A judge covers what is missing.</b> If a built-in subagent launches without a model, a fast classifier evaluates the task and sets model and effort on the fly. It fails open, leaving the launch unchanged on error.</li>
-        <li><b>Measured, not estimated.</b> First-pass yield (FPY), rework rate, and cost per successful task, broken down by task class, model, and effort.</li>
-        <li><b>Only on your machine.</b> All data stays locally in the Claude Code configuration folder: nothing is written into your repositories.</li>
+        <li><b>A lean routing grid.</b> Four model tiers, four effort questions, six task classes. On every launch, the agent states the model, effort, and reasoning behind the choice.</li>
+        <li><b>A judge fills the gaps.</b> When a built-in subagent starts without a model specified, a fast classifier evaluates the task and sets model and effort on the fly. It fails open, leaving the launch unchanged if an error occurs.</li>
+        <li><b>Measured, not estimated.</b> First-pass yield (FPY), rework rate, and cost per success, broken down by task class, model, and effort.</li>
+        <li><b>Strictly on your machine.</b> All data stays local inside your Claude Code config directory — nothing is ever written to your repositories.</li>
       </ul>
       <p style="margin-top: 24px"><a class="arrow" href="{{link:model-router}}">See how <code>model-router</code> works →</a></p>
     </div>
     <div class="stack">
-      <figure class="shot">
-        <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>Agent calls</span></div>
-        <img src="{{img:mr-agent-lines}}" alt="Three Agent calls, each with a colored line underneath showing the model, effort bar, effort, and reason for the choice" loading="lazy">
-        <figcaption>Three <code>Agent</code> calls, each with a colored line showing the model, effort bar, effort level, and reason for the choice.</figcaption>
-      </figure>
+      <div class="tabs">
+        <input type="radio" name="home-lines" id="home-lines-tui" checked><label for="home-lines-tui">Terminal</label>
+        <input type="radio" name="home-lines" id="home-lines-desktop"><label for="home-lines-desktop">Desktop app</label>
+        <div class="tab">
+          <figure class="shot">
+            <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>Agent calls</span></div>
+            <img src="{{img:mr-agent-lines}}" alt="Three Agent calls, each with a colored line underneath showing the model, effort bar, effort level, and reason for the choice" loading="lazy">
+            <figcaption>Three <code>Agent</code> calls, each with a colored line showing the model, effort bar, effort level, and reason for the choice.</figcaption>
+          </figure>
+        </div>
+        <div class="tab">
+          <figure class="shot">
+            <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>Claude desktop app</span></div>
+            <img src="{{img:mr-desktop-agent-lines}}" alt="In the Claude desktop app, Agent calls each followed by a muted text line stating model, effort, and reason" loading="lazy">
+            <figcaption>In the Claude desktop app, the same details appear as a clean plain-text line.</figcaption>
+          </figure>
+          <figure class="shot">
+            <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>/model-router</span></div>
+            <img src="{{img:mr-desktop-overview}}" alt="In the Claude desktop app, the Model routing card on the Overview view: daily task heatmap, headline metrics, and routing decisions" loading="lazy">
+            <figcaption><code>/model-router</code> in the desktop app: an inline card in the conversation, with views selectable from a menu.</figcaption>
+          </figure>
+        </div>
+      </div>
       <div class="metrics">
         <div><span class="k">First-pass yield</span><span class="v">FPY</span></div>
         <div><span class="k">Rework rate</span><span class="v">↻</span></div>
-        <div><span class="k">Cost per successful task</span><span class="v">$/✓</span></div>
+        <div><span class="k">Cost per success</span><span class="v">$/✓</span></div>
       </div>
     </div>
   </div>
@@ -170,8 +188,8 @@
   <div class="wrap">
     <p class="eyebrow">Architecture</p>
     <h2>Two plugins, one contract.</h2>
-    <p class="sub">You can install and use each plugin completely on its own. When they work together, <code>session-hub</code> relies on <code>model-router</code> to pick the model and effort for each child session, without duplicating rules or cluttering your repositories.</p>
-    <figure class="diagram">{{diagram:d1-hub}}<figcaption>A hub at a glance: the master at the hub root, one child session per repository — each restricted to its own write root — and <code>model-router</code> picking model and effort for every launch.</figcaption></figure>
+    <p class="sub">You can install and run either plugin completely on its own. When used together, <code>session-hub</code> delegates model and effort selection for every child session to <code>model-router</code>, without duplicating rules or cluttering your repositories.</p>
+    <figure class="diagram">{{diagram:d1-hub}}<figcaption>A hub at a glance: the master at the hub root, one child session per repository — each confined to its own write root — and <code>model-router</code> choosing model and effort for every launch.</figcaption></figure>
     <a class="arrow" href="{{link:architecture}}">Explore the architecture →</a>
   </div>
 </section>
@@ -182,13 +200,13 @@
     <h2>Up and running in three steps.</h2>
     <ol class="steps">
       <li><span class="n">1</span><div><h3>Install</h3><p>Add the marketplace and install either plugin or both. All you need is <code>node</code> in your <code>PATH</code>.</p><pre><code>/plugin install session-hub@mrbogomips</code></pre></div></li>
-      <li><span class="n">2</span><div><h3>Configure the hub</h3><p>Open Claude Code at the root of the folder containing your repositories and ask it to set up <code>session-hub</code>.</p><pre><code>set up session-hub for this hub</code></pre></div></li>
-      <li><span class="n">3</span><div><h3>Launch and measure</h3><p>Start a child session in a repository, let the subagents work, and then open the usage view.</p><pre><code>/model-router</code></pre></div></li>
+      <li><span class="n">2</span><div><h3>Configure the hub</h3><p>Open Claude Code at the root of the directory holding your repositories and ask it to set up <code>session-hub</code>.</p><pre><code>set up session-hub for this hub</code></pre></div></li>
+      <li><span class="n">3</span><div><h3>Launch and measure</h3><p>Start a child session in a repository, let the subagents do their work, and open the usage view.</p><pre><code>/model-router</code></pre></div></li>
     </ol>
     <div class="cta-band">
       <div>
         <h2>Every feature, with examples and screenshots.</h2>
-        <p>The user manual covers everything about both plugins: commands, keys, options, a step-by-step worked example, and troubleshooting. For what is new in each release, see the <a class="arrow" href="{{link:changelog}}">Changelog</a>.</p>
+        <p>The user manual covers both plugins end to end: commands, keys, options, a step-by-step walkthrough, and troubleshooting. For release-by-release updates, check the <a class="arrow" href="{{link:changelog}}">Changelog</a>.</p>
       </div>
       <a class="btn btn-primary" href="{{download:user-manual.pdf}}">{{s:cta.manual}}</a>
     </div>
