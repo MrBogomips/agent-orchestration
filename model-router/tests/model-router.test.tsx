@@ -452,6 +452,29 @@ describe('the routing line the model writes', () => {
     on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'intro', scope: 'shared' }] }))
     expect((await $.prompt.compose(COMPOSE as any)).sections.map((s: any) => s.id)).toEqual(['intro'])
   })
+
+  const SKILL = { skill: 'model-router:choose-model', text: 'Pick a model.', frontmatter: {}, source: 'plugin', pluginName: 'model-router' }
+
+  test('where the app draws the line, the choose-model skill itself carries the note (compose may be skipped)', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'] })
+    on('skill.prompt', (_$: any, e: any) => ({ text: e.text }))
+    const { text } = await $.skill.prompt(SKILL as any)
+    expect(text.startsWith('Pick a model.')).toBe(true)
+    expect(text).toContain('Do not write the 🔀 line yourself before an Agent call')
+  })
+
+  test('the note is not added in a terminal, nor to another skill', async ($, on) => {
+    world(on, undefined, { surfaces: ['terminal'] })
+    on('skill.prompt', (_$: any, e: any) => ({ text: e.text }))
+    expect((await $.skill.prompt(SKILL as any)).text).toBe('Pick a model.')
+  })
+
+  test('another plugin\'s skill keeps its text on the desktop app', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'] })
+    on('skill.prompt', (_$: any, e: any) => ({ text: e.text }))
+    const other = { ...SKILL, skill: 'other:choose-model', pluginName: 'other' }
+    expect((await $.skill.prompt(other as any)).text).toBe('Pick a model.')
+  })
 })
 
 describe('measuring', () => {

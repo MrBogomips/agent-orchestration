@@ -34,4 +34,6 @@ export declare function routeReason(input: {
 export declare function lineParts(line: RouteLine, options?: { pad?: boolean }): LineParts
 export declare function plainLine(line: RouteLine, options?: { pad?: boolean }): string
 export declare const DRAWN_LINE_SECTION: Readonly<{ id: string; scope: 'session'; text: string }>
+export declare function withDrawnLineNote(text: string): string
+export declare function isChooseModel(skill: string, pluginName?: string): boolean
 export declare function quietLine(line: RouteLine): { model: string; reason: string }

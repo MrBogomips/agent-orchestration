@@ -10,7 +10,7 @@ import type { ReportCache, RouteLineState, UsageCache, UsageView } from '../type
 import { buildJudgePrompt, parseJudgeAnswer } from '../lib/judge.mjs'
 import { projectId } from '../lib/project-id.mjs'
 import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky, routeCase } from '../lib/route.mjs'
-import { ARROW, DRAWN_LINE_SECTION, EMPTY_COLOR, ROUTE_ICON, lineParts, quietLine, routeReason } from '../lib/route-line.mjs'
+import { ARROW, DRAWN_LINE_SECTION, EMPTY_COLOR, ROUTE_ICON, isChooseModel, lineParts, quietLine, routeReason, withDrawnLineNote } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
 import { failText, logPaths, openPlan, openerArgv, whyNot } from '../lib/open-log.mjs'
@@ -680,6 +680,17 @@ export const register: Register = (on, options) => {
     return { sections: [...sections, { ...DRAWN_LINE_SECTION }] }
   }).catch(($, e, next) => {
     logFailure($, 'prompt.compose', next.error)
+    return next(e)
+  })
+
+  // The same note rides the choose-model skill's own text: a managed mod can skip prompt.compose (spikes.md), and
+  // the skill is what asks for the line in the first place.
+  on('skill.prompt', async ($, e, next) => {
+    if (!isChooseModel(e.skill, e.pluginName)) return next(e)
+    if ((await guarded($, 'skill.prompt', () => hostOf($), 'terminal')) !== 'graphical') return next(e)
+    return next({ ...e, text: withDrawnLineNote(e.text) })
+  }).catch(($, e, next) => {
+    logFailure($, 'skill.prompt', next.error)
     return next(e)
   })
 

@@ -3,6 +3,17 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.4.1
+
+2026-11-23 · pull request #86
+
+### Fixed
+
+- In the Claude desktop app the model no longer writes its own `🔀` routing line, in terminal glyphs, above the
+  Agent calls whose line the app already draws. The note that tells it so now also rides the `choose-model` skill's
+  text: the system prompt section alone was dropped where an organization's managed mod skips user mods'
+  `prompt.compose` hooks. A child session or a workflow still gets the line.
+
 ## model-router 0.4.0
 
 2026-11-23 · pull request #85

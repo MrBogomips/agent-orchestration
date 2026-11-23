@@ -92,6 +92,23 @@ export const DRAWN_LINE_SECTION = Object.freeze({
 });
 
 /**
+ * The same note, appended to the `choose-model` skill's text where the app draws the line. An organization's
+ * managed mod can skip a user mod's `prompt.compose` hook (seen live), and then only the skill carries it.
+ */
+export function withDrawnLineNote(text) {
+  const body = String(text ?? '');
+  if (body.includes(DRAWN_LINE_SECTION.text)) return body;
+  return `${body.replace(/\s+$/, '')}\n\n${DRAWN_LINE_SECTION.text}\n`;
+}
+
+/** Whether a `skill.prompt` event is this plugin's `choose-model` skill. */
+export function isChooseModel(skill, pluginName) {
+  const name = String(skill ?? '');
+  if (pluginName !== undefined && pluginName !== 'model-router') return false;
+  return name === 'model-router:choose-model' || (name === 'choose-model' && pluginName === 'model-router');
+}
+
+/**
  * The line as the desktop app draws it, quiet and in words: `{ model: 'Haiku · low', reason }`. The model and
  * effort are the bright words; the reason loses its leading keyword (`explicit:`, `judge:`, `fixed:`).
  */
