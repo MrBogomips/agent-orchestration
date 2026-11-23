@@ -106,7 +106,8 @@ function outcomeRecord(task, result, now) {
   const learn = result.outcome !== 'cancelled' && cls !== null && cls !== 'unknown' && !spawn.risky && tier !== 'other' && effort !== null;
   return {
     v: 1, type: 'outcome', ts: new Date(now).toISOString(), session: spawn.session, agentId: spawn.agentId,
-    task: taskKey(spawn.session, spawn.agentId), class: cls, tier, model, effort, outcome: result.outcome,
+    task: taskKey(spawn.session, spawn.agentId), class: cls, tier, model, parentModel: spawn.parentModel ?? null,
+    effort, outcome: result.outcome,
     why: result.why.join('; '), weak: task.files.length === 0, learn, explore: false, route: spawn.route ?? null,
     costUsd: typeof report?.costUsd === 'number' ? report.costUsd : null,
     tokens: typeof report?.tokens === 'number' ? report.tokens : null,

@@ -179,6 +179,14 @@ describe('routing a start that carries no model', () => {
     expect(w.appended.find((r) => r.type === 'decision').action).toBe('explicit')
   })
 
+  test('the spawn record names the model of the session that started the subagent', async ($, on) => {
+    const w = world(on)
+    await start($, { model: 'sonnet' }, { model: 'sonnet' })
+    const spawn = w.appended.find((r) => r.type === 'spawn')
+    expect(spawn.model).toBe('sonnet')
+    expect(spawn.parentModel).toBe('claude-opus-5-5')
+  })
+
   test('a fork and an unreadable agent definition are kept', async ($, on) => {
     const w = world(on)
     await start($, { subagent_type: 'fork' }, { subagentType: 'fork', fork: true })

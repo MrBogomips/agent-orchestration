@@ -3,6 +3,15 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.6.0
+
+2026-11-23 · pull request #91
+
+### Added
+
+- The spawn and outcome records of the event log carry `parentModel`, the model of the session that started the
+  subagent, so the log shows which starts ran on a cheaper tier than the one they would have inherited.
+
 ## model-router 0.5.0
 
 2026-11-23 · pull request #90

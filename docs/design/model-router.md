@@ -450,6 +450,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.3.15 | The panes measure their trees against the engine's bounds; the report pane draws large reports in brief. |
 | 0.4.0 | On the desktop app `/model-router` is one card in the transcript, with every view (the report as Trend, the log as Log); the report and log panes are gone. |
 | 0.5.0 | The judge's `frontier` tier: `fable` for open-ended design, at its own confidence bar. |
+| 0.6.0 | The spawn and outcome records name the starting session's model (`parentModel`). |
 | later | Adaptive selection from the quality data (`model-router-quality-loop.md`, which plans it as 0.4). |
 
 ## Open points
