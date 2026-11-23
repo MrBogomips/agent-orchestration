@@ -348,7 +348,7 @@ describe('the choose-model line under an Agent row', () => {
       const ui = await $.ui.mount({ ...AGENT_ROW, surface })
       const drawn = JSON.stringify(await ui.drawn())
       expect(drawn).toMatch(/^\{"type":"Box","props":\{"flexDirection":"column"\},"children":\[\{"type":"engine","ref":\d+\}/)
-      expect(drawn).toContain('{"type":"Text","props":{"size":"footnote","color":"inactive","wrap":"truncate-end"},"children":["Routed to ",{"type":"Text","props":{"weight":"medium","color":"text"},"children":["Haiku · low"]}," ","read-search; lowered from opus"]}')
+      expect(drawn).toContain('{"type":"Text","props":{"size":"footnote","color":"inactive","wrap":"truncate-end"},"children":["Routed to ",{"type":"Text","props":{"weight":"medium","color":"text"},"children":["Haiku · low"]}," · read-search; lowered from opus"]}')
       expect(/[🔀▰▱]|#ececec|#22c55e/.test(drawn)).toBe(false)
       await ui.unmount()
     }
@@ -432,6 +432,25 @@ describe('session start', () => {
     const save = runs.find((r) => String(r.argv.join(' ')).includes('options.json'))
     expect(save.argv).toContain('/home/u/.claude/model-router/options.json')
     expect(JSON.parse(save.init.stdin).reworkWindowMin).toBe(120)
+  })
+})
+
+describe('the routing line the model writes', () => {
+  const COMPOSE = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as const
+
+  test('where the app draws the line, a session section tells the model not to write it before an Agent call', async ($, on) => {
+    world(on, undefined, { surfaces: ['desktop'] })
+    on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'intro', scope: 'shared' }] }))
+    const { sections } = await $.prompt.compose(COMPOSE as any)
+    expect(sections.map((s: any) => s.id)).toEqual(['intro', 'model-router:route-line'])
+    expect(sections[1]?.scope).toBe('session')
+    expect(sections[1]?.text).toContain('Do not write the 🔀 line yourself before an Agent call')
+  })
+
+  test('in a terminal, and where nothing is drawn, the skill keeps its line: no section', async ($, on) => {
+    world(on, undefined, { surfaces: [], env: { CLAUDE_CODE_ENTRYPOINT: 'sdk-cli' } })
+    on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'intro', scope: 'shared' }] }))
+    expect((await $.prompt.compose(COMPOSE as any)).sections.map((s: any) => s.id)).toEqual(['intro'])
   })
 })
 

@@ -103,8 +103,9 @@ For each start, write one line before it: 🔀, the model, an effort bar of four
 🔀 haiku ▰▱▱▱ low -> mechanical rename, easy to check
 ```
 
-With the model-router mod on, the same line is also drawn in colour under the `Agent` call's row, with the model
-and effort the subagent actually got.
+With the model-router mod on, the same line is also drawn under the `Agent` call's row, with the model and effort
+the subagent actually got. Where the system prompt has a model-router section saying that the app draws this line,
+do not write it before an `Agent` call; still write it before a child session or a workflow.
 
 **Subagents.** Pass `model` and `effort` on the start call itself (the `Agent` tool takes both). Begin the
 `description` with the class tag, adding `!` when the start is risky:

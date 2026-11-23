@@ -10,7 +10,7 @@ import type { ReportCache, RouteLineState, UsageCache, UsageView } from '../type
 import { buildJudgePrompt, parseJudgeAnswer } from '../lib/judge.mjs'
 import { projectId } from '../lib/project-id.mjs'
 import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky, routeCase } from '../lib/route.mjs'
-import { ARROW, EMPTY_COLOR, ROUTE_ICON, lineParts, quietLine, routeReason } from '../lib/route-line.mjs'
+import { ARROW, DRAWN_LINE_SECTION, EMPTY_COLOR, ROUTE_ICON, lineParts, quietLine, routeReason } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
 import { failText, logPaths, openPlan, openerArgv, whyNot } from '../lib/open-log.mjs'
@@ -644,7 +644,7 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column">
           {row}
-          <Text size="footnote" color="inactive" wrap="truncate-end">Routed to <Text weight="medium" color="text">{quiet.model}</Text> {quiet.reason}</Text>
+          <Text size="footnote" color="inactive" wrap="truncate-end">Routed to <Text weight="medium" color="text">{quiet.model}</Text>{quiet.reason ? ` · ${quiet.reason}` : ''}</Text>
         </Box>
       )
     }
@@ -667,6 +667,19 @@ export const register: Register = (on, options) => {
     )
   }).catch(($, e, next) => {
     logFailure($, 'ui.render ToolUse', next.error)
+    return next(e)
+  })
+
+  // Where an app draws the session, the line under each Agent row is the mod's, in words; the choose-model skill
+  // would also have the model write its terminal-style line above the row. A session section tells the model that
+  // the line is drawn for it. Without the mod, or in a terminal, there is no section and the skill's line stays.
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+    const sections = composed.sections.filter((s) => s.id !== DRAWN_LINE_SECTION.id)
+    if ((await guarded($, 'prompt.compose', () => hostOf($), 'terminal')) !== 'graphical') return { sections }
+    return { sections: [...sections, { ...DRAWN_LINE_SECTION }] }
+  }).catch(($, e, next) => {
+    logFailure($, 'prompt.compose', next.error)
     return next(e)
   })
 

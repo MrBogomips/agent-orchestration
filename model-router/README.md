@@ -164,7 +164,7 @@ and `/context` cards; no pane opens beside the chat and no page or file opens by
   as bar charts, with the HTML report page linked in its last line; Log, the event log by kind and over time, with
   the latest records of each kind and `events.jsonl` linked in its last line.
 - **Live**: the newest card redraws as subagents report; the few before it keep their header and bar.
-- The line under an Agent call is one quiet line in words: `Routed to Haiku · low read-search; lowered from opus`.
+- The line under an Agent call is one quiet line in words: `Routed to Haiku · low · read-search; lowered from opus`.
 
 The card uses the app's own colours, with Desktop's blue shades per model; the 🔀 icon, the teal accent and the
 model and effort colours are the terminal's.
