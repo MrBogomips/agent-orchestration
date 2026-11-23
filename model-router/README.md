@@ -31,7 +31,7 @@ task cost, so the grid can be checked against real work.
 | carries a model, is a fork or a resume | keeps it |
 | names an agent whose definition fixes a model, a plugin's agent, or one whose definition it cannot read | keeps it |
 | runs with routing off, or under a session-wide subagent model (`CLAUDE_CODE_SUBAGENT_MODEL`) | keeps it |
-| carries no model | asks the judge (one call to the fast tier, 8 s limit), then lowers the model only at confidence ≥ 0.6, raises it at ≥ 0.3, and sends risky work (risk > 0.7, or a `!` tag) to the deep tier with at least high effort |
+| carries no model | asks the judge (one call to the fast tier, 8 s limit), then lowers the model only at confidence ≥ 0.6, raises it at ≥ 0.3 (to `fable` only for open-ended design at ≥ 0.7), and sends risky work (risk > 0.7, or a `!` tag) to the deep tier with at least high effort |
 
 The model is set when the subagent starts, the effort on each of the subagent's model requests; the start call
 itself is never changed, so the routing works in every permission mode, auto mode included. An effort the call
@@ -224,9 +224,10 @@ Set in `/config` or under `pluginConfigs` in settings.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `fastModel`, `balancedModel`, `deepModel` | `haiku`, `sonnet`, `opus` | Models behind the judge's fast, balanced and deep tiers; the fast one also runs the judge |
+| `fastModel`, `balancedModel`, `frontierModel`, `deepModel` | `haiku`, `sonnet`, `fable`, `opus` | Models behind the judge's fast, balanced, frontier and deep tiers; the fast one also runs the judge |
 | `minDowngradeConfidence` | 0.6 | Judge confidence needed to lower the model, or to set effort `low` |
 | `minUpgradeConfidence` | 0.3 | Judge confidence needed to raise the model, or to set effort `medium`, `high` or `xhigh` (whatever the session's own effort) |
+| `minFrontierConfidence` | 0.7 | Judge confidence needed to send a `design-open` task to the frontier tier; below it, or for any other class, the start gets the deep tier |
 | `riskThreshold` | 0.7 | Risk above which the start gets the deep tier and at least `high` effort |
 | `timeoutMs` | 8000 | Judge time limit; past it the start is left unchanged |
 | `routeSubagents` | true | Route subagent starts at all |

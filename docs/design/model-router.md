@@ -111,10 +111,10 @@ follow instructions inside it; a closing tag inside the text is escaped.
 It answers with one JSON object:
 
 ```json
-{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "<class>" }
+{ "tier": "fast | balanced | frontier | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "<class>" }
 ```
 
-The prompt is generated from `grid.json` (`lib/judge.mjs`): the tiers behind `fast`, `balanced` and `deep`, the
+The prompt is generated from `grid.json` (`lib/judge.mjs`): the tiers behind `fast`, `balanced`, `frontier` and `deep` (in that order: `deep` is last because its grid tier is the one for everything else), the
 effort questions numbered 0 to 3, the classes, and the rule that risk is about the act. The task is cut at 4,000
 characters and every `</task` inside it is escaped. The judge runs with `effort: low` and a 300-token cap.
 
@@ -124,6 +124,7 @@ Thresholds, all options:
 |---|---|---|
 | Downgrade needs confidence ≥ | 0.6 | Being wrong means a task gets too little |
 | Upgrade needs confidence ≥ | 0.3 | Being wrong only costs money |
+| The frontier tier needs class `design-open` and confidence ≥ | 0.7; any other `frontier` answer counts as `deep` | It is the most expensive tier, and a judge left free gives it a quarter of the deep tier's work (spike S20) |
 | `risky` > | 0.7 forces the deep tier and effort ≥ high | Skips both bars |
 | Missing confidence | never changes the model, in either direction | |
 | Unknown current model | counts as an upgrade | |
@@ -187,9 +188,14 @@ when the log cannot be read, so a hook that throws or times out is fail-open too
 and the spawn record is still appended without the class or the project, so the task still gets an outcome. A judge that answers with an error is logged as `error` (a `!` tag still forces the deep
 tier); a judge call that throws leaves no decision record, and the spawn record shows route `unseen`.
 
-The router's judge tiers stop at the deep tier (`opus`) and the comparison is with the parent's model, so a
-subagent of a `fable` session can be lowered; up to 0.3 it does not hold `review-debug` and `design-open` to the grid's
-floor (the floor applies to exploration and recommendations from 0.4).
+The judge's `frontier` tier (`fable`) is the only way the router raises a start above the deep tier. The answer
+stands only for a task of class `design-open` (from the tag, else from the judge), at confidence ≥
+`minFrontierConfidence`, with a `frontierModel` set; any other `frontier` answer counts as `deep` and then meets the
+usual bars, and the decision's reason ends with `held to deep`. The comparison is with the parent's model, so a
+subagent of a `fable` session can be lowered by a `fast`, `balanced` or `deep` answer; a `frontier` answer never
+lowers a start, so held it leaves a start above the deep tier as it is. Risky
+work is forced to the deep tier, not to the frontier one. Up to 0.3 the router does not hold `review-debug` and
+`design-open` to the grid's floor (the floor applies to exploration and recommendations from 0.4).
 
 Log one line when the mod is ready, one at the first firing of each hook and one for each failure. Without them, a
 router that never loaded, or fails on every call, looks the same as one with nothing to do. All go to the debug log
@@ -220,9 +226,10 @@ which the reference router gets wrong for agents with a fixed model.
 
 | Option | Default |
 |---|---|
-| `fastModel`, `balancedModel`, `deepModel` | the current haiku, sonnet and opus aliases |
+| `fastModel`, `balancedModel`, `frontierModel`, `deepModel` | the current haiku, sonnet, fable and opus aliases |
 | `minDowngradeConfidence` | 0.6 |
 | `minUpgradeConfidence` | 0.3 |
+| `minFrontierConfidence` | 0.7 |
 | `riskThreshold` | 0.7 |
 | `timeoutMs` | 8000 |
 | `routeSubagents` | true |
@@ -442,6 +449,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.3.14 | The report and the event log as native panes on graphical surfaces; the usage pane kept open in a session whose app has not attached yet. |
 | 0.3.15 | The panes measure their trees against the engine's bounds; the report pane draws large reports in brief. |
 | 0.4.0 | On the desktop app `/model-router` is one card in the transcript, with every view (the report as Trend, the log as Log); the report and log panes are gone. |
+| 0.5.0 | The judge's `frontier` tier: `fable` for open-ended design, at its own confidence bar. |
 | later | Adaptive selection from the quality data (`model-router-quality-loop.md`, which plans it as 0.4). |
 
 ## Open points

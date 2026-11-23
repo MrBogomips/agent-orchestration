@@ -124,7 +124,7 @@
 <h3>La chiamata e la risposta</h3>
 <p>Il router effettua una sola chiamata al livello <code>fast</code> (opzione <code>fastModel</code>, predefinita su <code>haiku</code>), con effort <code>low</code>, un tetto di 300 token di output e un timeout di 8 secondi (<code>timeoutMs</code>). La chiamata passa dal client della tua sessione come un normale subagent ed è conteggiata nel costo della sessione.</p>
 <p>Il judge restituisce un singolo oggetto JSON:</p>
-<pre><code>{ "tier": "fast | balanced | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "&lt;class&gt;" }</code></pre>
+<pre><code>{ "tier": "fast | balanced | frontier | deep", "confidence": 0.0, "effort": 0, "effort_confidence": 0.0, "risky": 0.0, "class": "&lt;class&gt;" }</code></pre>
 <h3>Come decide il router</h3>
 <p>Sbagliare per difetto rovina il risultato; sbagliare per eccesso costa solo un po' di più. Per questo le soglie decisionali sono asimmetriche:</p>
 <table>
@@ -136,7 +136,7 @@
     <tr><td><code>confidence</code> mancante</td><td>—</td><td>Non cambia mai il modello, in nessuna direzione</td></tr>
   </tbody>
 </table>
-<p>Il confronto avviene sempre rispetto al modello della sessione padre. Anche l'effort cambia solo quando <code>effort_confidence</code> supera la soglia (quella di abbassamento per <code>low</code>, quella di innalzamento per i livelli superiori). Se la chiamata porta già un effort esplicito, viene mantenuto, e <code>max</code> non viene mai impostato. Infine, i livelli del judge arrivano al massimo a <code>deep</code> (<code>opus</code>), quindi il router non sceglie mai <code>fable</code>.</p>
+<p>Il confronto avviene sempre rispetto al modello della sessione padre. Anche l'effort cambia solo quando <code>effort_confidence</code> supera la soglia (quella di abbassamento per <code>low</code>, quella di innalzamento per i livelli superiori). Se la chiamata porta già un effort esplicito, viene mantenuto, e <code>max</code> non viene mai impostato. Infine, il livello <code>frontier</code> (<code>fable</code>) vale solo per la classe <code>design-open</code> e con una confidenza di almeno 0,7 (<code>minFrontierConfidence</code>): in ogni altro caso la risposta conta come <code>deep</code> (<code>opus</code>). Il lavoro rischioso va sempre al livello <code>deep</code>.</p>
 <h3>Quando fallisce</h3>
 <p>In caso di errore il router <strong>lascia passare</strong>. Un guasto del judge, un timeout o una risposta illeggibile lasciano l'avvio invariato e registrano un <code>error</code>; fa eccezione un avvio marcato con <code>!</code>, che passa comunque al livello <code>deep</code>. Ogni decisione viene registrata con la sua azione: <code>downgrade</code>, <code>upgrade</code>, <code>keep</code>, <code>explicit</code>, <code>forced-risk</code> o <code>error</code>.</p>
 <p>Le impostazioni predefinite funzionano bene nella maggior parte dei casi, ma ogni repository ha le sue eccezioni: vediamo come configurarle.</p>
@@ -175,9 +175,10 @@ listed here follows the grid.
 <table>
   <thead><tr><th>Opzione</th><th>Predefinito</th><th>Significato</th></tr></thead>
   <tbody>
-    <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>opus</code></td><td>Modelli associati ai livelli <code>fast</code>, <code>balanced</code> e <code>deep</code> del judge; <code>fastModel</code> esegue anche il judge</td></tr>
+    <tr><td><code>fastModel</code>, <code>balancedModel</code>, <code>frontierModel</code>, <code>deepModel</code></td><td><code>haiku</code>, <code>sonnet</code>, <code>fable</code>, <code>opus</code></td><td>Modelli associati ai livelli <code>fast</code>, <code>balanced</code>, <code>frontier</code> e <code>deep</code> del judge; <code>fastModel</code> esegue anche il judge</td></tr>
     <tr><td><code>minDowngradeConfidence</code></td><td><code>0,6</code></td><td>Confidenza necessaria per abbassare il modello o impostare effort <code>low</code></td></tr>
     <tr><td><code>minUpgradeConfidence</code></td><td><code>0,3</code></td><td>Confidenza necessaria per alzare il modello o impostare effort <code>medium</code>, <code>high</code> o <code>xhigh</code></td></tr>
+    <tr><td><code>minFrontierConfidence</code></td><td><code>0,7</code></td><td>Confidenza necessaria per mandare un'attività <code>design-open</code> al livello <code>frontier</code>; sotto la soglia, o per un'altra classe, l'avvio riceve il livello <code>deep</code></td></tr>
     <tr><td><code>riskThreshold</code></td><td><code>0,7</code></td><td>Soglia di rischio oltre la quale l'avvio riceve il livello <code>deep</code> e almeno effort <code>high</code></td></tr>
     <tr><td><code>timeoutMs</code></td><td><code>8.000</code></td><td>Tempo massimo per il judge; superato il limite, l'avvio resta invariato</td></tr>
     <tr><td><code>routeSubagents</code></td><td><code>true</code></td><td>Attiva o disattiva del tutto il routing degli avvii dei subagent</td></tr>
@@ -464,7 +465,7 @@ listed here follows the grid.
 <p>Quattro limiti della versione attuale da tenere presenti:</p>
 <ul>
   <li>Vengono instradati solo gli avvii effettuati tramite lo strumento <code>Agent</code>; gli agenti interni ai plugin e gli agenti di workflow vengono misurati, ma non instradati.</li>
-  <li>Il router non sceglie mai <code>fable</code> e, fino alla versione <code>0.3</code>, non impone il minimo previsto dalla griglia per <code>review-debug</code> e <code>design-open</code>.</li>
+  <li>Il router sceglie <code>fable</code> solo per la classe <code>design-open</code> e, fino alla versione <code>0.3</code>, non impone il minimo previsto dalla griglia per <code>review-debug</code> e <code>design-open</code>.</li>
   <li>I costi sono stime del motore; le modifiche fatte fuori dagli strumenti della sessione non vengono rilevate.</li>
   <li>Fino alla versione <code>0.3</code> i dati vengono solo misurati, non usati per decidere. La selezione adattiva basata sui dati di qualità è prevista per la <code>0.4</code>.</li>
 </ul>

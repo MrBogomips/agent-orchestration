@@ -24,7 +24,7 @@ const EXPECTED_CLASSES = [
   'review-debug',
   'design-open',
 ];
-const EXPECTED_JUDGE = { fast: 'haiku', balanced: 'sonnet', deep: 'opus' };
+const EXPECTED_JUDGE = { fast: 'haiku', balanced: 'sonnet', frontier: 'fable', deep: 'opus' };
 
 function loadGrid() {
   return JSON.parse(readFileSync(GRID_PATH, 'utf8'));
@@ -142,7 +142,7 @@ test('every class names the grid choice the quality loop uses as its prior', () 
   }
 });
 
-test('the judge maps fast, balanced and deep onto tiers', () => {
+test('the judge maps fast, balanced, frontier and deep onto tiers', () => {
   const { judge, tiers } = loadGrid();
   assert.deepEqual(judge, EXPECTED_JUDGE);
   const names = tiers.map((t) => t.name);

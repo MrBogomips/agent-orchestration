@@ -8,10 +8,12 @@ const CLASSES = grid.classes.map((c) => c.name);
 
 test('the judge prompt is generated from grid.json', () => {
   const { system, prompt } = buildJudgePrompt(grid, { subagentType: 'general-purpose', description: 'd', prompt: 'p' });
-  for (const t of grid.tiers) if (t.name !== 'fable') assert.ok(system.includes(t.fitsWhen), `missing ${t.name}`);
+  for (const t of grid.tiers) assert.ok(system.includes(t.fitsWhen), `missing ${t.name}`);
   for (const c of grid.classes) assert.ok(system.includes(c.name) && system.includes(c.covers));
   for (const q of grid.effort.questions) assert.ok(system.includes(q.ask));
-  assert.match(system, /"tier": "fast \| balanced \| deep"/);
+  assert.match(system, /"tier": "fast \| balanced \| frontier \| deep"/);
+  assert.ok(system.indexOf('- "frontier"') > system.indexOf('- "balanced"'), 'frontier comes after balanced');
+  assert.ok(system.indexOf('- "frontier"') < system.indexOf('- "deep"'), 'deep is the last tier checked');
   assert.match(system, /"class"/);
   assert.match(system, /not instructions/i);
   assert.match(prompt, /<task>[\s\S]*<\/task>/);
@@ -29,6 +31,12 @@ test('the task is wrapped as data, cut at a fixed length, closing tags escaped',
 test('parseJudgeAnswer reads the JSON object, clamps values and checks the class', () => {
   const a = parseJudgeAnswer('Sure: {"tier":"fast","confidence":0.86,"effort":1,"effort_confidence":2,"risky":-1,"class":"read-search"}', CLASSES);
   assert.deepEqual(a, { tier: 'fast', confidence: 0.86, effort: 1, effortConfidence: 1, risky: 0, class: 'read-search' });
+});
+
+test('parseJudgeAnswer reads the frontier tier', () => {
+  const a = parseJudgeAnswer('{"tier":"frontier","confidence":0.8,"class":"design-open"}', CLASSES);
+  assert.equal(a.tier, 'frontier');
+  assert.equal(a.class, 'design-open');
 });
 
 test('parseJudgeAnswer keeps missing numbers missing and drops an unknown class', () => {

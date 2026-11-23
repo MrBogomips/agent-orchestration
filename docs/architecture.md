@@ -730,7 +730,8 @@ built-in type other than `general-purpose` and `Explore`, a file under the type'
 agent's `name`) are kept. The judge is one call to the fast tier (8 s
 limit) with a prompt generated from `grid.json`; the task is wrapped as data with closing tags escaped. A
 downgrade needs confidence 0.6, an upgrade 0.3; risk above 0.7 (or a `!` in the class tag) forces the deep tier
-and at least `high` effort. The judge's tiers stop at `opus`, so the router never picks `fable`, and up to 0.3 it does
+and at least `high` effort. The judge's `frontier` tier sends a start to `fable` only for `design-open` work at confidence 0.7; any other
+`frontier` answer counts as the deep tier. Up to 0.3 the router does
 not hold `review-debug` and `design-open` to the grid's floor.
 
 ### The quality loop (measuring only up to 0.3)

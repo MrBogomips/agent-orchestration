@@ -26,8 +26,9 @@ const GRID = {
   classes: [
     { name: 'read-search', covers: 'find things', neverBelowGrid: false, default: { tier: 'haiku', effort: 'low' } },
     { name: 'edit-specified', covers: 'a clear change', neverBelowGrid: false, default: { tier: 'sonnet', effort: 'medium' } },
+    { name: 'design-open', covers: 'open design', neverBelowGrid: true, default: { tier: 'fable', effort: 'high' } },
   ],
-  judge: { fast: 'haiku', balanced: 'sonnet', deep: 'opus' },
+  judge: { fast: 'haiku', balanced: 'sonnet', frontier: 'fable', deep: 'opus' },
 }
 
 const FAST_ANSWER = '{"tier":"fast","confidence":0.9,"effort":0,"effort_confidence":0.9,"risky":0.05,"class":"read-search"}'
@@ -212,6 +213,35 @@ describe('routing a start that carries no model', () => {
     expect(w.steps[0].effort).toBe('high')
     expect(w.spawns[0].model).toBe('opus')
     expect(w.appended.find((r) => r.type === 'decision').action).toBe('forced-risk')
+  })
+
+  test('a confident frontier answer for open design raises the start to the frontier tier', async ($, on) => {
+    const w = world(on, () => ({ value: { isAnswered: true, text: '{"tier":"frontier","confidence":0.8,"effort":2,"effort_confidence":0.8,"risky":0.05,"class":"design-open"}', usage: {} } }))
+    await start($)
+    expect(w.spawns[0].model).toBe('fable')
+    const decision = w.appended.find((r) => r.type === 'decision')
+    expect(decision.action).toBe('upgrade')
+    expect(decision.judge.tier).toBe('frontier')
+  })
+
+  test('a frontier answer for another class is held to the deep tier', async ($, on) => {
+    const w = world(on, () => ({ value: { isAnswered: true, text: '{"tier":"frontier","confidence":0.9,"effort":2,"effort_confidence":0.8,"risky":0.05,"class":"edit-specified"}', usage: {} } }))
+    await start($, {}, { parentModel: 'claude-sonnet-5-5' })
+    expect(w.spawns[0].model).toBe('opus')
+    expect(w.appended.find((r) => r.type === 'decision').reason).toBe('judge: frontier at 0.9, held to deep')
+  })
+
+  test('the class of the tag, not the judge\'s, decides whether a frontier answer stands', async ($, on) => {
+    const answer = (cls: string) => () => ({ value: { isAnswered: true, text: `{"tier":"frontier","confidence":0.9,"effort":2,"effort_confidence":0.8,"risky":0.05,"class":"${cls}"}`, usage: {} } })
+    const tagged = world(on, answer('edit-specified'))
+    await start($, { description: '[mr:design-open] Design the sync protocol' }, { description: '[mr:design-open] Design the sync protocol' })
+    expect(tagged.spawns[0].model).toBe('fable')
+  })
+
+  test('a frontier answer for a start tagged with another class is held, whatever class the judge names', async ($, on) => {
+    const w = world(on, () => ({ value: { isAnswered: true, text: '{"tier":"frontier","confidence":0.9,"effort":2,"effort_confidence":0.8,"risky":0.05,"class":"design-open"}', usage: {} } }))
+    await start($, { description: '[mr:edit-specified] Rename the flag' }, { description: '[mr:edit-specified] Rename the flag', parentModel: 'claude-sonnet-5-5' })
+    expect(w.spawns[0].model).toBe('opus')
   })
 
   test('a risky ! tag counts even when its class is unknown or the tag is not exact', async ($, on) => {

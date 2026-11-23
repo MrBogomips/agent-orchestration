@@ -265,7 +265,7 @@ the three tiers,
 the four effort questions,
 the six task classes,
 and: risk is about the act
-fast · balanced · deep
+fast · balanced · frontier · deep
 One judge call
 to the fast tier,
 at low effort,

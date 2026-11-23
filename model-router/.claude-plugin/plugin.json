@@ -1,6 +1,6 @@
 {
   "name": "model-router",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Picks the model and the effort level for sessions and subagents with one written grid, routes subagent starts that carry no model, and measures locally how well each choice worked",
   "author": {
     "name": "MrBogomips",
@@ -33,6 +33,13 @@
       "required": false,
       "default": "sonnet"
     },
+    "frontierModel": {
+      "type": "string",
+      "title": "Frontier tier model",
+      "description": "Model behind the frontier tier (grid tier fable); only open-ended design the judge is sure of goes here.",
+      "required": false,
+      "default": "fable"
+    },
     "deepModel": {
       "type": "string",
       "title": "Deep tier model",
@@ -53,6 +60,13 @@
       "description": "The judge's confidence needed to raise a subagent's model, or to set effort medium, high or xhigh (0 to 1).",
       "required": false,
       "default": 0.3
+    },
+    "minFrontierConfidence": {
+      "type": "number",
+      "title": "Confidence for the frontier tier",
+      "description": "The judge's confidence needed to send open-ended design to the frontier tier (0 to 1); below it the start gets the deep tier.",
+      "required": false,
+      "default": 0.7
     },
     "riskThreshold": {
       "type": "number",

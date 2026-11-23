@@ -260,8 +260,8 @@ user was away; the user may change any of them.
    person types after the report, and either name a file the subagent wrote or reach `similarityThreshold`
    against the subagent's description. Any other prompt is not a signal.
 2. **Tiers are the four model families, ordered by price: `haiku` < `sonnet` < `opus` < `fable`.** "One step away"
-   follows this order. The judge's three tiers map to `fast` = `haiku`, `balanced` = `sonnet`, `deep` = `opus`;
-   `fable` is reached only by the grid or an explicit choice. A full model id maps to its family; an id outside
+   follows this order. The judge's four tiers map to `fast` = `haiku`, `balanced` = `sonnet`, `frontier` = `fable`, `deep` = `opus`;
+   the judge reaches `fable` only for `design-open` work, at its own confidence bar (`model-router.md`). A full model id maps to its family; an id outside
    the four families is logged as `other` and not learned. A cell also stores the model id it was measured on:
    when the model behind an alias changes, a new cell starts with the old cell's counts halved as its prior.
    A start without an effort is learned under the session's effective effort when the mod can read it, and is

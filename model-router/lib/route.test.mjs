@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { routeCase, definitionCase, isRisky, decideEffort, decideModel } from './route.mjs';
 
-const OPTS = { minDowngradeConfidence: 0.6, minUpgradeConfidence: 0.3, riskThreshold: 0.7 };
-const MODELS = { fast: 'haiku', balanced: 'sonnet', deep: 'opus' };
+const OPTS = { minDowngradeConfidence: 0.6, minUpgradeConfidence: 0.3, minFrontierConfidence: 0.7, riskThreshold: 0.7 };
+const MODELS = { fast: 'haiku', balanced: 'sonnet', frontier: 'fable', deep: 'opus' };
 const base = { subagentType: 'general-purpose', enabled: true, routeSubagents: true, definition: 'inherit' };
 
 test('routeCase: the call that carries a model keeps it', () => {
@@ -90,6 +90,33 @@ test('decideModel: the same tier keeps; risky forces the deep tier past both bar
     decideModel({ judge: { tier: 'fast', confidence: 0.1 }, current: 'haiku', risky: true, options: OPTS, models: MODELS }),
     { action: 'forced-risk', model: 'opus', reason: 'risky work: deep tier' },
   );
+});
+
+const frontier = (confidence, cls, current) =>
+  decideModel({ judge: { tier: 'frontier', confidence }, cls, current, risky: false, options: OPTS, models: MODELS });
+
+test('decideModel: the frontier tier needs the design-open class and its own bar', () => {
+  assert.deepEqual(frontier(0.7, 'design-open', 'claude-opus-5-5'), { action: 'upgrade', model: 'fable', reason: 'judge: frontier at 0.7' });
+  assert.equal(frontier(0.9, 'design-open', 'claude-fable-5-2').action, 'keep');
+});
+
+test('decideModel: a frontier answer below its bar or for another class counts as deep', () => {
+  assert.deepEqual(frontier(0.6, 'design-open', 'sonnet'), { action: 'upgrade', model: 'opus', reason: 'judge: frontier at 0.6, held to deep' });
+  assert.deepEqual(frontier(0.9, 'review-debug', 'opus'), { action: 'keep', reason: 'judge: frontier at 0.9, held to deep' });
+  assert.deepEqual(frontier(0.9, null, 'haiku'), { action: 'upgrade', model: 'opus', reason: 'judge: frontier at 0.9, held to deep' });
+  assert.equal(frontier(null, 'design-open', 'opus').action, 'keep');
+});
+
+test('decideModel: a frontier answer never lowers a start that is above the deep tier', () => {
+  assert.deepEqual(frontier(0.9, 'review-debug', 'claude-fable-5-2'), { action: 'keep', reason: 'judge: frontier at 0.9, held to deep' });
+  assert.equal(frontier(0.65, 'design-open', 'claude-fable-5-2').action, 'keep');
+  const deep = decideModel({ judge: { tier: 'deep', confidence: 0.65 }, cls: 'design-open', current: 'claude-fable-5-2', risky: false, options: OPTS, models: MODELS });
+  assert.equal(deep.action, 'downgrade');
+});
+
+test('decideModel: without a frontier model a frontier answer counts as deep', () => {
+  const d = decideModel({ judge: { tier: 'frontier', confidence: 0.9 }, cls: 'design-open', current: 'sonnet', risky: false, options: OPTS, models: { ...MODELS, frontier: '' } });
+  assert.deepEqual(d, { action: 'upgrade', model: 'opus', reason: 'judge: frontier at 0.9, held to deep' });
 });
 
 test('decideModel: a fable parent is never lowered below the deep tier by a forced risk', () => {
