@@ -20,7 +20,7 @@ task cost, so the grid can be checked against real work.
 | `model-router:setup` | skill | Writes or updates a *Model routing* section in the project's instruction file, `AGENTS.md` or else `CLAUDE.md`, with defaults and exceptions per kind of work or task class, only after the user says yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs`: compacts the quality data, writes a self-contained page and opens it. |
 | `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model. Draws under each `Agent` call the model and effort the subagent actually got, in colour (see [The choose-model line](#the-choose-model-line)). Records decisions, starts, signals and reports. Fails open. |
-| `/model-router` | command | In a terminal, the usage view: a dialog with four tabs (Overview, Models, Classes, Decisions), or the same rows as text where no pane fits. In the Claude desktop app, the Model routing card in the conversation. `on` and `off` switch routing for the session. See [Commands](#commands). |
+| `/model-router` | command | In a terminal, the usage view: a dialog with five tabs (Overview, Models, Classes, Decisions, Savings), or the same rows as text where no pane fits. In the Claude desktop app, the Model routing card in the conversation. `on` and `off` switch routing for the session. See [Commands](#commands). |
 | `grid.json` | data | The grid in machine-readable form, with each class's usual choice. The judge's prompt is generated from it; `grid.test.mjs` fails when it and the skills drift apart. |
 | `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes the outcome of each task and keeps aggregates per user and per project; the report renders them; `usage.mjs` gives `/model-router` its data. The page and the command share one aggregation (`lib/usage-data.mjs`), so their numbers agree. |
 
@@ -97,7 +97,7 @@ does not read it.
 | Command | Does |
 |---|---|
 | `/model-router` | Opens the usage view on Overview, last 7 days, user level |
-| `/model-router [overview\|models\|classes\|decisions] [24h\|7d\|30d\|all] [user\|project]` | Opens it on that tab, window and level, in any order (`stats` works as `classes`) |
+| `/model-router [overview\|models\|classes\|decisions\|savings] [24h\|7d\|30d\|all] [user\|project]` | Opens it on that tab, window and level, in any order (`stats` works as `classes`) |
 | `/model-router on`, `/model-router off` | Turns routing on or off for this session |
 | `/model-router report` | Opens the report: in a terminal it writes the report page and opens it in the system's default browser, printing where it opened; in the Claude desktop app it opens the card on Trend, whose last line links the page |
 | `/model-router log` | Opens the event log (`events.jsonl`): in a terminal, the file in the system's default app, printing its path; in the Claude desktop app, the card on Log, whose last line links the file |
@@ -106,14 +106,14 @@ does not read it.
 ### The usage view
 
 A dialog pane laid out like Claude Code's own Settings dialog (`/usage`, `/stats`): a header row with 🔀 and the
-four tabs, a second row with the window (24h, 7d, 30d, all) and the level (user or project), the content, and a
+five tabs, a second row with the window (24h, 7d, 30d, all) and the level (user or project), the content, and a
 footer of key hints. The active tab and window are drawn as a teal block; the KPI tile borders share the teal.
 
 That is the terminal's rendering. In the Claude desktop app (and the editor and mobile apps) see
 [The card in the Claude desktop app](#the-card-in-the-claude-desktop-app) below.
 
 ```text
-🔀 model-router [Overview]  Models   Classes   Decisions
+🔀 model-router [Overview]  Models   Classes   Decisions   Savings
 d:  24h  w: [7d] m:  30d  a:  all                p: user · project
 ```
 
@@ -123,6 +123,7 @@ d:  24h  w: [7d] m:  30d  a:  all                p: user · project
 | Models | The tiles, when the four fit on one row (70 columns); per tier and effort, over the window: closed tasks, tokens, cost, FPY with a bar, cost per successful task, and the model ids seen in the window. Closed tasks only, as in the tiles: a cancelled task counts in none of them |
 | Classes | The tiles, when they fit; per task class, over the window and at the level: n, FPY with a bar, rework rate, cost per successful task, the grid's choice next to the best measured cell, weak-signal flags, and each cell under its class (`*` marks the recommended one); then up to three recommendations that differ from the grid, each led by its FPY |
 | Decisions | The latest twelve routing decisions of every session (UTC), `•` marking this session's |
+| Savings | What routing gained over the window at the level (see [Savings](#savings)): the verdict with its dot, then one line per measure, the moves per pair of tiers with a total, spend per week, and the tasks left out |
 
 The keys work as soon as the view opens, with no click:
 
@@ -155,12 +156,13 @@ and `/context` cards; no pane opens beside the chat and no page or file opens by
 
 - **Header**: the title, which folds the card to its header and one bar of the window's tasks by model, and the
   window's right first time and cost per success.
-- **Dropdowns**: the view at the left (Overview, Models, Task classes, Projects, Decisions, Trend, Log); the scope
+- **Dropdowns**: the view at the left (Overview, Models, Task classes, Projects, Decisions, Savings, Trend, Log); the scope
   (all projects or this one) and the window (last 24 hours, 7 days, 30 days, all time) at the right. The arguments
   of the command open the card on a view, window and scope; `report` opens it on Trend, `log` on Log.
 - **Views**: Overview, a heatmap of tasks per day, the key figures and the routing decisions by kind; Models, a row
   per model with each effort level's count and right-first-time rate, and tasks per day by model; Task classes and
-  Projects, a row each; Decisions, the decisions by kind with the latest of each; Trend, the weekly quality and cost
+  Projects, a row each; Decisions, the decisions by kind with the latest of each; Savings, the verdict, the key
+  figures, where tasks ran, spend per week and the moves (see [Savings](#savings)); Trend, the weekly quality and cost
   as bar charts, with the HTML report page linked in its last line; Log, the event log by kind and over time, with
   the latest records of each kind and `events.jsonl` linked in its last line.
 - **Live**: the newest card redraws as subagents report; the few before it keep their header and bar.
@@ -170,7 +172,7 @@ The card uses the app's own colours, with Desktop's blue shades per model; the �
 model and effort colours are the terminal's.
 
 Where no pane can be placed (`claude -p`, a headless run, a terminal under 60 columns), the command prints the same
-rows as text, without colours and with the status dots: the tab you named, or all four. A real run of
+rows as text, without colours and with the status dots: the tab you named, or all five. A real run of
 `claude -p "/model-router overview"` on a machine with three measured subagents:
 
 ```text
@@ -217,6 +219,26 @@ Last 30 days · user level · 8 tasks scored · vs the one before
 FPY by 3 days            ▁   ██▆  67%
 $/success by 3 days          ▂▁█  $0.205
 ```
+
+### Savings
+
+Savings answers whether routing is worth its cost. Each subagent task is compared with what it would have cost on the
+model it would have inherited, the model of the session or agent that started it (logged from release 0.6.0 on):
+its own cost when it ran on that model, else its tokens of each kind (input, output, cache read, cache write; logged
+from release 0.7.0 on) at that model's prices. The plugin holds no price list: the prices of each model are fitted
+from the costs logged over the last 90 days, and a model with too few recent tasks, or costs the fit does not
+explain within 10%, has none. The cost per successful task on the session's model is taken at the right-first-time rate of the tasks kept
+on it, so a cheaper model that is redone more often does not count as a saving.
+
+- **Verdict**: *pays off* from 100 tasks compared, with 5% or more saved per success and quality holding; *costs
+  more* from 100 tasks with 5% or more spent; *not proven* otherwise, with the reason (too few tasks, a difference
+  within 5%, or quality dropping). Quality holds while the tasks moved to a cheaper model are right first time at
+  most 5 points less often than the kept ones; under five tasks on either side it is not judged.
+- **Where it shows**: the Savings tab of `/model-router` and the Savings view of the card, for the window and level
+  they are on; the first section of the report page, for the last 30 days at the user level, with the known limits in
+  its footnote. With no task to compare, each says that savings are measured for tasks started from 0.7.0 on.
+- **Limits**: the tasks moved to a cheaper model are easier on average, which favours routing; a lower effort is not
+  counted as a saving; the judge's own cost is not in the log, so only its time is shown.
 
 ## Options
 

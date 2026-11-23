@@ -149,6 +149,58 @@ export function barSvg(share, { width, height, color } = {}) {
   return `${open(w, h)}${track}${bar}</svg>`;
 }
 
+/**
+ * One bar of parts: a rounded track filled from the left by `parts` (`{ share, color }`, shares of 0 to 1), in
+ * order. A part with no positive share is skipped; a colour that is no hex is the muted one.
+ */
+export function partsBarSvg(parts, { width, height } = {}) {
+  const w = size(width, BAR_SIZE.width);
+  const h = size(height, BAR_SIZE.height);
+  let x = 0;
+  const rects = [];
+  for (const p of Array.isArray(parts) ? parts : []) {
+    if (!isNum(p?.share) || p.share <= 0 || x >= w) continue;
+    const part = Math.min(w - x, Math.max(1, Math.round(Math.min(1, p.share) * w)));
+    rects.push(`<rect x="${x}" width="${part}" height="${h}" fill="${colour(p.color, COLORS.dim)}"/>`);
+    x += part;
+  }
+  return `${open(w, h)}<rect class="track" width="${w}" height="${h}" rx="${round(h / 2)}" fill="${COLORS.dim}" fill-opacity="0.25"/>${rects.join('')}</svg>`;
+}
+
+/** The size a chart of paired bars is drawn at when none is asked for, in CSS pixels. */
+export const PAIRS_SIZE = Object.freeze({ width: 640, height: 96 });
+
+/**
+ * Two bars per period, side by side on a faint baseline and one scale from zero: `pairs` are `[first, second]`,
+ * oldest first; `labels` the two tooltips of each. The first is drawn muted, the second in `color`. A value above
+ * zero is at least two pixels tall. Over SVG_MAX characters the tooltips go first, then the bars.
+ */
+export function pairedBarsSvg(pairs, { width, height, color, labels = [] } = {}) {
+  const w = size(width, PAIRS_SIZE.width);
+  const h = size(height, PAIRS_SIZE.height);
+  const fill = colour(color, COLORS.accent);
+  const list = Array.isArray(pairs) ? pairs.map((p) => (Array.isArray(p) ? p : [])) : [];
+  const base = h - PAD;
+  const frame = `${open(w, h)}<line class="base" x1="${PAD}" y1="${base}" x2="${w - PAD}" y2="${base}" stroke="${COLORS.dim}" stroke-opacity="0.35" stroke-width="1"/>`;
+  const top = Math.max(0, ...list.flat().filter(isNum));
+  if (!list.length || top <= 0) return `${frame}</svg>`;
+  const step = (w - 2 * PAD) / list.length;
+  const bar = Math.max(1, Math.min(28, step * 0.36));
+  const draw = (withTitles) => list.map((pair, i) => [0, 1].map((k) => {
+    const v = pair[k];
+    if (!isNum(v) || v <= 0) return '';
+    const tall = round(Math.max(2, (v / top) * (h - 2 * PAD)));
+    const x = round(PAD + i * step + step / 2 - bar + k * bar);
+    const tip = withTitles && typeof labels?.[i]?.[k] === 'string' ? `<title>${escapeXml(labels[i][k])}</title>` : '';
+    const paint = k === 0 ? `fill="${COLORS.dim}" fill-opacity="0.45"` : `fill="${fill}"`;
+    return `<rect class="${k === 0 ? 'first' : 'second'}" x="${x}" y="${round(base - tall)}" width="${round(bar)}" height="${tall}" rx="1.5" ${paint}>${tip}</rect>`;
+  }).join('')).join('');
+  const full = `${frame}${draw(true)}</svg>`;
+  if (full.length <= SVG_MAX) return full;
+  const plain = `${frame}${draw(false)}</svg>`;
+  return plain.length <= SVG_MAX ? plain : `${frame}</svg>`;
+}
+
 /** The size a column chart is drawn at when none is asked for, in CSS pixels. */
 export const COLUMNS_SIZE = Object.freeze({ width: 320, height: 72 });
 

@@ -27,6 +27,22 @@ test('an outcome carries the model of the session that started the task, or null
   assert.equal(outcomes.find((o) => o.agentId === 'a2').parentModel, null);
 });
 
+test('an outcome carries the report\'s tokens by kind, or null when they are absent or malformed', () => {
+  const usage = { input: 1200, output: 800, cacheRead: 90000, cacheWrite: 4000 };
+  const events = [
+    spawn('a1', 0), report('a1', 2, { usage }),
+    spawn('a2', 0), report('a2', 2),
+    spawn('a3', 0), report('a3', 2, { usage: { ...usage, output: -1 } }),
+    spawn('a4', 0), report('a4', 2, { usage: 'lots' }),
+    spawn('a5', 0), report('a5', 2, { usage: { input: 1, output: 2, cacheRead: 3 } }),
+  ];
+  const { outcomes } = computeOutcomes(events, { ...OPTS, now: now(40) });
+  const of = (id) => outcomes.find((o) => o.agentId === id).usage;
+  assert.deepEqual(of('a1'), usage);
+  for (const id of ['a2', 'a3', 'a4', 'a5']) assert.equal(of(id), null, id);
+  assert.equal(outcomes.find((o) => o.agentId === 'a1').tokens, 30000, 'the total is kept as it was');
+});
+
 test('a completed task with no rework signal is a success once the window closes', () => {
   const events = [spawn('a1', 0), write('a1', 1, '/repo/src/auth.ts'), report('a1', 2)];
   const open = computeOutcomes(events, { ...OPTS, now: now(10) });

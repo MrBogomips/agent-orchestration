@@ -1,6 +1,7 @@
 // A fixed data set for the usage view's tests: records and aggregates at a fixed time, built through the same
 // code the scripts use. Not loaded by the mod or the scripts.
 import { applyOutcome, emptyLevel } from './aggregate.mjs';
+import { costAt } from './prices.mjs';
 import { agedCells, buildUsageData, classesOf, decisionsOf, latestOutcomes, trendOf } from './usage-data.mjs';
 
 export const T0 = Date.parse('2026-11-20T12:00:00Z');
@@ -18,14 +19,41 @@ export const GRID = {
   ],
 };
 
+/** The list prices per million tokens the fixture's costs are made at, so the fit reads them back. */
+export const FIXTURE_PRICES = Object.freeze({
+  opus: Object.freeze({ input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 }),
+  sonnet: Object.freeze({ input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 }),
+  haiku: Object.freeze({ input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 }),
+});
+
+/** Tokens by kind whose cost at the tier's prices is `cost`: a mix that differs from task to task, scaled to it. */
+function usageFor(tier, cost, i) {
+  const mix = { input: 1000 + 300 * (i % 4), output: 500 + 200 * ((i * 3) % 5), cacheRead: 20000 + 5000 * ((i * 5) % 7), cacheWrite: 800 + 400 * ((i * 7) % 3) };
+  const scale = cost / costAt(FIXTURE_PRICES[tier], mix);
+  return Object.fromEntries(Object.entries(mix).map(([k, v]) => [k, Math.round(v * scale)]));
+}
+
 let seq = 0;
-function outcome(ago, { cls, tier, model, effort, result = 'success', cost, tokens, project = PROJECT, learn = true }) {
+function outcome(ago, { cls, tier, model, effort, result = 'success', cost, tokens, project = PROJECT, learn = true, parent = null }) {
   seq += 1;
   const ts = at(T0 - ago);
   return {
     v: 1, type: 'outcome', ts, session: 'old', agentId: `t${seq}`, task: `old/t${seq}`, class: cls, tier, model, effort,
-    outcome: result, why: '', weak: false, learn, explore: false, route: 'judge', costUsd: cost, tokens, project, reportTs: ts,
+    outcome: result, why: '', weak: false, learn, explore: false, route: 'judge', costUsd: cost, tokens, usage: usageFor(tier, cost, seq),
+    project, reportTs: ts, parentModel: parent,
   };
+}
+
+/**
+ * Cancelled tasks 50 days old, in the event log only: they count in no figure but the prices, which need eight
+ * recent outcomes of a tier. Opus has one closed task and sonnet seven: seven and one more make eight of each.
+ */
+export function pricedOutcomes() {
+  seq = 100;
+  const priced = (tier, model, n) => Array.from({ length: n }, (_, i) => outcome(50 * DAY + i * HOUR, {
+    cls: null, tier, model, effort: 'medium', result: 'cancelled', cost: 0.02 + 0.01 * i, tokens: 20000, learn: false, parent: model,
+  }));
+  return [...priced('opus', OPUS, 7), ...priced('sonnet', SONNET, 1)];
 }
 
 const SONNET = 'claude-sonnet-5-5';
@@ -36,31 +64,33 @@ const OPUS = 'claude-opus-5-5';
 export function outcomes() {
   seq = 0;
   return [
-    outcome(40 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'medium', cost: 0.05, tokens: 30000 }),
-    outcome(20 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'medium', result: 'rework', cost: 0.06, tokens: 32000 }),
-    outcome(6 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'medium', cost: 0.04, tokens: 28000 }),
-    outcome(5 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'low', cost: 0.02, tokens: 15000 }),
-    outcome(4 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'low', cost: 0.02, tokens: 16000 }),
+    outcome(40 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'medium', cost: 0.05, tokens: 30000, parent: OPUS }),
+    outcome(20 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'medium', result: 'rework', cost: 0.06, tokens: 32000, parent: OPUS }),
+    outcome(6 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'medium', cost: 0.04, tokens: 28000, parent: SONNET }),
+    outcome(5 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'low', cost: 0.02, tokens: 15000, parent: OPUS }),
+    outcome(4 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'low', cost: 0.02, tokens: 16000, parent: OPUS }),
     outcome(3 * DAY, { cls: 'edit-specified', tier: 'sonnet', model: SONNET, effort: 'low', cost: 0.03, tokens: 17000, project: null }),
-    outcome(2 * DAY, { cls: 'read-search', tier: 'haiku', model: HAIKU, effort: 'low', cost: 0.003, tokens: 43632 }),
-    outcome(10 * HOUR, { cls: 'read-search', tier: 'haiku', model: HAIKU, effort: 'low', cost: 0.0065, tokens: 122660 }),
-    outcome(5 * HOUR, { cls: 'review-debug', tier: 'opus', model: OPUS, effort: 'high', result: 'failure', cost: 0.4, tokens: 210000 }),
-    outcome(2 * HOUR, { cls: null, tier: 'sonnet', model: SONNET, effort: 'medium', result: 'cancelled', cost: 0.01, tokens: 5000, learn: false }),
+    outcome(2 * DAY, { cls: 'read-search', tier: 'haiku', model: HAIKU, effort: 'low', cost: 0.003, tokens: 43632, parent: OPUS }),
+    outcome(10 * HOUR, { cls: 'read-search', tier: 'haiku', model: HAIKU, effort: 'low', cost: 0.0065, tokens: 122660, parent: SONNET }),
+    outcome(5 * HOUR, { cls: 'review-debug', tier: 'opus', model: OPUS, effort: 'high', result: 'failure', cost: 0.4, tokens: 210000, parent: SONNET }),
+    outcome(2 * HOUR, { cls: null, tier: 'sonnet', model: SONNET, effort: 'medium', result: 'cancelled', cost: 0.01, tokens: 5000, learn: false, parent: OPUS }),
   ];
 }
 
-function decision(ago, action, before, after, effort, session = SESSION) {
-  return { v: 1, type: 'decision', ts: at(T0 - ago), session, agentId: `d${ago}`, subagentType: 'general-purpose', class: 'read-search', action, before, after, effort, reason: `judge: ${action}` };
+function decision(ago, action, before, after, effort, session = SESSION, judgeMs = null) {
+  const judge = judgeMs === null ? null : { tier: 'fast', confidence: 0.9, effort: 0, effortConfidence: 0.9, risky: 0.05, class: 'read-search', ms: judgeMs };
+  return { v: 1, type: 'decision', ts: at(T0 - ago), session, agentId: `d${ago}`, subagentType: 'general-purpose', class: 'read-search', action, before, after, effort, reason: `judge: ${action}`, judge };
 }
 
 /** Every record of the fixture's event log. */
 export function events() {
   return [
-    decision(3 * DAY, 'downgrade', SONNET, HAIKU, 'low', 'old'),
+    ...pricedOutcomes(),
+    decision(3 * DAY, 'downgrade', SONNET, HAIKU, 'low', 'old', 1240),
     ...outcomes(),
-    decision(50 * 60000, 'downgrade', OPUS, HAIKU, 'low'),
-    decision(40 * 60000, 'downgrade', OPUS, SONNET, 'medium'),
-    decision(30 * 60000, 'keep', OPUS, OPUS, null),
+    decision(50 * 60000, 'downgrade', OPUS, HAIKU, 'low', SESSION, 820),
+    decision(40 * 60000, 'downgrade', OPUS, SONNET, 'medium', SESSION, 640),
+    decision(30 * 60000, 'keep', OPUS, OPUS, null, SESSION, 910),
     decision(20 * 60000, 'explicit', 'opus', 'opus', 'high'),
     { v: 1, type: 'report', ts: at(T0 - 25 * 60000), session: SESSION, agentId: 'gone', model: SONNET, status: 'completed', costUsd: 0.021, tokens: 52000 },
   ];

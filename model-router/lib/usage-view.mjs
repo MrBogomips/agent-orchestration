@@ -2,13 +2,17 @@
 // lib/usage-data.mjs builds and returns rows ({ text, tone }), which the pane and the text fallback both draw.
 // See docs/design/model-router.md, "Command".
 // Plain ES module with no Node or engine imports, so both the mod and node tests load it.
+import { fmtNum, fmtPct, fmtTokens, fmtUsd } from './format.mjs';
 import { familyOf } from './tiers.mjs';
-import { ROUTE_ICON } from './route-line.mjs';
+import { CELL_EMPTY, CELL_FULL, ROUTE_ICON } from './route-line.mjs';
+import {
+  EMPTY_TEXT, GROUP_NAMES, SAVINGS_TITLE, baselineNote, judgeText, leftOutText, moveName, qualityWord, savedPhrase, savingText, sharePhrase, verdictSentence, verdictTone, weekText,
+} from './savings-text.mjs';
 import { TILES_ONE_ROW, fpyStatus, sparkRows, tileRows } from './usage-tiles.mjs';
 import { cutToWidth, displayWidth, padEndTo, padStartTo } from './width.mjs';
 
-export const TABS = Object.freeze(['overview', 'models', 'classes', 'decisions']);
-export const TAB_TITLES = Object.freeze({ overview: 'Overview', models: 'Models', classes: 'Classes', decisions: 'Decisions' });
+export const TABS = Object.freeze(['overview', 'models', 'classes', 'decisions', 'savings']);
+export const TAB_TITLES = Object.freeze({ overview: 'Overview', models: 'Models', classes: 'Classes', decisions: 'Decisions', savings: SAVINGS_TITLE });
 export const WINDOW_KEYS = Object.freeze({ d: '24h', w: '7d', m: '30d', a: 'all' });
 export const WINDOW_TITLES = Object.freeze({ '24h': 'last 24 hours', '7d': 'last 7 days', '30d': 'last 30 days', all: 'all time' });
 export const LEVELS = Object.freeze(['user', 'project']);
@@ -22,7 +26,7 @@ const DECISIONS_SHOWN = 12;
 const RECOMMENDATIONS_SHOWN = 3;
 const ACTION_ORDER = ['downgrade', 'upgrade', 'keep', 'explicit', 'forced-risk', 'error'];
 const has = (table, key) => Object.hasOwn(table, key);
-const TAB_ALIASES = { overview: 'overview', models: 'models', model: 'models', classes: 'classes', class: 'classes', stats: 'classes', decisions: 'decisions' };
+const TAB_ALIASES = { overview: 'overview', models: 'models', model: 'models', classes: 'classes', class: 'classes', stats: 'classes', decisions: 'decisions', savings: 'savings' };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Arguments
@@ -55,7 +59,7 @@ export function helpText() {
     `${ROUTE_ICON} Usage: /model-router [tab] [window] [level] | on | off | report | log | help`,
     '',
     '  (none)          the usage view on Overview, last 7 days, user level',
-    '  overview|models|classes|decisions',
+    '  overview|models|classes|decisions|savings',
     '                  open on that tab',
     '  24h|7d|30d|all  the window (all: Classes as on the report page)',
     '  user|project    the level: all your projects, or this one',
@@ -75,24 +79,6 @@ export function helpText() {
 // Formatting
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-
-/** Tokens as 940, 1.2k, 3.4M. */
-export function fmtTokens(n) {
-  if (!isNum(n)) return '–';
-  if (n < 1000) return String(Math.round(n));
-  if (n < 1e6) return `${(n / 1e3).toFixed(1)}k`;
-  return `${(n / 1e6).toFixed(1)}M`;
-}
-
-/** Dollars as the report page writes them: four decimals under a cent, three above. */
-export function fmtUsd(v) {
-  if (!isNum(v)) return '–';
-  return `$${v < 0.01 ? v.toFixed(4) : v.toFixed(3)}`;
-}
-
-export const fmtPct = (v) => (isNum(v) ? `${Math.round(v * 100)}%` : '–');
-/** A count: whole numbers as they are, aged (fractional) counts with one decimal. */
-export const fmtNum = (v) => (isNum(v) ? (Number.isInteger(v) ? String(v) : v.toFixed(1)) : '–');
 
 /** A text bar of `width` cells filled to `share` (0 to 1); an unknown share is all empty. */
 export function bar(share, width) {
@@ -316,11 +302,89 @@ function decisionRows(data, view, width) {
   return rows;
 }
 
+const VERDICT_DOTS = Object.freeze({ good: '🟢', bad: '🔴', dim: '⚪' });
+const SHARE_CELLS = 10;
+const MOVES_SHOWN = 8;
+const WEEKS_SHOWN = 8;
+
+/** A share as ten effort-bar cells: `▰▰▰▰▰▰▰▱▱▱`. */
+const shareCells = (share) => {
+  const filled = isNum(share) ? Math.max(0, Math.min(SHARE_CELLS, Math.round(share * SHARE_CELLS))) : 0;
+  return CELL_FULL.repeat(filled) + CELL_EMPTY.repeat(SHARE_CELLS - filled);
+};
+
+/** The words of a text on lines of at most `width` columns, each after `indent` spaces. */
+function wrapWords(text, width, indent) {
+  const lines = [];
+  let line = '';
+  for (const word of String(text).split(/\s+/).filter(Boolean)) {
+    if (line && displayWidth(line) + 1 + displayWidth(word) > width - indent) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.map((l) => fit(`${' '.repeat(indent)}${l}`, width));
+}
+
+function groupLine(g, extra) {
+  return [fmtPct(g.share), `${fmtPct(g.fpy)} FPY`, `${fmtPct(g.reworkRate)} rework`, ...extra].join(' · ');
+}
+
+function measureRows(s, width) {
+  const { cheaper, kept, stronger } = s.groups;
+  // A value too long for the room goes on under the label's column, never cut.
+  const line = (label, value) => wrapWords(value, width - LABEL, 0).map((l, i) => row(fit(`${padEndTo(i ? '' : label, LABEL)}${l}`, width)));
+  return [
+    line('Per success:', `${fmtUsd(s.perSuccess)} · ${fmtUsd(s.baselinePerSuccess)} on the session's model · ${sharePhrase(s.savedShare)}`),
+    line('Saved:', `${savingText(s.saved)} · spent ${fmtUsd(s.spent)} of ${fmtUsd(s.baselineSpent)}`),
+    line('Moved cheaper:', `${shareCells(cheaper.share)} ${groupLine(cheaper, cheaper.tasks ? [savedPhrase(cheaper.saving)] : [])}`),
+    line('Kept:', groupLine(kept, [])),
+    line('Moved stronger:', groupLine(stronger, stronger.tasks ? [savedPhrase(stronger.saving)] : [])),
+    line('Quality:', `${qualityWord(s.quality)} · FPY ${fmtPct(cheaper.fpy)} moved cheaper, ${fmtPct(kept.fpy)} kept`),
+    line('Judge:', judgeText(s.judge)),
+  ].flat();
+}
+
+function moveRows(s, width) {
+  if (!s.moves.length) return [];
+  const shown = s.moves.slice(0, MOVES_SHOWN).map((m) => row(labelled(`  ${moveName(m.from, m.to)}`,
+    `${fmtNum(m.tasks)} task${m.tasks === 1 ? '' : 's'} · ${fmtPct(m.fpy)} FPY · ${savingText(m.saving)}`, width)));
+  const more = s.moves.length > MOVES_SHOWN ? [dim(fit(`  ${s.moves.length - MOVES_SHOWN} more moves are on the report page.`, width))] : [];
+  return [blank(), title('Saved by move'), ...shown, ...more, row(labelled('  Total', savingText(s.movesTotal), width))];
+}
+
+function weekRows(s, width) {
+  if (!s.weeks.length) return [];
+  const weeks = s.weeks.slice(-WEEKS_SHOWN).map((w) => row(labelled(`  Week of ${weekText(w.week)}`, `${fmtUsd(w.spent)} of ${fmtUsd(w.baseline)} · ${savedPhrase(w.saving)}`, width)));
+  return [blank(), title(fit("Spend per week · spent of the session's model's cost", width)), ...weeks];
+}
+
+/** Savings: the verdict and its sentence, one line per measure, the moves, the weeks, and what was left out. */
+function savingsRows(data, view, width) {
+  const level = view.level === 'project' ? 'project' : 'user';
+  const s = data.windows?.[view.window]?.savings?.[level] ?? null;
+  const rows = [title(fit(`${SAVINGS_TITLE} · ${WINDOW_TITLES[view.window]} · ${levelName(data, view)} · ${s?.tasks ?? 0} tasks compared`, width))];
+  if (level === 'project' && !data.project) return [...rows, dim('This session has no project id yet.')];
+  if (!s || s.isEmpty) return [...rows, dim(fit(EMPTY_TEXT, width))];
+  const tone = verdictTone(s.verdict);
+  const notes = [leftOutText(s.leftOut), baselineNote(s)].filter(Boolean).flatMap((t) => wrapWords(t, width, 0).map(dim));
+  return [
+    ...rows,
+    { text: `${VERDICT_DOTS[tone]} ${s.verdict}`, segments: [{ text: `${VERDICT_DOTS[tone]} ` }, { text: s.verdict, tone }] },
+    ...wrapWords(verdictSentence(s), width, 3).map((l) => row(l)),
+    blank(), ...measureRows(s, width), ...moveRows(s, width), ...weekRows(s, width),
+    ...(notes.length ? [blank(), ...notes] : []),
+  ];
+}
+
 /** Models and Classes open with the tiles where the four fit on one row. */
 const withTiles = (build) => (data, view, width) =>
   (width >= TILES_ONE_ROW ? [...headlineRows(data, view, width), blank(), ...build(data, view, width)] : build(data, view, width));
 
-const BUILDERS = { overview: overviewRows, models: withTiles(modelsRows), classes: withTiles(classRows), decisions: decisionRows };
+const BUILDERS = { overview: overviewRows, models: withTiles(modelsRows), classes: withTiles(classRows), decisions: decisionRows, savings: savingsRows };
 
 /**
  * The rows of one tab: `view` is `{ tab, window, level, status }`, `columns` the room. A missing tab, window or
@@ -358,6 +422,8 @@ export function textView(data, view, columns) {
   out.push('', ...noteRows(data, width).map((r) => r.text), '/model-router help: tabs, windows, levels and keys.');
   return out.map((l) => l.replace(/\s+$/, '')).join('\n');
 }
+
+export { fmtNum, fmtPct, fmtTokens, fmtUsd };
 
 // What the graphical rendering (lib/usage-cards.mjs) shares with the rows above, so the two cannot disagree.
 export { ACTION_ORDER, DECISIONS_SHOWN, RECOMMENDATIONS_SHOWN, cell as cellName, headlineOf as headlineFor, levelName, shortModel };

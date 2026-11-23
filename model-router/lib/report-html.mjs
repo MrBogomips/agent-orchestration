@@ -42,6 +42,35 @@ ${view.banner ? `<p class="banner">${esc(view.banner)}</p>` : ''}
 ${modelsCard(view.models)}</section>`;
 }
 
+function savingsWeeks(w) {
+  if (!w) return '';
+  return `<div class="card"><div class="row between"><h3>${esc(w.title)}</h3><span class="num">${esc(w.latest)}</span></div>
+${picture(w.picture, ' wide')}
+<div class="row between caption"><span>${esc(w.first)}</span><span>${esc(w.last)}</span></div>
+<div class="row caption"><span class="key muted-key">on the session's model</span><span class="key accent-key">spent</span></div></div>`;
+}
+
+function savingsMoves(rows) {
+  const body = rows.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.tasks)}</td><td>${esc(r.fpy)}</td><td class="opt">${esc(r.rework)}</td>
+<td class="opt">${esc(r.spent)}</td><td class="opt">${esc(r.baseline)}</td><td>${esc(r.saved)}</td></tr>`).join('');
+  return `<div class="card"><h3>Where the saving comes from</h3><div class="scroll"><table class="moves">
+<thead><tr><th>Session to subagent</th><th>Tasks</th><th>FPY</th><th class="opt">Rework</th><th class="opt">Spent</th><th class="opt">On the session's model</th><th>Saved</th></tr></thead>
+<tbody>${body}</tbody></table></div></div>`;
+}
+
+/** Savings, first on the page: the verdict, four cards, spend per week, the judge's figures and the moves. */
+function savingsSection(s) {
+  if (!s) return '';
+  const head = `<div><h2>${esc(s.title)}</h2><p class="caption">${esc(s.caption)}</p></div>`;
+  if (s.empty) return `<section>${head}<p class="card muted">${esc(s.empty)}</p></section>`;
+  const judge = s.judge.map((j) => `<div class="row between"><span class="muted">${esc(j.label)}</span><span class="num">${esc(j.value)}</span></div>`).join('');
+  return `<section>${head}
+<p class="verdict">${chip({ text: s.verdict.word, tone: s.verdict.tone })} ${esc(s.verdict.sentence)}</p>
+<div class="grid">${s.cards.map(kpiCard).join('\n')}</div>
+<div class="two">${savingsWeeks(s.weeks)}<div class="card"><h3>The judge</h3>${judge}</div></div>
+${savingsMoves(s.moves)}</section>`;
+}
+
 const trendChart = (c) => `<div class="card"><div class="row between"><h3>${esc(c.title)}</h3><span class="num">${esc(c.latest)}</span></div>
 ${picture(c.picture, ' wide')}
 <div class="row between caption"><span>${esc(c.first)}</span><span>${esc(c.last)}</span></div></div>`;
@@ -98,6 +127,7 @@ export function renderReport(data) {
 <body><main>
 <header><h1><span class="id">🔀 model-router</span> quality report</h1>
 <p class="caption">${esc(view.generated)}</p></header>
+${savingsSection(view.savings)}
 ${headline(view.headline)}
 ${trendSection(view.trend)}
 ${decisionsSection(view.decisions)}

@@ -72,6 +72,48 @@ test('a requested tab prints that tab only', () => {
   assert.match(text, /last 30 days/);
 });
 
+test('Savings: the verdict, then one line per measure, at the window and level of the view', async () => {
+  const data = usageData();
+  const s = data.windows['30d'].savings.user;
+  const rows = tabRows(data, { tab: 'savings', window: '30d', level: 'user', status: STATUS }, 80);
+  const text = rows.map((r) => r.text);
+  assert.equal(text[0], `Savings · last 30 days · user level · ${s.tasks} tasks compared`);
+  const verdict = rows[1];
+  assert.equal(verdict.segments.find((x) => x.text === s.verdict).tone, 'dim');
+  for (const label of ['Per success:', 'Saved:', 'Moved cheaper:', 'Kept:', 'Moved stronger:', 'Quality:', 'Judge:']) {
+    assert.ok(text.some((t) => t.startsWith(label)), label);
+  }
+  const cheaper = text.find((t) => t.startsWith('Moved cheaper:'));
+  assert.match(cheaper, /[▰▱]{10}/);
+  assert.equal((cheaper.match(/▰/g) ?? []).length, Math.round(s.groups.cheaper.share * 10));
+  assert.ok(text.some((t) => t.includes('Saved by move')));
+  assert.ok(text.some((t) => /^ {2}Total/.test(t)));
+  const { savedPhrase, weekText } = await import('./savings-text.mjs');
+  for (const w of s.weeks) {
+    const line = text.find((t) => t.startsWith(`  Week of ${weekText(w.week)} `));
+    assert.ok(line?.endsWith(savedPhrase(w.saving)), `${w.week}: ${line}`);
+  }
+  assert.ok(s.weeks.some((w) => w.saving < 0), 'a week of the fixture cost more');
+  assert.ok(text.some((t) => t.includes(`${s.leftOut} task${s.leftOut === 1 ? '' : 's'} left out`)));
+  const week = tabRows(data, { tab: 'savings', window: '7d', level: 'user' }, 80)[0].text;
+  assert.match(week, /last 7 days/);
+  const project = tabRows(data, { tab: 'savings', window: '30d', level: 'project' }, 80)[0].text;
+  assert.match(project, /project \/work\/shop/);
+  assert.deepEqual(parseArgs('savings 30d'), { kind: 'view', tab: 'savings', window: '30d', level: null });
+});
+
+test('Savings with no task to compare says, in one line, from which release they are measured', async () => {
+  const { savingsOf } = await import('./savings.mjs');
+  const data = usageData();
+  const none = savingsOf({ outcomes: [], decisions: [], window: '24h', now: Date.parse(data.generatedAt) });
+  const empty = { ...data, windows: { ...data.windows, '24h': { ...data.windows['24h'], savings: { user: none, project: none } } } };
+  const rows = tabRows(empty, { tab: 'savings', window: '24h', level: 'user' }, 80);
+  assert.equal(rows.length, 2);
+  assert.match(rows[1].text, /release 0\.7\.0/);
+  const old = { ...data, windows: { ...data.windows, '7d': { ...data.windows['7d'], savings: undefined } } };
+  assert.match(tabRows(old, { tab: 'savings', window: '7d' }, 80)[1].text, /release 0\.7\.0/);
+});
+
 test('the windows count different tasks', () => {
   const data = usageData();
   const title = (window) => tabRows(data, { tab: 'models', window }, 80).find((r) => r.text.startsWith('Models ·')).text;

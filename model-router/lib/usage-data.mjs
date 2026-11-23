@@ -2,39 +2,19 @@
 // Pure: it takes records and aggregate levels already read, and returns plain data. The scripts read the files.
 // See docs/design/model-router.md, "Command", and docs/design/model-router-quality-loop.md, "Report".
 import { ageCell, metrics, recommend } from './aggregate.mjs';
+import { pricesOf } from './prices.mjs';
+import { savingsOf } from './savings.mjs';
 import { EFFORT_LEVELS, PRICE_ORDER } from './tiers.mjs';
+import { CLOSED, DAY_MS, WINDOWS, WINDOW_NAMES, decisionsIn, inWindow, latestOutcomes, outcomeTime, weekOf } from './windows.mjs';
 
+export { WINDOWS, WINDOW_NAMES, inWindow, latestOutcomes, outcomeTime };
 export const READ_ONLY_CLASSES = Object.freeze(['read-search', 'read-analyze']);
 export const WEAK_N = 5;
-/** The windows of the usage view, in days; `all` has no bound. */
-export const WINDOWS = Object.freeze({ '24h': 1, '7d': 7, '30d': 30, all: null });
-export const WINDOW_NAMES = Object.freeze(Object.keys(WINDOWS));
 /** Routing actions in the order the view lists them. */
 export const ACTIONS = Object.freeze(['downgrade', 'upgrade', 'keep', 'explicit', 'forced-risk', 'error']);
 export const DECISIONS_KEPT = 50;
 
-const DAY_MS = 86400000;
-const CLOSED = ['success', 'rework', 'failure'];
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-
-/** The last outcome record of each task: a task decided twice keeps its latest. */
-export function latestOutcomes(events) {
-  return [...new Map(events.filter((e) => e?.type === 'outcome' && e.task).map((o) => [o.task, o])).values()];
-}
-
-/** When an outcome counts in a window: its subagent's report, else the time it was decided. */
-export const outcomeTime = (o) => Date.parse(o.reportTs ?? o.ts);
-
-/** The outcomes inside `window` (a key of WINDOWS) ending at `now`. */
-export function inWindow(outcomes, window, now) {
-  const days = WINDOWS[window];
-  if (days === null || days === undefined) return outcomes;
-  const from = now - days * DAY_MS;
-  return outcomes.filter((o) => {
-    const t = outcomeTime(o);
-    return Number.isFinite(t) && t > from && t <= now;
-  });
-}
 
 /** The cells of a level, each aged to `now`. */
 export function agedCells(level, now, halfLifeDays) {
@@ -140,12 +120,6 @@ export function classesOf(cells, grid, { outcomes = [], projectId = null } = {})
     });
 }
 
-function weekOf(time) {
-  const d = new Date(time);
-  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - ((d.getUTCDay() + 6) % 7) * DAY_MS);
-  return monday.toISOString().slice(0, 10);
-}
-
 /** First-pass yield and cost per successful task per week (Monday, UTC); an outcome with no readable time is skipped. */
 export function trendOf(outcomes) {
   const weeks = new Map();
@@ -218,12 +192,6 @@ export function seriesOf(outcomes, window, now) {
   });
   return { unit: spec.unit, points };
 }
-
-/** The decisions whose time falls in (from, to]. */
-const decisionsIn = (decisions, from, to) => decisions.filter((d) => {
-  const t = Date.parse(d.ts);
-  return Number.isFinite(t) && t > from && t <= to;
-});
 
 /**
  * The headline numbers of a window and of the window of the same length before it (null for `all`), with the
@@ -358,6 +326,9 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
   const allDecisions = events.filter((e) => e?.type === 'decision' && typeof e.ts === 'string');
   // A decision carries no project: the project level counts the decisions of this session's project's spawns.
   const projectAgents = new Set(events.filter((e) => e?.type === 'spawn' && projectId && e.project?.id === projectId).map((e) => e.agentId));
+  const projectDecisions = allDecisions.filter((d) => projectAgents.has(d.agentId));
+  // The prices of each tier are fitted from every project's outcomes of the last 90 days: once for every window and level.
+  const rates = pricesOf(outcomes, now);
   const windows = {};
   for (const window of WINDOW_NAMES) {
     const recent = inWindow(outcomes, window, now);
@@ -372,8 +343,12 @@ export function buildUsageData({ events, user, projectLevel = null, project = nu
       headline: {
         user: headlineOf(outcomes, allDecisions, window, now),
         project: projectId
-          ? headlineOf(outcomes.filter((o) => o.project?.id === projectId), allDecisions.filter((d) => projectAgents.has(d.agentId)), window, now)
+          ? headlineOf(outcomes.filter((o) => o.project?.id === projectId), projectDecisions, window, now)
           : null,
+      },
+      savings: {
+        user: savingsOf({ outcomes, decisions: allDecisions, window, now, rates }),
+        project: projectId ? savingsOf({ outcomes, decisions: projectDecisions, window, now, projectId, rates }) : null,
       },
       models: modelRows(closed),
       // The same rows for the session's project alone, for the card at the project level.

@@ -94,4 +94,9 @@ pinned in `.github/workflows/validate.yml` (no login needed). `main` requires th
 repository ruleset: change the workflow's job name and the ruleset together. To run the check before each push:
 `git config core.hooksPath .githooks` once per clone (skip one push with `git push --no-verify`).
 
-The definition of done is `DoD.md`.
+## Done
+
+The definition of done is `DoD.md`. Before saying that any development work is finished, go through it item by item
+and state in the pull request what was checked and what is still open. A new or changed feature is never done
+without its documentation: the plugin's README, the design in `docs/design/`, the user manual (`docs/manual/`) and
+the documentation site (`site/`, Italian and English) are updated in the same pull request.

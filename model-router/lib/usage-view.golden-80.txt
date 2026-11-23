@@ -77,5 +77,34 @@ Decisions · latest 5 of 5 · all sessions · UTC
 11-20 11:40• explicit    opus → opus·high      general-purpose: judge: explicit
 • this session
 
+── Savings ─────────────────────────────────────────────────────────────────────
+Savings · last 7 days · user level · 6 tasks compared
+⚪ not proven
+   6 tasks compared: a verdict needs 100.
+
+Per success:          $0.098 · $0.076 on the session's model · 28% more
+Saved:                $0.108 more · spent $0.490 of $0.381
+Moved cheaper:        ▰▰▰▰▰▰▰▱▱▱ 67% · 100% FPY · 0% rework · saved $0.052
+Kept:                 17% · 100% FPY · 0% rework
+Moved stronger:       17% · 0% FPY · 0% rework · cost $0.160 more
+Quality:              not judged · FPY 100% moved cheaper, 100% kept
+Judge:                4 calls · 3.6 s · median 0.9 s
+
+Saved by move
+  Opus to Haiku       1 task · 100% FPY · $0.012
+  Opus to Sonnet      2 tasks · 100% FPY · $0.027
+  Sonnet to Haiku     1 task · 100% FPY · $0.013
+  Sonnet to Opus      1 task · 0% FPY · $0.160 more
+  Total               $0.108 more
+
+Spend per week · spent of the session's model's cost
+  Week of 9 Nov       $0.060 of $0.073 · saved $0.013
+  Week of 16 Nov      $0.429 of $0.308 · cost $0.122 more
+
+1 task left out: no session model or no token counts by kind (both recorded from
+releases 0.6.0 and 0.7.0), or a session tier with too few recent tasks to price.
+Fewer than 5 tasks kept on the session's model: the baseline is at the
+right-first-time rate of every task compared.
+
 Data read 2026-11-20 12:00 UTC.
 /model-router help: tabs, windows, levels and keys.

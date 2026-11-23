@@ -9,4 +9,7 @@ export declare function barSvg(share: unknown, options?: SvgOptions): string
 export declare const SPARK_SIZE: Readonly<{ width: number; height: number }>
 export declare const BAR_SIZE: Readonly<{ width: number; height: number }>
 export declare const COLUMNS_SIZE: Readonly<{ width: number; height: number }>
+export declare function partsBarSvg(parts: unknown, options?: { width?: number; height?: number }): string
+export declare const PAIRS_SIZE: Readonly<{ width: number; height: number }>
+export declare function pairedBarsSvg(pairs: unknown, options?: SvgOptions & { labels?: readonly (readonly string[])[] }): string
 export declare function columnsSvg(values: unknown, options?: SvgOptions & { labels?: readonly string[] }): string
