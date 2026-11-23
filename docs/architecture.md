@@ -187,7 +187,7 @@ check block every command it sees writing a file, so that a typo cannot switch t
 |---|---|
 | `SESSION_HUB_ROLE` | `child` |
 | `SESSION_HUB_MASTER` | the master's session name |
-| `SESSION_HUB_SCOPE_ROOT` | the write root, absolute; it must exist when the child starts |
+| `SESSION_HUB_SCOPE_ROOT` | the write root, absolute (a POSIX or a Windows path); it must exist when the child starts |
 | `SESSION_HUB_HANDOFF` | the handoff file, absolute |
 | `SESSION_HUB_REGISTRY` | the children record, absolute; a child only reads it |
 | `SESSION_HUB_GUARDS` | `on`, or `off` when the hub's *Guards* key says so; absent means `on` |

@@ -83,6 +83,9 @@ The names are fixed by the plugins' shared contract. The values must be free of 
 paths and the handoff file are chosen so. If the hub path itself has a space, quote each value as the shell
 needs (`'SESSION_HUB_SCOPE_ROOT=/a b/repo'`) and check the command once before starting.
 
+On Windows, give the paths as Windows paths with forward slashes (`C:/hub/repo`). Git Bash rewrites a value that
+looks like a POSIX path (`/hub/repo`) before the child sees it, and a backslash needs quoting.
+
 With these variables, the `session-hub-scope-guard` hook blocks the child's `Edit`, `Write` and `NotebookEdit`
 calls outside the write root. It does not see writes made through the shell. Without them (the desktop app),
 the scope holds only by the handoff's prose.
