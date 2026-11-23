@@ -1,6 +1,6 @@
 {
   "name": "model-router",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Picks the model and the effort level for sessions and subagents with one written grid, routes subagent starts that carry no model, and measures locally how well each choice worked",
   "author": {
     "name": "MrBogomips",
@@ -98,8 +98,8 @@
     },
     "adapt": {
       "type": "boolean",
-      "title": "Adapt (from 0.4)",
-      "description": "Choose from the quality data. Not implemented before 0.4: the loop only measures.",
+      "title": "Adapt (not used yet)",
+      "description": "Choose from the quality data. Not implemented yet: the loop only measures.",
       "required": false,
       "default": false
     },
@@ -112,15 +112,15 @@
     },
     "projectPriorStrength": {
       "type": "number",
-      "title": "Project prior strength (from 0.4)",
-      "description": "How many observations the user level counts for in a project's estimate. Unused before 0.4.",
+      "title": "Project prior strength (not used yet)",
+      "description": "How many observations the user level counts for in a project's estimate. Not used yet.",
       "required": false,
       "default": 5
     },
     "exploreCap": {
       "type": "number",
-      "title": "Exploration cap (from 0.4)",
-      "description": "Largest share of decisions per class that may explore. Unused before 0.4.",
+      "title": "Exploration cap (not used yet)",
+      "description": "Largest share of decisions per class that may explore. Not used yet.",
       "required": false,
       "default": 0.1
     },

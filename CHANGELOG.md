@@ -3,6 +3,17 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.7.1
+
+2026-11-23 · pull request #94
+
+### Fixed
+
+- The option titles, the usage view's status line, the report's note and the README no longer say that adaptive
+  selection arrives in release 0.4: the router only measures so far, and the options `adapt`,
+  `projectPriorStrength` and `exploreCap` are not used yet.
+- The README says that the judge has four tiers and when the router picks `fable`.
+
 ## model-router 0.7.0
 
 2026-11-23 · pull request #93

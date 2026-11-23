@@ -73,7 +73,7 @@ function decisionsSection(decisions) {
   return {
     title: 'Routing decisions', summary: `${plural(total, 'decision')} logged, all time.`, empty: total ? null : EMPTY.decisions,
     chips: actions.map((a) => ({ text: `${a} ${fmtNum(byAction[a])}`, tone: ACTION_TONES[a] ?? 'dim' })),
-    note: 'Up to release 0.3 the router only measures: no correction from the quality data is applied before 0.4.',
+    note: 'The router only measures so far: no correction from the quality data is applied yet.',
   };
 }
 

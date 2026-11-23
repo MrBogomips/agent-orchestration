@@ -9,7 +9,7 @@ Picks the model and the effort level for sessions and for subagents. Works in an
 | `model-router:choose-model` | skill | Holds the grid. The agent uses it whenever it starts a subagent or a session, and passes model and effort explicitly. |
 | `model-router:setup` | skill | Writes a *Model routing* section in the project's instruction file with project defaults and exceptions, after the user confirms. |
 | `model-router` | mod | At a subagent's start, acts only when no model was given. Logs every decision. |
-| `/model-router` | command (mod) | In a terminal, opens the usage view, a tabbed dialog pane (overview, models, classes, decisions), with a text fallback where no pane can be placed; on the desktop app, draws the Model routing card in the transcript. Turns the router on or off for the session. See *Command*. |
+| `/model-router` | command (mod) | In a terminal, opens the usage view, a tabbed dialog pane (Overview, Models, Classes, Decisions, Savings), with a text fallback where no pane can be placed; on the desktop app, draws the Model routing card in the transcript. Turns the router on or off for the session. See *Command*. |
 | Decision log | file | `decision` records in `~/.claude/model-router/events.jsonl` (under the active config folder); see `model-router-quality-loop.md`. |
 | Options | `userConfig` | Tier models, thresholds, judge timeout, on/off switches. |
 | `model-router:report` | skill | Compacts the quality data and opens a local report page. See `model-router-quality-loop.md`. |
@@ -194,8 +194,8 @@ stands only for a task of class `design-open` (from the tag, else from the judge
 usual bars, and the decision's reason ends with `held to deep`. The comparison is with the parent's model, so a
 subagent of a `fable` session can be lowered by a `fast`, `balanced` or `deep` answer; a `frontier` answer never
 lowers a start, so held it leaves a start above the deep tier as it is. Risky
-work is forced to the deep tier, not to the frontier one. Up to 0.3 the router does not hold `review-debug` and
-`design-open` to the grid's floor (the floor applies to exploration and recommendations from 0.4).
+work is forced to the deep tier, not to the frontier one. The router does not hold `review-debug` and
+`design-open` to the grid's floor (the floor applies to exploration and recommendations once adaptive selection ships).
 
 Log one line when the mod is ready, one at the first firing of each hook and one for each failure. Without them, a
 router that never loaded, or fails on every call, looks the same as one with nothing to do. All go to the debug log
@@ -454,6 +454,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.5.0 | The judge's `frontier` tier: `fable` for open-ended design, at its own confidence bar. |
 | 0.6.0 | The spawn and outcome records name the starting session's model (`parentModel`). |
 | 0.7.0 | The Savings view: what routing saved against the session's own model, on the page, the terminal and the card. |
+| 0.7.1 | Documents and option titles no longer promise adaptive selection for 0.4. |
 | later | Adaptive selection from the quality data (`model-router-quality-loop.md`, which plans it as 0.4). |
 
 ## Open points

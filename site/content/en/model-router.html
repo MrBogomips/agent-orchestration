@@ -1,4 +1,4 @@
-<!-- translated-from: it/model-router.html sha256:5036de09c33a -->
+<!-- translated-from: it/model-router.html sha256:8e6461859b70 -->
 <h1>model-router</h1>
 <p class="lede">Choosing the right model for every subagent, child session, or workflow agent shouldn't be guesswork. <code>model-router</code> applies a single written grid, routes launches that don't specify a model on the fly, and measures on your machine how well each choice actually paid off.</p>
 
@@ -184,10 +184,10 @@ listed here follows the grid.
     <tr><td><code>timeoutMs</code></td><td><code>8,000</code></td><td>Maximum wait time for the judge; once exceeded, the launch stays unchanged</td></tr>
     <tr><td><code>routeSubagents</code></td><td><code>true</code></td><td>Turns subagent launch routing on or off altogether</td></tr>
     <tr><td><code>measure</code></td><td><code>true</code></td><td>Records the event log and quality data</td></tr>
-    <tr><td><code>adapt</code></td><td><code>false</code></td><td>Chooses based on quality data (from version <code>0.4</code>; unused earlier)</td></tr>
+    <tr><td><code>adapt</code></td><td><code>false</code></td><td>Picks based on quality data (not used yet)</td></tr>
     <tr><td><code>halfLifeDays</code></td><td><code>30</code></td><td>Half-life for quality data decay, in days</td></tr>
-    <tr><td><code>projectPriorStrength</code></td><td><code>5</code></td><td>How many observations the user-level history counts for in a project estimate (from <code>0.4</code>)</td></tr>
-    <tr><td><code>exploreCap</code></td><td><code>0.1</code></td><td>Maximum share of decisions per class allowed to explore alternatives (from <code>0.4</code>)</td></tr>
+    <tr><td><code>projectPriorStrength</code></td><td><code>5</code></td><td>How many observations the user level counts for when estimating a project (not yet used)</td></tr>
+    <tr><td><code>exploreCap</code></td><td><code>0.1</code></td><td>Maximum share of decisions per class that can explore alternatives (not yet used)</td></tr>
     <tr><td><code>reworkWindowMin</code></td><td><code>30</code></td><td>Minutes after a report within which redoing the work counts as rework</td></tr>
     <tr><td><code>similarityThreshold</code></td><td><code>0.5</code></td><td>Word overlap above which two descriptions count as the same task</td></tr>
   </tbody>
@@ -261,7 +261,7 @@ listed here follows the grid.
 </ul>
 <h3>How the router uses it</h3>
 <p><strong>Today (versions <code>0.2</code> and <code>0.3</code>), FPY informs rather than drives.</strong> The <code>adapt</code> option is off and the router follows the grid alone. FPY powers the <code>/model-router</code> view, the report, and — for each task class — a <strong>recommended cell</strong>: the one with the lowest cost per successful task among cells with at least three tasks, never dropping below the grid on <code>review-debug</code> and <code>design-open</code>. If a recommendation consistently diverges from the grid, you can decide to add an exception under <code>## Model routing</code>.</p>
-<p><strong>Starting in version <code>0.4</code> (planned), FPY will drive selection.</strong> With <code>adapt</code> enabled, the router balances exploitation (sticking with what works) and exploration (testing promising alternatives) via <strong>Thompson sampling</strong>:</p>
+<p><strong>In a planned future version, FPY will drive the choices.</strong> With <code>adapt</code> enabled, the router balances exploitation (using what works) and exploration (trying promising alternatives) via <strong>Thompson sampling</strong>:</p>
 <ul>
   <li>For every cell, it maintains a range of plausible FPY values modeled as a Beta distribution: <code>alpha</code> grows with time-weighted successes, <code>beta</code> with weighted reworks and failures.</li>
   <li>On each launch, it draws a plausible FPY from each candidate cell neighboring the grid, divides the cell's cost by that draw, and picks the one with the lowest cost per success.</li>
@@ -469,5 +469,5 @@ listed here follows the grid.
   <li>Only launches made through the <code>Agent</code> tool are routed; plugin-internal agents and workflow agents are measured, not routed.</li>
   <li>The router only picks <code>fable</code> for <code>design-open</code> and, through version <code>0.3</code>, does not enforce the grid's floor on <code>review-debug</code> and <code>design-open</code>.</li>
   <li>Costs are engine estimates; edits made outside the session's tools are not detected.</li>
-  <li>Through version <code>0.3</code>, quality data is measured only, never used to make decisions. Adaptive selection driven by quality data is planned for <code>0.4</code>.</li>
+  <li>For now, data is only measured, not used to make decisions. Adaptive selection based on quality data is planned for a future release.</li>
 </ul>

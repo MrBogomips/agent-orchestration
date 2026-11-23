@@ -188,7 +188,7 @@ test('the status reads as three parts, each on or off, shared by the rows and th
     { key: 'adapt', text: 'adapt off', on: false },
   ]);
   assert.equal(statusParts({ ...STATUS, routing: false, routeSubagents: false })[0].text, 'routing off (routeSubagents is false)');
-  assert.equal(statusParts({ ...STATUS, adapt: true })[2].text, 'adapt on (not used before 0.4)');
+  assert.equal(statusParts({ ...STATUS, adapt: true })[2].text, 'adapt on (not used yet)');
   assert.deepEqual(statusParts(null), []);
 });
 
