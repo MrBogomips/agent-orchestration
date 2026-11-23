@@ -12,7 +12,7 @@ record where it departs from the grid, and catches the starts that still carry n
 each kind of task and each model and effort, how often the work was right the first time and what a successful
 task cost, so the grid can be checked against real work.
 
-## Components (0.3)
+## Components
 
 | Name | Kind | What it does |
 |---|---|---|
@@ -76,7 +76,7 @@ or one of the next two prompts you type names its files or its task),
 no class (no `[mr:<class>]` tag and no judge answer), tasks on a model outside the four families and tasks with no
 known effort are recorded but not learned. Cells of class × tier × effort keep first-pass yield, rework rate,
 cost per task and cost per successful task, aged with a 30-day half-life, at two levels: you, and each project.
-Up to release 0.3 the router only measures: it does not yet choose from this data.
+So far the router only measures: it does not yet choose from this data.
 
 ## Usage
 
@@ -254,10 +254,10 @@ Set in `/config` or under `pluginConfigs` in settings.
 | `timeoutMs` | 8000 | Judge time limit; past it the start is left unchanged |
 | `routeSubagents` | true | Route subagent starts at all |
 | `measure` | true | Record the event log and the quality data |
-| `adapt` | false | Choose from the quality data; from release 0.4, unused before |
+| `adapt` | false | Choose from the quality data; not used yet |
 | `halfLifeDays` | 30 | Aging of the quality data |
-| `projectPriorStrength` | 5 | How many observations the user level counts for in a project's estimate; from release 0.4, unused before |
-| `exploreCap` | 0.1 | Share of decisions per class that may explore; from release 0.4 |
+| `projectPriorStrength` | 5 | How many observations the user level counts for in a project's estimate; not used yet |
+| `exploreCap` | 0.1 | Share of decisions per class that may explore; not used yet |
 | `reworkWindowMin` | 30 | Minutes after a report during which a redo counts as rework |
 | `similarityThreshold` | 0.5 | Word overlap at which two task descriptions count as the same task |
 
@@ -282,9 +282,11 @@ receives the subagent type, its short description and the first 4,000 characters
   measured, not routed.
 - An agent defined by a plugin is never routed: its definition file is not read. Of the built-in types, only
   `general-purpose` and `Explore` are routed (verified to inherit the parent's model).
-- The judge's tiers are haiku, sonnet and opus: the router never picks `fable`, and it compares with the
-  parent's model, so a subagent of a `fable` session can be lowered. Up to 0.3 it does not hold `review-debug` and
-  `design-open` to the grid's floor.
+- The judge has four tiers: `fast` (haiku), `balanced` (sonnet), `frontier` (`fable`) and `deep` (opus). The
+  router picks `fable` only for `design-open` work at a confidence of at least `minFrontierConfidence`; any other
+  `frontier` answer is held to the deep tier. It compares with the parent's model, so a subagent of a `fable`
+  session can be lowered by a `fast`, `balanced` or `deep` answer, but never by a held `frontier` one. It does not
+  hold `review-debug` and `design-open` to the grid's floor.
 - Costs are the engine's estimates. Edits made outside the session's own tools are not seen.
 - Read-only classes and cells with fewer than five tasks are weak signals; the report marks them.
 - Several `Agent` calls made in one message are drawn by Claude Code as one "background agents launched" row:
@@ -307,4 +309,4 @@ The user manual for both plugins, with screenshots of every tab of the usage vie
 `docs/manual/user-manual.pdf` in the source repository.
 
 Design: `docs/design/model-router.md` and `docs/design/model-router-quality-loop.md` in the source repository.
-Adaptive selection from the quality data comes in 0.4.
+Adaptive selection from the quality data is planned for a later release.

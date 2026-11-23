@@ -1,14 +1,14 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.3.2, `model-router` 0.3):
+This document describes the two plugins in this repository as built (`session-hub` 0.5.1, `model-router` 0.7.1):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
 
 | Plugin | Version | In one line |
 |---|---|---|
-| `session-hub` | 0.3.2 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
-| `model-router` | 0.3.5 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
+| `session-hub` | 0.5.1 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
+| `model-router` | 0.7.1 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
 
@@ -74,7 +74,7 @@ on purpose: `mr` in the router's task-class tag (`[mr:<class>]`), and the messag
 
 ```mermaid
 flowchart LR
-  subgraph SH["session-hub 0.2"]
+  subgraph SH["session-hub"]
     dispatch["skill<br/>session-hub:dispatch"]
     spawn["skill<br/>session-hub:spawn"]
     shsetup["skill<br/>session-hub:setup"]
@@ -82,13 +82,16 @@ flowchart LR
     guard["hook<br/>session-hub-scope-guard<br/>(hooks.json + scope-guard.mjs)"]
     shmod["mod<br/>session-hub<br/>(hooks.json + session-hub-mod.tsx)"]
   end
-  subgraph MR["model-router 0.2"]
+  subgraph MR["model-router"]
     choose["skill<br/>model-router:choose-model"]
     mrsetup["skill<br/>model-router:setup"]
     mrreport["skill<br/>model-router:report"]
     mrmod["mod<br/>model-router<br/>(hooks/model-router.tsx)"]
     compactjs["script<br/>scripts/compact.mjs"]
     reportjs["script<br/>scripts/report.mjs"]
+    usagejs["script<br/>scripts/usage.mjs"]
+    logjs["script<br/>scripts/log.mjs"]
+    card["card<br/>(hooks/router-card.tsx)"]
     grid["data<br/>grid.json"]
     gridtest["test<br/>grid.test.mjs"]
   end
@@ -119,6 +122,12 @@ flowchart LR
   mrmod -->|at session start| compactjs
   mrreport --> reportjs
   reportjs --> compactjs
+  usagejs -->|compacts within 3 s| compactjs
+  mrmod -->|usage view, card data| usagejs
+  mrmod -->|Log view| logjs
+  mrmod -->|desktop app| card
+  logjs -->|reads, writes nothing| events
+  usagejs -->|reads| events
   compactjs -->|outcomes, aggregates| events
 ```
 
@@ -152,9 +161,12 @@ one file per environment).
 | `model-router:setup` | skill | Writes or updates a `## Model routing` section in the project's instruction file with the project's defaults and exceptions, only after the user's explicit yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs` and gives the user the page's path. Computes nothing itself. |
 | `model-router` | mod | `hooks/model-router.tsx`, registered as a module in `hooks/hooks.json`. Routes subagent starts that carry no model, draws under each `Agent` call's row the model and effort the subagent got, and records the quality loop's events. Thin glue over the plain modules in `lib/`. |
-| `/model-router` | command | Registered by the mod: the usage view, a tabbed dialog (Overview, Models, Classes, Decisions, Savings) with a text fallback; `on` or `off` for the session; `report`; `help`. See [Commands](#commands). |
-| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), which typed prompts are stored (`prompt-gate.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the choose-model line (`route-line.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the windows and weeks it cuts by (`windows.mjs`), the formatters every surface writes a figure through (`format.mjs`), Savings, what routing gained against the session's own model (`savings.mjs`, the prices of each model fitted from the logged costs `prices.mjs`, its shared words `savings-text.mjs`, its card view `card-savings.mjs` and page section `report-savings.mjs`), the usage view's rows (`usage-view.mjs`), its tiles and sparklines (`usage-tiles.mjs`) and keys (`usage-nav.mjs`), terminal text width (`width.mjs`), report page (`report-html.mjs`). Unit-tested with `node:test`. |
-| `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes outcomes and updates the aggregates under a lock; the report renders them into one self-contained page and opens it; `usage.mjs` compacts within a 3-second budget and prints the usage view's data as JSON. |
+| `/model-router` | command | Registered by the mod: the usage view, a tabbed dialog (Overview, Models, Classes, Decisions, Savings) with a text fallback; `on` or `off` for the session; `report`; `log`; `help`. See [Commands](#commands). |
+| `lib/*.mjs` | modules | Plain ES modules with no Node or engine import, loaded by both the mod and the scripts: judge prompt and answer (`judge.mjs`), routing table and thresholds (`route.mjs`), tag and similarity (`text.mjs`), model families and effort levels (`tiers.mjs`), outcomes (`outcome.mjs`), which typed prompts are stored (`prompt-gate.mjs`), aggregates (`aggregate.mjs`), project id (`project-id.mjs`), the choose-model line (`route-line.mjs`), the aggregation the report page and the usage view share (`usage-data.mjs`), the windows and weeks it cuts by (`windows.mjs`), the formatters every surface writes a figure through (`format.mjs`), Savings, what routing gained against the session's own model (`savings.mjs`, the prices of each model fitted from the logged costs `prices.mjs`, its shared words `savings-text.mjs`, its card view `card-savings.mjs` and page section `report-savings.mjs`), the usage view's rows (`usage-view.mjs`), its tiles and sparklines (`usage-tiles.mjs`) and keys (`usage-nav.mjs`), terminal text width (`width.mjs`), report page (`report-html.mjs`, its view model `report-cards.mjs` and its style sheet `report-style.mjs`); for the desktop app's card, the card as a plain value (`card-view.mjs`), its drawings as SVG and its markdown text (`card-parts.mjs`), the usage view as cards, rows and charts (`usage-cards.mjs`, `usage-svg.mjs`) and the bounds a returned tree must keep (`tree-bounds.mjs`); for the event log, the dashboard's bounded one-pass collector (`log-data.mjs`), a record as one line (`log-cards.mjs`), the file and command that open the log (`open-log.mjs`), and where the report opens, as a page in the browser from a terminal and as the card's Trend view on a graphical surface (`open-report.mjs`); `usage-fixture.mjs`, a fixed data set for the tests only. Unit-tested with `node:test`. |
+| `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs`, `scripts/log.mjs` | scripts | Node, no dependencies. Compaction closes outcomes and updates the aggregates under a lock; the report renders them into one self-contained page and opens it; `usage.mjs` compacts within a 3-second budget and prints the usage view's data as JSON; `log.mjs` makes one read-only pass over the event log, archive included, for a window, a record type and a page, and prints the Log view's data as JSON. |
+| `scripts/log-io.mjs`, `scripts/rotate.mjs` | scripts | Helpers of the scripts, not run by themselves: reading and writing the event log and its neighbours without holding a log whole (`log-io.mjs`), and rotating `events.jsonl` into `archive/` without dropping a line another session appends (`rotate.mjs`, called by compaction under its lock). |
+| `hooks/router-card.tsx`, `hooks/card-kit.tsx` | card | The Model routing card on the desktop app: its state, the newest card and its reads, with the render hook (`router-card.tsx`); the layout of a card from a plain value, with no logic (`card-kit.tsx`, the same file in both plugins). |
+| `hooks/usage-pane.tsx`, `hooks/usage-terminal.tsx` | pane | The usage view in a terminal: the dialog's header, rows and key hints (`usage-terminal.tsx`), and the pane that always shows at least one line, or says that a proportional-type surface has the card instead (`usage-pane.tsx`). |
 | `grid.json` | data | The same grid in machine-readable form, with each class's usual choice (`default`); the judge's prompt is generated from it. |
 | `grid.test.mjs` | test | Fails when `grid.json` and the two skills drift apart. |
 | `tests/model-router.test.tsx` | test | The mod's tests, run by `claude plugin test ./model-router`. |
@@ -421,7 +433,7 @@ flowchart TD
   json -->|no| b0["Block"]
   json -->|yes| role{"Role is child?"}
   role -->|"no (unknown value)"| b1["Block"]
-  role -->|yes| root{"Scope root set, absolute, existing,<br/>a directory, not / and not home?"}
+  role -->|yes| root{"Scope root set, absolute, existing,<br/>a directory, not the top of a file system<br/>and not home?"}
   root -->|no| b2["Block"]
   root -->|yes| input{"Tool name present?"}
   input -->|no| b3["Block"]
@@ -432,7 +444,9 @@ flowchart TD
   path -->|yes| res{"Real path resolved?<br/>(dangling link fails)"}
   res -->|no| b5["Block"]
   res -->|yes| under{"Real path under the<br/>real scope root?"}
-  under -->|yes| hard{"An existing file with<br/>more than one hard link?"}
+  under -->|yes| cfg{"Repository's .claude/settings*.json?<br/>(either separator)"}
+  cfg -->|yes| b8["Block: the settings can turn the guards off.<br/>Send an out-of-scope message to the master"]
+  cfg -->|no| hard{"An existing file with<br/>more than one hard link?"}
   hard -->|no| allow3["Allow"]
   hard -->|yes| b7["Block: another name may be outside.<br/>Send an out-of-scope message to the master"]
   under -->|no| out["Block: outside the write root.<br/>Send an out-of-scope message to the master"]
@@ -446,9 +460,15 @@ How it decides:
   a link goes to the link target's parent as the file system does, and a link outside the root that points inside
   is allowed. Parts that do not exist yet are kept as written. A path is inside when it equals the root or starts
   with the root followed by a separator, so a sibling folder whose name starts with the root's name is outside.
-- **Absolute paths only.** A relative target or a path starting with `~` is blocked.
-- **Too-wide roots refused.** A scope root of `/` or the home folder is a configuration error and blocks. The
+- **Absolute paths only.** A relative target or a path starting with `~` is blocked. Absolute means `/…`, or on
+  Windows `\…`, a drive path (`C:\…`, `C:/…`) or a network share (`\\server\share`). The walk to the real path starts
+  from the path's own root, a drive or a share included, never from a part of it.
+- **Too-wide roots refused.** A scope root that is the top of a file system (`/`, a drive root such as `C:\`) or the
+  home folder is a configuration error and blocks. The
   rules for the root live in `hooks/mod/write-root.mjs`, which the mod's shell check uses too.
+- **The repository's settings blocked.** A write to `<root>/.claude/settings*.json` blocks, with either separator
+  and whatever the case: the `env` and hook settings in those files can turn the child's guards off, so only the
+  master changes them.
 - **Hard links blocked.** A write to an existing file with more than one hard link blocks: a hard link has no real
   path that leads elsewhere, so another name of the file may be outside the root, and the write would change it.
 - **Block message.** Every message starts with `[session-hub] Write blocked:`. For a write outside the root, it
@@ -679,7 +699,7 @@ runs on `opus` at `medium` unless its own design work is hard.
 **Quality hints.** When `<config dir>/model-router/quality/recommendations.json` exists, `choose-model` reads the
 entry for the task's class (`classes.<class>`: `tier`, `effort`, `source`, `n`) as a hint. The hint never overrides the order of precedence, never goes below the grid
 for `review-debug` or `design-open`, never goes below the project's defaults, and does not apply to a risky start.
-Releases up to 0.3 do not write this file.
+No release writes this file yet: adaptive selection, which would, is still planned.
 
 ### How `grid.json`, the skills and the test relate
 
@@ -703,7 +723,7 @@ drift apart. It checks that:
 - `grid.json` has every part, with the tiers in check order, the price order, the effort levels and questions
   (ending with the `medium` fallback, never `max`), the six classes with `review-debug` and `design-open` flagged
   as never below the grid and each with a valid `default` tier and effort, the tag format `[mr:<class>]` with the
-  `!` marker, and the judge mapping `fast` = `haiku`, `balanced` = `sonnet`, `deep` = `opus`;
+  `!` marker, and the judge mapping `fast` = `haiku`, `balanced` = `sonnet`, `frontier` = `fable`, `deep` = `opus`;
 - the tables under `### Model` and `### Task classes` in `choose-model` name the same tiers and classes in the
   same order, the questions under `### Effort` give the same levels in the same order and forbid `max`, every
   `[mr:…]` tag names a known class, and the price order is stated;
@@ -730,20 +750,27 @@ built-in type other than `general-purpose` and `Explore`, a file under the type'
 agent's `name`) are kept. The judge is one call to the fast tier (8 s
 limit) with a prompt generated from `grid.json`; the task is wrapped as data with closing tags escaped. A
 downgrade needs confidence 0.6, an upgrade 0.3; risk above 0.7 (or a `!` in the class tag) forces the deep tier
-and at least `high` effort. The judge's `frontier` tier sends a start to `fable` only for `design-open` work at confidence 0.7; any other
-`frontier` answer counts as the deep tier. Up to 0.3 the router does
-not hold `review-debug` and `design-open` to the grid's floor.
+and at least `high` effort. The judge's `frontier` tier sends a start to `fable` only for `design-open` work, when the judge's confidence
+reaches the option `minFrontierConfidence` (default 0.7) and a frontier model is set; any other `frontier` answer
+is held to the deep tier. A held answer never lowers a start (a `fable` session's subagent stays on `fable`), and
+its decision's reason ends with `held to deep`. The router does not hold `review-debug` and `design-open` to the
+grid's floor.
 
-### The quality loop (measuring only up to 0.3)
+### The quality loop (measuring only)
 
 The mod appends `decision`, `spawn`, `signal` (`write`, `tool-error`, `prompt`, `stop`, `resume`), `report` and
 `session-end` records to `events.jsonl` with `cat >>` through `$.process.run`; a `prompt` signal only for the next
-two prompts after a subagent's report, inside the rework window. Compaction, started by the mod at
+two prompts after a subagent's report, inside the rework window. Some records carry fields later features read:
+a `spawn` carries `parentModel`, the model of the session that started the subagent (from 0.6.0); a `report`
+carries `usage`, the tokens by kind (`input`, `output`, `cacheRead`, `cacheWrite`) or `null` (from 0.7.0); an
+`outcome` carries both; and a `decision` carries `judge.ms`, the judge's answer time, which Savings reads. Compaction, started by the mod at
 session start and by the report, decides the outcome of every task whose rework window closed (`success`,
 `rework`, `failure`, `cancelled`), appends it as an `outcome` record, and folds the learned ones into cells of
-class × tier × effort at two levels (user, project), with aging and the grid as prior. The report shows first-pass
-yield, rework rate, cost per task and per successful task, the explored share, a recommendation per class, a
-weekly trend and the router's decisions. The router does not use the data until 0.4. The same aggregation
+class × tier × effort at two levels (user, project), with aging and the grid as prior. The report page shows,
+in this order, Savings (the last 30 days, at the user level), the headline (first-pass yield, rework rate, cost per
+task and per successful task, the explored share), the weekly trend, the router's decisions, the classes with a
+recommendation each, and the projects. In every release so far the loop only measures: the router does not use
+the data. The same aggregation
 (`lib/usage-data.mjs`) feeds the page and the terminal's usage view, so the two show the same numbers.
 
 ### The line under an Agent row
@@ -801,7 +828,7 @@ sequenceDiagram
     P->>M: Down / Up (ui.scroll of one row: next window, body kept)
     P->>M: d/w/m/a, p (Button hotkeys)
     M->>M: $.state view; redraw only
-    P->>M: r (usage.mjs again), o (report.mjs)
+    P->>M: r (usage.mjs again), o (report.mjs), l (open the event log)
   else no pane (headless, -p, under 60 columns)
     M->>U: the same read
     U-->>M: JSON
@@ -817,15 +844,17 @@ the report skill still work then. Every answer is for the person (`isTextDisplay
 | Command | Arguments | Shows or does | With mods off |
 |---|---|---|---|
 | `/session-hub` | none | The session's role and scope; in a master, the children table (sized to the terminal) and the children panel opened beside the chat. In the Claude desktop app, the Session hub card in the transcript instead (Children, Record). | No command; the scope guard hook still guards writes in a child. |
+| `/session-hub log` (or `record`) | | Opens the children record in the system's default app and answers its path, or says there is no record yet. In a child, it opens its master's record. | |
 | `/session-hub help` | | What the command does. Any other argument prints the same. | |
 | `/model-router` | `[overview\|models\|classes\|decisions\|savings] [24h\|7d\|30d\|all] [user\|project]` | The usage view: a dialog pane with five tabs, or the same rows as text where no pane can be placed (headless, `-p`, under 60 columns). Defaults: Overview, 7 days, user level. In the Claude desktop app, the Model routing card in the transcript instead, whose views include the report (Trend) and the event log (Log). | No command; ask for the *model-router report* (skill) for the same numbers on a page. |
 | `/model-router on`, `off` | | Routing on or off for this session. | |
 | `/model-router report` | | Writes and opens the report page; answers its path. | The `model-router:report` skill does the same. |
+| `/model-router log` | | Opens the event log (`events.jsonl`) in the system's default app; answers its path. | |
 | `/model-router help` | | The arguments and the keys. Any unknown argument prints the same. | |
 
 Keys in the usage view: Tab and Shift+Tab switch tab; Down and Up step the window, and `d`, `w`, `m`, `a` set
 it to 24 hours, 7 days, 30 days or all; `p` switches between the user and the project level; `o` writes and opens
-the report; `r` refreshes (runs compaction); Page Up and Page Down scroll; Esc closes. Left and Right do not reach
+the report; `r` refreshes (runs compaction); `l` opens the event log; Page Up and Page Down scroll; Esc closes. Left and Right do not reach
 a plugin pane.
 
 ## State on disk
@@ -839,7 +868,7 @@ No plugin keeps state inside a hub or a repository. State lives under the active
 | `<config dir>/session-hub/children-<hub id>.json.lock` | session-hub | `registry.mjs`, during a write | the lock | 0.1 |
 | a path named by the hub's *Registry* key | session-hub | the master, through `registry.mjs` | the children record, when the hub moves it; never inside the hub | 0.1 |
 | `<scratchpad or mktemp -d>/<name>-handoff.md` | session-hub | `spawn` | one handoff per child; none for a desktop app child, whose handoff is passed inline | 0.1 |
-| `<config dir>/model-router/quality/recommendations.json` | model-router | nothing up to 0.3 (read only, if present) | per-class model and effort hints | written from 0.4 |
+| `<config dir>/model-router/quality/recommendations.json` | model-router | nothing yet (read only, if present) | per-class model and effort hints | not written by any release; adaptive selection is planned |
 | `<config dir>/model-router/events.jsonl` | model-router | the router mod and compaction, append only; compaction renames it into `archive/` from 32 MB | routing decisions, spawns, signals, reports, session ends; outcomes (compaction) | 0.2 |
 | `<config dir>/model-router/archive/` | model-router | compaction | rotated logs (`raw-<ms>.jsonl` until settled, then `events-<ms>.jsonl` with outcomes, decisions and spawns only), and `outcomes.jsonl` with the outcomes of rotated logs older than 90 days | 0.3.11 |
 | `<config dir>/model-router/quality/user.json`, `quality/projects/<project id>.json` | model-router | compaction, written whole (temporary name, then rename) | quality aggregates per user and per project | 0.2 |
@@ -883,7 +912,7 @@ file remembers the tasks it folded.
 | Cross-session messaging (needed by `session-hub`) | Claude Code 2.1.224 or later |
 | Mods | exist from Claude Code 2.1.287; both mods declare `engines["claude-code"]: ">=2.1.329"`, the version they were tested on |
 | `node` | on `PATH`, for the scope guard, the record script, the `session-hub` mod's panel (it reads the record through `registry.mjs`), the `model-router` scripts and the `model-router` mod (it starts `compact.mjs`); no dependencies |
-| Operating system | macOS and Linux only: the `session-hub` hook wrapper in `hooks.json` is a POSIX `sh` command; the `model-router` mod runs `sh`, `node`, `mkdir`, `dirname`, `cat`, `mv` and `tail`, and its report opens the page with `open` (macOS) or `xdg-open` (Linux) |
+| Operating system | The `session-hub` scope guard also works for a Windows child under Git Bash: it accepts Windows write roots and target paths, and the hook command in `hooks.json` sets `MSYS2_ENV_CONV_EXCL` so that Git Bash leaves the `SESSION_HUB_*` values as they are. Everything else is written for macOS and Linux: the hook wrapper in `hooks.json` is a POSIX `sh` command, and the `model-router` mod runs `sh`, `node`, `mkdir`, `dirname`, `cat`, `mv` and `tail`, and its report opens the page with `open` (macOS) or `xdg-open` (Linux) |
 
 What was verified on 2.1.329:
 
@@ -911,7 +940,7 @@ folder loaded no project instruction file at all, so test hubs belong under the 
 
 Everything in this section is provisional: names, defaults and behaviour may change before release.
 
-### model-router 0.4: adaptive selection
+### model-router: adaptive selection, a later release
 
 - **Selection** by **Thompson sampling** when `adapt` is on: for the grid's choice and its neighbours one step
   away in tier or effort, sample a success probability from each one's two-level posterior and pick the lowest
@@ -930,8 +959,10 @@ Everything in this section is provisional: names, defaults and behaviour may cha
     `.mjs` modules with their `.d.mts` declarations; `scripts/` holds `registry.mjs`; `types/` and `tsconfig.json`
     type the mod. The mod's tests are `hooks/session-hub-mod.test.tsx` for the glue and `hooks/mod/*.test.mjs` for
     the logic.
-  - `model-router/`: `hooks/` holds the mod (`model-router.tsx`, loaded from `hooks.json`); `lib/` holds the plain
-    modules shared by the mod and the scripts; `scripts/` holds `compact.mjs`, `report.mjs` and `usage.mjs`; `types/` types the
+  - `model-router/`: `hooks/` holds the mod (`model-router.tsx`, loaded from `hooks.json`) and its views
+    (`router-card.tsx`, `card-kit.tsx`, `usage-pane.tsx`, `usage-terminal.tsx`); `lib/` holds the plain
+    modules shared by the mod and the scripts, listed in [model-router](#model-router); `scripts/` holds `compact.mjs`,
+    `report.mjs`, `usage.mjs` and `log.mjs`, with `log-io.mjs` and `rotate.mjs` as their helpers; `types/` types the
     mod; `grid.json` and `grid.test.mjs` sit at the plugin's root. The mod's tests are
     `tests/model-router.test.tsx` for the glue and `lib/*.test.mjs` and `scripts/*.test.mjs` for the logic; the
     usage view's golden text is in `lib/usage-view.golden-*.txt`.

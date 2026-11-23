@@ -41,8 +41,8 @@ When the page has no data yet, say why it may be empty:
 
 ## Limits
 
-- Up to release 0.3 the router only measures. The page shows a recommendation per class, but the router does not
-  act on it before 0.4.
+- The router only measures so far. The page shows a recommendation per class, but the router does not act on it
+  yet.
 - In a session with mods on, `/model-router` shows the same numbers in the terminal, and `/model-router report`
   writes and opens this same page. Suggest it to the user for next time.
 - Read-only classes and cells with fewer than five tasks are weak signals; the page flags them.

@@ -148,7 +148,7 @@ export const RECOMMENDATIONS_VERSION = 1;
  * The content of `quality/recommendations.json`, which `choose-model` reads as a hint:
  * `{ version, generatedAt, classes: { <class>: { tier, effort, source, n } } }`, `tier` a row of the grid's model
  * table, `source` `data` or `grid`, `n` the tasks behind a `data` entry (0 for `grid`). Nothing writes the file
- * before 0.4; the shape is fixed here so the skill and the writer agree.
+ * yet; the shape is fixed here so the skill and the writer agree.
  */
 export function recommendationsFile(cells, grid, { now }) {
   const classes = {};

@@ -236,7 +236,7 @@ test('SKILL.md shows the choose-model line as lib/route-line.mjs writes it', () 
   }
 });
 
-// The hints file has no writer before 0.4: its shape is fixed now, so the skill and the writer read the same fields.
+// The hints file has no writer yet: its shape is fixed now, so the skill and the writer read the same fields.
 test('the quality hints the skill reads are the fields the recommendations file holds', () => {
   const grid = loadGrid();
   const file = recommendationsFile({}, grid, { now: Date.parse('2026-11-21T00:00:00Z') });

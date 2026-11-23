@@ -1,4 +1,4 @@
-<!-- translated-from: it/architecture.html sha256:5e22f27f90ec -->
+<!-- translated-from: it/architecture.html sha256:245da33a3c58 -->
 <h1>Architecture</h1>
 <p class="lede">This page shows how the two released plugins (session-hub {{version:session-hub}} and model-router {{version:model-router}}) are built: what components make them up, how they talk to each other, what files they write to disk, and how they behave when something goes wrong.</p>
 
@@ -179,7 +179,7 @@
 </ol>
 <p>The report page and the usage view share the same aggregation logic (<code>lib/usage-data.mjs</code>), so their numbers always match. Through version <code>0.3</code>, the router only collects and displays this data without using it to alter routing decisions.</p>
 <figure class="diagram">{{diagram:d9-stats}}<figcaption>Events, outcomes, cells: how the quality loop turns subagent runs into numbers.</figcaption></figure>
-<p><strong>Planned for <code>0.4</code> (provisional):</strong> when <code>adapt</code> is enabled, Thompson sampling between the grid choice and adjacent cells using the grid as prior; exploration capped at 10% of recent decisions for a task class and disabled altogether on risky launches; writing <code>recommendations.json</code> during compaction so <code>choose-model</code> can read it.</p>
+<p><strong>Planned for a later release (still provisional):</strong> when <code>adapt</code> is enabled, Thompson sampling selects between the grid's pick and its neighboring cells, using the grid as a prior; exploration is capped at 10% of recent decisions for a task class, with no exploration on risky launches; <code>recommendations.json</code> is written during compaction for <code>choose-model</code> to read.</p>
 <p>Every file produced by the record and the quality loop lives in a well-defined spot outside your repositories. Here is the full list in one table.</p>
 
 <h2 id="state">On-disk state</h2>
@@ -195,7 +195,7 @@
     <tr><td><code>model-router/quality/state.json</code>, <code>quality/.lock</code></td><td><code>model-router</code></td><td>Compaction cursor and lock (stale after 2 minutes)</td></tr>
     <tr><td><code>model-router/options.json</code></td><td><code>model-router</code></td><td>Options used by compaction and the report</td></tr>
     <tr><td><code>model-router/report.html</code></td><td><code>model-router</code></td><td>The local report page</td></tr>
-    <tr><td><code>model-router/quality/recommendations.json</code></td><td><code>model-router</code></td><td>Per-task-class recommendations, read if present and written starting in <code>0.4</code></td></tr>
+    <tr><td><code>model-router/quality/recommendations.json</code></td><td><code>model-router</code></td><td>Recommendations per task class, read if present; no version writes them yet</td></tr>
   </tbody>
 </table>
 <p>The only writes that ever touch a hub or project are two configuration sections — <code>## Child sessions</code> in the hub and <code>## Model routing</code> in the project — both created only after your explicit confirmation and never committed automatically.</p>

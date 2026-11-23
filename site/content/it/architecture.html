@@ -178,7 +178,7 @@
 </ol>
 <p>La pagina del report e la vista d'uso condividono la stessa logica di aggregazione (<code>lib/usage-data.mjs</code>), così i numeri coincidono sempre. Fino alla versione <code>0.3</code> il router si limita a raccogliere e mostrare questi dati senza usarli per cambiare le decisioni.</p>
 <figure class="diagram">{{diagram:d9-stats}}<figcaption>Eventi, esiti, celle: come il ciclo di qualità trasforma le esecuzioni dei subagent in numeri.</figcaption></figure>
-<p><strong>Previsto per la <code>0.4</code> (ancora provvisorio):</strong> con <code>adapt</code> attivo, selezione tramite Thompson sampling tra la scelta della griglia e le celle adiacenti, usando la griglia come stima a priori; esplorazione limitata al 10% delle decisioni recenti di una classe di attività e nessuna esplorazione sugli avvii rischiosi; scrittura di <code>recommendations.json</code> durante la compattazione perché <code>choose-model</code> possa leggerlo.</p>
+<p><strong>Previsto per una versione successiva (ancora provvisorio):</strong> con <code>adapt</code> attivo, selezione tramite Thompson sampling tra la scelta della griglia e le celle adiacenti, usando la griglia come stima a priori; esplorazione limitata al 10% delle decisioni recenti di una classe di attività e nessuna esplorazione sugli avvii rischiosi; scrittura di <code>recommendations.json</code> durante la compattazione perché <code>choose-model</code> possa leggerlo.</p>
 <p>Tutti i file prodotti dal registro e dal ciclo di qualità hanno una collocazione precisa fuori dai tuoi repository: vediamola in un'unica tabella.</p>
 
 <h2 id="state">Stato su disco</h2>
@@ -194,7 +194,7 @@
     <tr><td><code>model-router/quality/state.json</code>, <code>quality/.lock</code></td><td><code>model-router</code></td><td>Posizione della compattazione e relativo lock (obsoleto dopo 2 minuti)</td></tr>
     <tr><td><code>model-router/options.json</code></td><td><code>model-router</code></td><td>Le opzioni usate dalla compattazione e dal report</td></tr>
     <tr><td><code>model-router/report.html</code></td><td><code>model-router</code></td><td>La pagina locale del report</td></tr>
-    <tr><td><code>model-router/quality/recommendations.json</code></td><td><code>model-router</code></td><td>Suggerimenti per classe di attività, letti se presenti e scritti a partire dalla <code>0.4</code></td></tr>
+    <tr><td><code>model-router/quality/recommendations.json</code></td><td><code>model-router</code></td><td>Suggerimenti per classe di attività, letti se presenti; nessuna versione li scrive ancora</td></tr>
   </tbody>
 </table>
 <p>Le uniche scritture che possono toccare un hub o un progetto riguardano due sezioni di configurazione — <code>## Child sessions</code> nell'hub e <code>## Model routing</code> nel progetto — entrambe create solo dopo una tua conferma esplicita e senza mai eseguirne il commit.</p>

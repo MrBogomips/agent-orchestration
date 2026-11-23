@@ -134,7 +134,7 @@ const labelled = (label, value, width) => fit(`${padEndTo(label, LABEL)}${value}
 export function statusParts(status) {
   if (!status) return [];
   const routing = status.routing ? 'on' : `off${status.routeSubagents === false ? ' (routeSubagents is false)' : ''}`;
-  const adapt = status.adapt ? 'on (not used before 0.4)' : 'off';
+  const adapt = status.adapt ? 'on (not used yet)' : 'off';
   return [
     { key: 'routing', text: `routing ${routing}`, on: Boolean(status.routing) },
     { key: 'measuring', text: `measuring ${status.measuring ? 'on' : 'off'}`, on: Boolean(status.measuring) },
@@ -407,7 +407,7 @@ export function noteRows(data, columns) {
 }
 
 /**
- * The whole view as text, for where no pane can be placed: the tabs asked for (all four when `tab` is null),
+ * The whole view as text, for where no pane can be placed: the tabs asked for (all five when `tab` is null),
  * each under its title, then the note and a pointer to the help.
  */
 export function textView(data, view, columns) {

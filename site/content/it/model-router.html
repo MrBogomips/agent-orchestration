@@ -183,10 +183,10 @@ listed here follows the grid.
     <tr><td><code>timeoutMs</code></td><td><code>8.000</code></td><td>Tempo massimo per il judge; superato il limite, l'avvio resta invariato</td></tr>
     <tr><td><code>routeSubagents</code></td><td><code>true</code></td><td>Attiva o disattiva del tutto il routing degli avvii dei subagent</td></tr>
     <tr><td><code>measure</code></td><td><code>true</code></td><td>Registra il log degli eventi e i dati sulla qualità</td></tr>
-    <tr><td><code>adapt</code></td><td><code>false</code></td><td>Sceglie in base ai dati sulla qualità (dalla versione <code>0.4</code>, inutilizzato prima)</td></tr>
+    <tr><td><code>adapt</code></td><td><code>false</code></td><td>Sceglie in base ai dati sulla qualità (non ancora usato)</td></tr>
     <tr><td><code>halfLifeDays</code></td><td><code>30</code></td><td>Tempo di dimezzamento dei dati sulla qualità</td></tr>
-    <tr><td><code>projectPriorStrength</code></td><td><code>5</code></td><td>Quante osservazioni vale il livello utente nella stima di un progetto (dalla <code>0.4</code>)</td></tr>
-    <tr><td><code>exploreCap</code></td><td><code>0,1</code></td><td>Quota massima di decisioni per classe che può esplorare alternative (dalla <code>0.4</code>)</td></tr>
+    <tr><td><code>projectPriorStrength</code></td><td><code>5</code></td><td>Quante osservazioni vale il livello utente nella stima di un progetto (non ancora usato)</td></tr>
+    <tr><td><code>exploreCap</code></td><td><code>0,1</code></td><td>Quota massima di decisioni per classe che può esplorare alternative (non ancora usato)</td></tr>
     <tr><td><code>reworkWindowMin</code></td><td><code>30</code></td><td>Minuti dopo il resoconto entro i quali rifare il lavoro conta come rilavorazione</td></tr>
     <tr><td><code>similarityThreshold</code></td><td><code>0,5</code></td><td>Sovrapposizione di parole oltre la quale due descrizioni contano come lo stesso compito</td></tr>
   </tbody>
@@ -260,7 +260,7 @@ listed here follows the grid.
 </ul>
 <h3>Come lo usa il router</h3>
 <p><strong>Oggi (versioni <code>0.2</code> e <code>0.3</code>) l'FPY informa, ma non guida.</strong> L'opzione <code>adapt</code> è disattivata e il router segue soltanto la griglia. L'FPY alimenta la vista <code>/model-router</code>, il report e, per ogni classe di attività, una <strong>cella consigliata</strong>: quella con il minor costo per compito riuscito tra le celle con almeno tre compiti, senza mai scendere sotto la griglia per <code>review-debug</code> e <code>design-open</code>. Se un consiglio si discosta stabilmente dalla griglia, puoi decidere tu di aggiungere un'eccezione in <code>## Model routing</code>.</p>
-<p><strong>Dalla versione <code>0.4</code> (prevista) l'FPY guiderà le scelte.</strong> Con <code>adapt</code> attivo, il router bilancia sfruttamento (usare ciò che funziona) ed esplorazione (provare alternative promettenti) tramite il <strong>Thompson sampling</strong>:</p>
+<p><strong>In una versione successiva (prevista) l'FPY guiderà le scelte.</strong> Con <code>adapt</code> attivo, il router bilancia sfruttamento (usare ciò che funziona) ed esplorazione (provare alternative promettenti) tramite il <strong>Thompson sampling</strong>:</p>
 <ul>
   <li>Per ogni cella mantiene un intervallo di FPY plausibili modellato con una distribuzione Beta: <code>alpha</code> cresce con i successi pesati nel tempo, <code>beta</code> con rilavorazioni e fallimenti pesati.</li>
   <li>A ogni avvio estrae un FPY plausibile da ciascuna cella candidata vicina alla griglia, divide il costo della cella per quel valore e sceglie quella con il minor costo per successo.</li>
@@ -468,5 +468,5 @@ listed here follows the grid.
   <li>Vengono instradati solo gli avvii effettuati tramite lo strumento <code>Agent</code>; gli agenti interni ai plugin e gli agenti di workflow vengono misurati, ma non instradati.</li>
   <li>Il router sceglie <code>fable</code> solo per la classe <code>design-open</code> e, fino alla versione <code>0.3</code>, non impone il minimo previsto dalla griglia per <code>review-debug</code> e <code>design-open</code>.</li>
   <li>I costi sono stime del motore; le modifiche fatte fuori dagli strumenti della sessione non vengono rilevate.</li>
-  <li>Fino alla versione <code>0.3</code> i dati vengono solo misurati, non usati per decidere. La selezione adattiva basata sui dati di qualità è prevista per la <code>0.4</code>.</li>
+  <li>Per ora i dati vengono solo misurati, non usati per decidere. La selezione adattiva basata sui dati di qualità è prevista per una versione successiva.</li>
 </ul>
