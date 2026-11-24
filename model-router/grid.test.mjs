@@ -256,8 +256,14 @@ test('a fixed agent model or effort is an exception to the project defaults and 
   assert.ok(rules.every((l) => !/agent definition/i.test(l)), 'the fixed-model rule is still a numbered rule');
   const text = body.replace(/\s+/g, ' ');
   assert.match(text, /whatever the project's defaults or the grid say/i);
-  assert.match(text, /never pass a model to an agent whose definition sets one/i);
-  assert.match(text, /nor an effort to an agent whose definition sets one/i);
+  assert.match(text, /no `model` if its frontmatter names one, no `effort` if it names one/i);
+});
+
+test('the skill says how to tell whether an agent fixes its model or effort, and to pass neither when it cannot', () => {
+  const text = section(loadSkill(), '## Order of precedence').replace(/\s+/g, ' ');
+  assert.match(text, /\.claude\/agents\/<type>\.md/);
+  assert.match(text, /agents\/<type>\.md` in the config folder/);
+  assert.match(text, /for an agent you cannot check, .*pass neither/i);
 });
 
 // A critical task almost always answers yes to the high question too: the first yes wins, so xhigh comes first.

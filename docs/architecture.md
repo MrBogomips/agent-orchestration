@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the two plugins in this repository as built (`session-hub` 0.5.1, `model-router` 0.7.2):
+This document describes the two plugins in this repository as built (`session-hub` 0.5.1, `model-router` 0.7.3):
 what each one is for, what it is made of, how its parts work together, what it keeps on disk and how it behaves
 when something fails. Parts planned for later releases are described in [Planned releases](#planned-releases);
 they may change before they ship.
@@ -8,7 +8,7 @@ they may change before they ship.
 | Plugin | Version | In one line |
 |---|---|---|
 | `session-hub` | 0.5.1 | A master session in a hub of repositories starts one child session per repository, gives each a scope, routes their requests and keeps a record of them. |
-| `model-router` | 0.7.2 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
+| `model-router` | 0.7.3 | One written grid that decides the model and the effort level of every subagent, child session or workflow agent; a mod that routes subagent starts carrying no model and measures locally how well each choice worked. |
 
 ## Contents
 
@@ -391,8 +391,9 @@ sibling that uses it.
 2. The project's `## Model routing` section, when it names the kind of work or the task class.
 3. The grid.
 
-An agent definition that fixes its own model keeps it whatever rule 2 or 3 says (only the user can name another
-model for it): no model is passed, only an effort, and only if its definition sets none.
+An agent definition that fixes its own model or effort keeps it whatever rule 2 or 3 says (only the user can name
+another): the agent reads the frontmatter of a project or user agent and passes only what it leaves open, and passes
+neither value to an agent it cannot check (a plugin's, a built-in type other than `general-purpose` and `Explore`).
 
 Before the start, the agent writes one line `🔀 <model> <bar> <effort> -> <reason in under 12 words>` (the bar
 four cells, `▰` filled and `▱` empty: `low` one to `xhigh` four), passes `model` and `effort` on the start call, and begins the description with the class tag, `[mr:<class>]`, or

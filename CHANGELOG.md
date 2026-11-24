@@ -3,6 +3,16 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.7.3
+
+2026-11-24
+
+### Fixed
+
+- `choose-model` says how to tell whether an agent's definition fixes its model or effort: read the frontmatter
+  of a project or user agent, and pass neither value to an agent that cannot be checked, such as a plugin's. A value
+  on the call overrides the definition, and the list of agent types does not show these fields.
+
 ## model-router 0.7.2
 
 2026-11-24

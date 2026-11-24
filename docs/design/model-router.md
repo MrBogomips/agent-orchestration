@@ -73,9 +73,12 @@ write the skill's text fresh.
 - For subagents, the agent passes both values on the start call. The effort parameter exists on the start tool
   in the current release (`research/mods-capabilities.md`, C.9); the reference pack says otherwise and is out of
   date on this point.
-- An agent definition that fixes its own model keeps it. The skill does not override project agents: this is an
-  exception to the project's defaults and to the grid, not a rule between them, so unless the user names a model
-  for it, such an agent gets only an effort, and only when its definition sets none.
+- An agent definition that fixes its own model or effort keeps it. The skill does not override project agents: this
+  is an exception to the project's defaults and to the grid, not a rule between them, so unless the user names one,
+  such an agent gets only what its definition leaves open. A value on the call would override the definition, and
+  the list of agent types does not show these fields, so the skill reads the frontmatter of a project or user agent
+  (`.claude/agents/<type>.md`, else `agents/<type>.md` in the config folder) and passes neither value to an agent it
+  cannot check (a plugin's, a built-in type other than `general-purpose` and `Explore`).
 - `session-hub:spawn` loads this skill when it is installed (`shared-contract.md`).
 
 ## Mod `model-router`
@@ -461,6 +464,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.7.0 | The Savings view: what routing saved against the session's own model, on the page, the terminal and the card. |
 | 0.7.1 | Documents and option titles no longer promise adaptive selection for 0.4. |
 | 0.7.2 | An effort declared in an agent's frontmatter is honoured: the router no longer sets its own effort on such an agent. |
+| 0.7.3 | `choose-model` says how to tell what an agent's definition fixes, and passes neither value to an agent it cannot check. |
 | later | Adaptive selection from the quality data (`model-router-quality-loop.md`, which plans it as 0.4). |
 
 ## Open points

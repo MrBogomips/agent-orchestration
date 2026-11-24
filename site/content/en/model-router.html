@@ -1,4 +1,4 @@
-<!-- translated-from: it/model-router.html sha256:345aab1c5482 -->
+<!-- translated-from: it/model-router.html sha256:a712255cfc87 -->
 <h1>model-router</h1>
 <p class="lede">Choosing the right model for every subagent, child session, or workflow agent shouldn't be guesswork. <code>model-router</code> applies a single written grid, routes launches that don't specify a model on the fly, and measures on your machine how well each choice actually paid off.</p>
 
@@ -48,7 +48,7 @@
   <li>The project's <code>## Model routing</code> section, if it names that kind of work or task class.</li>
   <li>The grid.</li>
 </ol>
-<p>The exception is an agent definition that pins its own model or effort: whatever the project section or the grid says, those values stay unless you explicitly specify others. Only the fields left unpinned by the definition are passed through.</p>
+<p>The exception is an agent definition that pins its own model or effort: whatever the project section or the grid says, those values stick unless you specify others yourself. Only what the definition leaves unpinned gets passed in: the agent reads the frontmatter of project or user agents and, if it cannot check it—as with a plugin agent—passes neither model nor effort.</p>
 <figure class="diagram">{{diagram:d7-grid}}<figcaption>The grid: model tiers checked in order, four effort questions asked in order, and six task classes, each with its usual choice.</figcaption></figure>
 <h3>Model tiers</h3>
 <p>Scan down the table from top to bottom and stop at the first row that fits the task:</p>
