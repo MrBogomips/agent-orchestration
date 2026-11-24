@@ -1,4 +1,4 @@
-<!-- translated-from: it/model-router.html sha256:8e6461859b70 -->
+<!-- translated-from: it/model-router.html sha256:345aab1c5482 -->
 <h1>model-router</h1>
 <p class="lede">Choosing the right model for every subagent, child session, or workflow agent shouldn't be guesswork. <code>model-router</code> applies a single written grid, routes launches that don't specify a model on the fly, and measures on your machine how well each choice actually paid off.</p>
 
@@ -26,12 +26,13 @@
   <li><strong>The mod (<code>model-router</code>)</strong>: steps in when a subagent starts without a model specified, queries the judge, and applies both model and effort. It also shows the assigned values beneath every <code>Agent</code> call, logs decisions and outcomes locally, and enables the <code>/model-router</code> command. Requires mods enabled and Claude Code <code>2.1.329</code> or later.</li>
 </ul>
 <figure class="diagram">{{diagram:d8-routing}}<figcaption>What happens when a subagent launches: an explicit model, a fork, a resume, or a fixed agent model is kept; a model-less launch goes to the judge, and thresholds decide whether to lower, raise, or keep the model.</figcaption></figure>
-<p>The router never overrides an explicit choice — it steps in only when the model is missing.</p>
+<p>The router never overrides an explicit choice: it only steps in when no model is set, and it always honors the model and effort declared in an agent's definition.</p>
 <table>
   <thead><tr><th>Launch</th><th>Router behavior</th></tr></thead>
   <tbody>
     <tr><td>Already specifies a model, or is a fork or resume</td><td>Keeps it</td></tr>
     <tr><td>Targets an agent whose definition pins a model, a plugin agent, or an agent with an unreadable definition</td><td>Keeps it</td></tr>
+    <tr><td>Names an agent whose definition pins the effort (<code>effort:</code> in the frontmatter)</td><td>Keeps that effort, even on risky work; if the definition does not pin a model, picks only the model</td></tr>
     <tr><td>Runs with routing disabled or with a session-wide subagent model pinned (<code>CLAUDE_CODE_SUBAGENT_MODEL</code>)</td><td>Keeps it</td></tr>
     <tr><td>Specifies no model</td><td>Queries the judge, then sets model and effort</td></tr>
   </tbody>
@@ -47,7 +48,7 @@
   <li>The project's <code>## Model routing</code> section, if it names that kind of work or task class.</li>
   <li>The grid.</li>
 </ol>
-<p>The one exception is an agent definition that pins its own model: regardless of what the project section or the grid says, that model stays in place unless you override it yourself, and only effort is passed if the definition doesn't already pin it.</p>
+<p>The exception is an agent definition that pins its own model or effort: whatever the project section or the grid says, those values stay unless you explicitly specify others. Only the fields left unpinned by the definition are passed through.</p>
 <figure class="diagram">{{diagram:d7-grid}}<figcaption>The grid: model tiers checked in order, four effort questions asked in order, and six task classes, each with its usual choice.</figcaption></figure>
 <h3>Model tiers</h3>
 <p>Scan down the table from top to bottom and stop at the first row that fits the task:</p>

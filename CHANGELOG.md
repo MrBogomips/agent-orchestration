@@ -3,6 +3,16 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## model-router 0.7.2
+
+2026-11-24
+
+### Fixed
+
+- The router honours an effort declared in an agent's frontmatter (`effort:`). Before, an agent that declared its
+  effort but no model went to the judge, and the router could set its own effort on it, also for risky work. The
+  rule is now written down: the router always honours the model and the effort an agent declares.
+
 ## model-router 0.7.1
 
 2026-11-23 · pull request #94

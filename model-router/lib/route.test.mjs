@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { routeCase, definitionCase, isRisky, decideEffort, decideModel } from './route.mjs';
+import { routeCase, definitionCase, readDefinition, ownEffort, isRisky, decideEffort, decideModel } from './route.mjs';
 
 const OPTS = { minDowngradeConfidence: 0.6, minUpgradeConfidence: 0.3, minFrontierConfidence: 0.7, riskThreshold: 0.7 };
 const MODELS = { fast: 'haiku', balanced: 'sonnet', frontier: 'fable', deep: 'opus' };
@@ -45,6 +45,28 @@ test('definitionCase: a model in the frontmatter, a plugin agent or an unread fi
   assert.equal(definitionCase('plug:agent'), 'unknown');
   assert.equal(definitionCase('reviewer'), 'unknown');
   assert.equal(definitionCase('reviewer', 'no frontmatter at all\nmodel: haiku'), 'inherit');
+});
+
+test('readDefinition: the effort an agent declares is read with its case', () => {
+  assert.deepEqual(readDefinition('reviewer', '---\nname: reviewer\neffort: high\n---\nbody'), { case: 'inherit', effort: 'high' });
+  assert.deepEqual(readDefinition('reviewer', '---\nmodel: haiku\neffort: "low" # cheap\n---\n'), { case: 'fixed', effort: 'low' });
+  assert.deepEqual(readDefinition('reviewer', '---\nname: reviewer\n---\neffort: high'), { case: 'inherit', effort: null }, 'only the frontmatter counts');
+  assert.deepEqual(readDefinition('reviewer', '---\neffort:\n---\n'), { case: 'inherit', effort: null });
+  assert.deepEqual(readDefinition('bar', '---\nname: baz\neffort: high\n---\n'), { case: 'unknown', effort: null }, 'another agent');
+  assert.deepEqual(readDefinition('Explore'), { case: 'inherit', effort: null });
+  assert.deepEqual(readDefinition('plug:agent'), { case: 'unknown', effort: null });
+});
+
+test('ownEffort: the call effort, else the effort the agent declares', () => {
+  assert.equal(ownEffort('medium', { case: 'inherit', effort: 'high' }), 'medium');
+  assert.equal(ownEffort(undefined, { case: 'inherit', effort: 'high' }), 'high');
+  assert.equal(ownEffort(undefined, { case: 'inherit', effort: null }), undefined);
+  assert.equal(ownEffort(undefined, undefined), undefined);
+});
+
+test('decideEffort: an effort the agent declares is never changed, not even for risky work', () => {
+  const own = ownEffort(undefined, readDefinition('reviewer', '---\nname: reviewer\neffort: low\n---\n'));
+  assert.equal(decideEffort({ judge: { effort: 3, effortConfidence: 1 }, explicitEffort: own, risky: true, options: OPTS }), 'low');
 });
 
 test('isRisky: the tag marker or the judge above the threshold', () => {

@@ -9,7 +9,7 @@ import type { ReportCache, RouteLineState, UsageCache, UsageView } from '../type
 
 import { buildJudgePrompt, parseJudgeAnswer } from '../lib/judge.mjs'
 import { projectId } from '../lib/project-id.mjs'
-import { decideEffort, decideModel, definitionCase, INHERITING_BUILTINS, isRisky, routeCase } from '../lib/route.mjs'
+import { decideEffort, decideModel, INHERITING_BUILTINS, isRisky, ownEffort, readDefinition, routeCase } from '../lib/route.mjs'
 import { ARROW, DRAWN_LINE_SECTION, EMPTY_COLOR, ROUTE_ICON, isChooseModel, lineParts, quietLine, routeReason, withDrawnLineNote } from '../lib/route-line.mjs'
 import { effortOf } from '../lib/tiers.mjs'
 import { errorText, parseTag } from '../lib/text.mjs'
@@ -81,9 +81,12 @@ type Pending = {
   judge: Judged | null
   judgeMs: number | null
   effort: string | undefined
+  /** The effort the start already has: on the call, else in the agent's definition. Never changed. */
   callEffort: string | undefined
   error: string | null
 }
+
+type Definition = { case: 'inherit' | 'fixed' | 'unknown'; effort: string | null }
 
 type Ctx = {
   grid?: any
@@ -167,15 +170,15 @@ function firstFire($: any, fired: Set<string>, hook: string) {
   $.ui.log(`[model-router] first ${hook}`, { to: 'debug' })
 }
 
-async function definitionOf($: any, ctx: Ctx, subagentType: string): Promise<string> {
+async function definitionOf($: any, ctx: Ctx, subagentType: string): Promise<Definition> {
   if (INHERITING_BUILTINS.includes(subagentType) || subagentType.includes(':') || !/^[\w.-]+$/.test(subagentType)) {
-    return definitionCase(subagentType)
+    return readDefinition(subagentType)
   }
   const candidates = [`${await $.session.cwd()}/.claude/agents/${subagentType}.md`, `${await configDirOf($, ctx)}/agents/${subagentType}.md`]
   for (const path of candidates) {
-    if (await $.fs.exists(path)) return definitionCase(subagentType, await $.fs.read(path))
+    if (await $.fs.exists(path)) return readDefinition(subagentType, await $.fs.read(path))
   }
-  return definitionCase(subagentType)
+  return readDefinition(subagentType)
 }
 
 async function runJudge($: any, ctx: Ctx, opts: Options, e: any): Promise<{ judge: Judged | null; ms: number; error: string | null }> {
@@ -198,19 +201,22 @@ async function planStart($: any, ctx: Ctx, opts: Options, e: any): Promise<Pendi
   const grid = await gridOf($, ctx)
   const tag = parseTag(e.description, grid.classes.map((c: any) => c.name))
   const subagentType = e.subagent_type ?? 'general-purpose'
+  const definition = e.model || subagentType === 'fork' ? null : await definitionOf($, ctx, subagentType)
+  // The router never changes an effort the call or the agent's definition declares: that effort counts as the call's.
+  const callEffort = ownEffort(e.effort, definition)
   const { route, reason } = routeCase({
     subagentType,
     model: e.model,
     enabled: await read($, enabled),
     routeSubagents: opts.routeSubagents,
     forcedModel: await $.env.get('CLAUDE_CODE_SUBAGENT_MODEL'),
-    definition: e.model || subagentType === 'fork' ? 'inherit' : await definitionOf($, ctx, subagentType),
+    definition: definition?.case ?? 'inherit',
   })
-  const base = { route, reason, cls: tag.cls, risky: tag.risky, judge: null, judgeMs: null, effort: e.effort, callEffort: e.effort, error: null }
+  const base = { route, reason, cls: tag.cls, risky: tag.risky, judge: null, judgeMs: null, effort: callEffort, callEffort, error: null }
   if (route !== 'judge') return base
   const { judge, ms, error } = await runJudge($, ctx, opts, e)
   const risky = isRisky(judge, tag.risky, opts.riskThreshold)
-  const effort = error && !risky ? e.effort : decideEffort({ judge, explicitEffort: e.effort, risky, options: opts })
+  const effort = error && !risky ? callEffort : decideEffort({ judge, explicitEffort: callEffort, risky, options: opts })
   return { ...base, cls: tag.cls ?? judge?.class ?? null, risky, judge, judgeMs: ms, effort, error }
 }
 

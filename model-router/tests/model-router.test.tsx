@@ -317,6 +317,27 @@ describe('agent definitions', () => {
     await start($, { subagent_type: 'bar' }, { subagentType: 'bar' })
     expect(w.judgeCalls.length).toBe(1)
   })
+
+  test('an agent that declares only its effort is routed for the model, and its effort is kept even for risky work', async ($, on) => {
+    const risky = () => ({ value: { isAnswered: true, text: '{"tier":"fast","confidence":0.9,"effort":3,"effort_confidence":0.9,"risky":0.9}', usage: {} } })
+    const w = world(on, risky, { files: { '/repo/.claude/agents/bar.md': '---\nname: bar\neffort: low\n---\nbody' } })
+    await start($, { subagent_type: 'bar' }, { subagentType: 'bar', parentModel: 'claude-haiku-5-5' })
+    await step($, 'ag1', 'low')
+    expect(w.judgeCalls.length).toBe(1)
+    expect(w.spawns[0].model).toBe('opus')
+    expect(w.steps[0].effort).toBe('low')
+    expect(w.appended.find((r) => r.type === 'decision').effort).toBe('low')
+  })
+
+  test('an agent that declares its model and its effort is kept whole', async ($, on) => {
+    const w = world(on, undefined, { files: { '/repo/.claude/agents/bar.md': '---\nname: bar\nmodel: sonnet\neffort: high\n---\nbody' } })
+    await start($, { subagent_type: 'bar' }, { subagentType: 'bar' })
+    await step($, 'ag1', 'high')
+    expect(w.judgeCalls.length).toBe(0)
+    expect(w.spawns[0].model).toBe(undefined)
+    expect(w.steps[0].effort).toBe('high')
+    expect(w.appended.find((r) => r.type === 'spawn').route).toBe('fixed')
+  })
 })
 
 describe('effort without rewriting the tool call', () => {

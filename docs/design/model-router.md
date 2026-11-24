@@ -94,6 +94,7 @@ effort on each model request of the started subagent, by its `agentId` (S14). St
 |---|---|
 | The call carries a model | Keep it. Log `explicit`. |
 | The agent's definition fixes a model | Keep it. The event does not show a fixed model, and a hook's model would override it (S3), so the mod reads the definition: it routes the built-in types verified to inherit (`general-purpose`, `Explore`) and project or user agents (`<cwd>/.claude/agents/<type>.md`, `<config dir>/agents/<type>.md`) whose frontmatter names no model or `inherit`, and whose `name`, when present, is the type: Claude Code names a type after that `name`, not the file (S17), so a file that declares another name is some other agent and the start is kept. Any other type (a plugin's agent, a definition it cannot read) is kept. The decision is logged as `keep`, the spawn record with route `fixed`. |
+| The agent's definition declares an effort | Keep that effort, risky work included: it counts as an effort on the call. The mod reads `effort:` from the same frontmatter (Claude Code honours it on 2.1.331). An agent that declares only its effort is still routed for the model. |
 | A fork or a resume | Keep it. The engine ignores a change anyway. A resume is logged as a `resume` signal of the same task. |
 | The router is off, or a session-wide forced subagent model is set (`CLAUDE_CODE_SUBAGENT_MODEL`) | Keep it. Log `keep`. |
 | No model given | Ask the judge; apply the thresholds below; log. |
@@ -101,6 +102,10 @@ effort on each model request of the started subagent, by its `agentId` (S14). St
 A risky marker in the class tag (`[mr:<class>!]`, written by `choose-model`) counts as a risky judge answer. The tag
 is read in any case and with spaces inside (`[MR: edit-specified !]`), and the marker counts even when the class is
 not in the grid: a mistyped or invented class reads as no class, never as no risk.
+
+**The rule: the router always honours the model and the effort an agent's definition declares.** It never sets a
+model on an agent whose frontmatter names one, nor an effort on an agent whose frontmatter names one; the effort a
+call carries is kept the same way. Whoever wrote the definition chose them for that agent's work.
 
 ### The judge
 
@@ -455,6 +460,7 @@ Routing the main session's effort per prompt is out of scope: a change mid-chat 
 | 0.6.0 | The spawn and outcome records name the starting session's model (`parentModel`). |
 | 0.7.0 | The Savings view: what routing saved against the session's own model, on the page, the terminal and the card. |
 | 0.7.1 | Documents and option titles no longer promise adaptive selection for 0.4. |
+| 0.7.2 | An effort declared in an agent's frontmatter is honoured: the router no longer sets its own effort on such an agent. |
 | later | Adaptive selection from the quality data (`model-router-quality-loop.md`, which plans it as 0.4). |
 
 ## Open points

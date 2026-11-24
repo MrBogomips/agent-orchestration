@@ -827,6 +827,7 @@ through the <code>Agent</code> tool:</p>
   <thead><tr><th>The start</th><th style="width:50%">The router</th></tr></thead>
   <tr><td>carries a model, is a fork or a resume</td><td>keeps it</td></tr>
   <tr><td>names an agent whose definition fixes a model, a plugin's agent, or one whose definition it cannot read (a file under the agent's name that declares another <code>name</code> is not its definition)</td><td>keeps it</td></tr>
+  <tr><td>names an agent whose definition declares an effort (<code>effort:</code> in its frontmatter)</td><td>keeps that effort, risky work included, and routes only the model if the definition fixes none</td></tr>
   <tr><td>runs with routing off, or under a session-wide subagent model (<code>CLAUDE_CODE_SUBAGENT_MODEL</code>)</td><td>keeps it</td></tr>
   <tr><td>carries no model</td><td>asks the judge, then sets the model and the effort</td></tr>
 </table>

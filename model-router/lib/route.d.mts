@@ -10,6 +10,11 @@ type Thresholds = { minDowngradeConfidence: number; minUpgradeConfidence: number
 
 export declare const INHERITING_BUILTINS: readonly string[]
 export declare function definitionCase(subagentType: string, definitionText?: string): 'inherit' | 'fixed' | 'unknown'
+export declare function readDefinition(subagentType: string, definitionText?: string): {
+  case: 'inherit' | 'fixed' | 'unknown'
+  effort: string | null
+}
+export declare function ownEffort(callEffort: string | undefined, definition?: { effort: string | null } | null): string | undefined
 export declare function routeCase(input: {
   subagentType: string
   model?: string

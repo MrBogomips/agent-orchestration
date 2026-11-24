@@ -11,21 +11,42 @@ export const INHERITING_BUILTINS = Object.freeze(['general-purpose', 'Explore'])
  * the file found under the type's name, when there is one.
  */
 export function definitionCase(subagentType, definitionText) {
-  if (INHERITING_BUILTINS.includes(subagentType)) return 'inherit';
-  if (typeof definitionText !== 'string') return 'unknown';
+  return readDefinition(subagentType, definitionText).case;
+}
+
+/**
+ * What an agent type's definition declares to the router: its case (see `definitionCase`) and the effort its
+ * frontmatter names, or null. The router never changes a declared model or effort.
+ */
+export function readDefinition(subagentType, definitionText) {
+  if (INHERITING_BUILTINS.includes(subagentType)) return { case: 'inherit', effort: null };
+  if (typeof definitionText !== 'string') return { case: 'unknown', effort: null };
   const lines = definitionText.split('\n');
-  if (lines[0]?.trim() !== '---') return 'inherit';
+  if (lines[0]?.trim() !== '---') return { case: 'inherit', effort: null };
   let model = null;
+  let effort = null;
   for (const line of lines.slice(1)) {
     if (line.trim() === '---') break;
     // Claude Code names an agent type after its frontmatter `name`, not its file name: a file found under the
     // type's name that declares another name is some other agent, and the type's own definition is unknown.
     const name = line.match(/^name\s*:\s*["']?([^"'#]*?)["']?\s*(#.*)?$/);
-    if (name && name[1] && name[1] !== subagentType) return 'unknown';
-    const m = line.match(/^model\s*:\s*["']?([^"'#\s]*)["']?/);
-    if (m && model === null) model = m[1];
+    if (name && name[1] && name[1] !== subagentType) return { case: 'unknown', effort: null };
+    model ??= scalarOf(line, 'model');
+    effort ??= scalarOf(line, 'effort');
   }
-  return model === null || model === '' || model === 'inherit' ? 'inherit' : 'fixed';
+  const fixed = model !== null && model !== '' && model !== 'inherit';
+  return { case: fixed ? 'fixed' : 'inherit', effort: effort || null };
+}
+
+/** The value of a one-line `key: value` frontmatter entry, without quotes or comment, or null. */
+function scalarOf(line, key) {
+  const m = line.match(new RegExp(`^${key}\\s*:\\s*["']?([^"'#\\s]*)["']?`));
+  return m ? m[1] : null;
+}
+
+/** The effort a start already has: the one on the call, else the one its agent declares. */
+export function ownEffort(callEffort, definition) {
+  return callEffort || definition?.effort || undefined;
 }
 
 /**
