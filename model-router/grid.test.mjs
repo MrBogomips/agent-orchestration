@@ -250,13 +250,14 @@ test('the quality hints the skill reads are the fields the recommendations file 
   assert.doesNotMatch(body, /its model and effort/, 'the file holds a tier, not a model');
 });
 
-test('a fixed agent model is an exception to the project defaults and the grid, not a rule between them', () => {
+test('a fixed agent model or effort is an exception to the project defaults and the grid, not a rule between them', () => {
   const body = section(loadSkill(), '## Order of precedence');
   const rules = body.split('\n').filter((l) => /^\d+\. /.test(l));
   assert.ok(rules.every((l) => !/agent definition/i.test(l)), 'the fixed-model rule is still a numbered rule');
   const text = body.replace(/\s+/g, ' ');
   assert.match(text, /whatever the project's defaults or the grid say/i);
-  assert.match(text, /never pass a model to such an agent/i);
+  assert.match(text, /never pass a model to an agent whose definition sets one/i);
+  assert.match(text, /nor an effort to an agent whose definition sets one/i);
 });
 
 // A critical task almost always answers yes to the high question too: the first yes wins, so xhigh comes first.

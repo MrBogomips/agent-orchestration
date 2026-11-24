@@ -24,9 +24,10 @@ workflow. Decide before the start, pass both values explicitly, and say what you
    routing* section that names this kind of work or this class, use its model and effort.
 3. **The grid below.**
 
-**An agent definition that fixes its own model keeps it.** Unless the user names a model for it, whatever the
-project's defaults or the grid say, never pass a model to such an agent: pass only the effort they give, and only
-if its definition sets none. Whoever wrote the definition chose that model for that agent's work.
+**An agent definition that fixes its own model or effort keeps it.** Unless the user names one for it, whatever the
+project's defaults or the grid say, never pass a model to an agent whose definition sets one, nor an effort to an
+agent whose definition sets one. Whoever wrote the definition chose them for that agent's work; the router honours
+them too.
 
 ## The grid
 
@@ -115,7 +116,8 @@ the app draws this line, do not write it before an `Agent` call; still write it 
 [mr:edit-specified!] Rotate the production API key
 ```
 
-For an agent whose definition fixes the model, omit `model`, keep the tag, and pass `effort`.
+For an agent whose definition fixes the model, omit `model`, keep the tag, and pass `effort` unless the definition
+fixes that too.
 
 **Child sessions.** When `session-hub:spawn` (or another launcher) loads this skill, apply the grid to the
 child's handoff and return the model and the effort; the launcher puts them on the launch command

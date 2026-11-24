@@ -19,7 +19,7 @@ task cost, so the grid can be checked against real work.
 | `model-router:choose-model` | skill | The grid: four model tiers, four effort questions, the rules around them (go up when in doubt, risk is about the act, project defaults, the user wins, choose at start, escalation, a coordinator's own model), plus *inline or delegate* and *continue, do not restart*. For each start it writes one line `🔀 opus ▰▰▰▱ high -> reason` (an effort bar of four cells, `low` one to `xhigh` four), passes `model` and `effort` on the start call, and tags the description with the task class (`[mr:<class>]`, `[mr:<class>!]` when risky). Agents with a fixed model keep it. |
 | `model-router:setup` | skill | Writes or updates a *Model routing* section in the project's instruction file, `AGENTS.md` or else `CLAUDE.md`, with defaults and exceptions per kind of work or task class, only after the user says yes. |
 | `model-router:report` | skill | Runs `scripts/report.mjs`: compacts the quality data, writes a self-contained page and opens it. |
-| `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model. Draws under each `Agent` call the model and effort the subagent actually got, in colour (see [The choose-model line](#the-choose-model-line)). Records decisions, starts, signals and reports. Fails open. |
+| `model-router` | mod | At a subagent start that carries no model, asks a fast judge model and sets the model and the effort; keeps explicit models, forks, resumes and agents whose definition fixes a model, and never changes an effort the call or the agent's definition declares. Draws under each `Agent` call the model and effort the subagent actually got, in colour (see [The choose-model line](#the-choose-model-line)). Records decisions, starts, signals and reports. Fails open. |
 | `/model-router` | command | In a terminal, the usage view: a dialog with five tabs (Overview, Models, Classes, Decisions, Savings), or the same rows as text where no pane fits. In the Claude desktop app, the Model routing card in the conversation. `on` and `off` switch routing for the session. See [Commands](#commands). |
 | `grid.json` | data | The grid in machine-readable form, with each class's usual choice. The judge's prompt is generated from it; `grid.test.mjs` fails when it and the skills drift apart. |
 | `scripts/compact.mjs`, `scripts/report.mjs`, `scripts/usage.mjs` | scripts | Node, no dependencies. Compaction closes the outcome of each task and keeps aggregates per user and per project; the report renders them; `usage.mjs` gives `/model-router` its data. The page and the command share one aggregation (`lib/usage-data.mjs`), so their numbers agree. |
@@ -30,12 +30,14 @@ task cost, so the grid can be checked against real work.
 |---|---|
 | carries a model, is a fork or a resume | keeps it |
 | names an agent whose definition fixes a model, a plugin's agent, or one whose definition it cannot read | keeps it |
+| names an agent whose definition declares an effort (`effort:` in its frontmatter) | keeps that effort, and routes only the model if the definition fixes none |
 | runs with routing off, or under a session-wide subagent model (`CLAUDE_CODE_SUBAGENT_MODEL`) | keeps it |
 | carries no model | asks the judge (one call to the fast tier, 8 s limit), then lowers the model only at confidence ≥ 0.6, raises it at ≥ 0.3 (to `fable` only for open-ended design at ≥ 0.7), and sends risky work (risk > 0.7, or a `!` tag) to the deep tier with at least high effort |
 
 The model is set when the subagent starts, the effort on each of the subagent's model requests; the start call
-itself is never changed, so the routing works in every permission mode, auto mode included. An effort the call
-already carries is kept.
+itself is never changed, so the routing works in every permission mode, auto mode included. The router always
+honours the model and the effort an agent declares: an effort the call carries or the agent's frontmatter names is
+kept, risky work included.
 
 ### The choose-model line
 

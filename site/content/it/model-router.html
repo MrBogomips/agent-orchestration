@@ -25,12 +25,13 @@
   <li><strong>La mod (<code>model-router</code>)</strong>: interviene quando parte un subagent senza un modello indicato, interpella il judge e applica modello ed effort. Inoltre mostra sotto ogni chiamata <code>Agent</code> i valori effettivamente assegnati, registra decisioni ed esiti in locale e abilita il comando <code>/model-router</code>. Richiede le mod attive e Claude Code <code>2.1.329</code> o successivo.</li>
 </ul>
 <figure class="diagram">{{diagram:d8-routing}}<figcaption>Cosa succede all'avvio di un subagent: un modello esplicito, un fork, una ripresa o un modello fisso dell'agente vengono mantenuti; un avvio senza modello passa al judge, e le soglie decidono se abbassare, alzare o mantenere il modello.</figcaption></figure>
-<p>Il router non sovrascrive mai una scelta già esplicita: interviene soltanto quando il modello manca.</p>
+<p>Il router non sovrascrive mai una scelta già esplicita: interviene soltanto quando il modello manca, e rispetta sempre il modello e l'effort dichiarati nella definizione di un agente.</p>
 <table>
   <thead><tr><th>L'avvio</th><th>Comportamento del router</th></tr></thead>
   <tbody>
     <tr><td>Specifica già un modello, è un fork o una ripresa</td><td>Lo mantiene</td></tr>
     <tr><td>Indica un agente la cui definizione fissa un modello, l'agente di un plugin o un agente con definizione illeggibile</td><td>Lo mantiene</td></tr>
+    <tr><td>Indica un agente la cui definizione fissa l'effort (<code>effort:</code> nel frontmatter)</td><td>Mantiene quell'effort, anche per il lavoro rischioso; se la definizione non fissa il modello, sceglie solo quello</td></tr>
     <tr><td>Gira con il routing disattivato o con un modello subagent fissato a livello di sessione (<code>CLAUDE_CODE_SUBAGENT_MODEL</code>)</td><td>Lo mantiene</td></tr>
     <tr><td>Non specifica alcun modello</td><td>Interpella il judge, poi imposta modello ed effort</td></tr>
   </tbody>
@@ -46,7 +47,7 @@
   <li>La sezione <code>## Model routing</code> del progetto, se nomina quel tipo di lavoro o quella classe di attività.</li>
   <li>La griglia.</li>
 </ol>
-<p>Fa eccezione la definizione di un agente che fissa il proprio modello: qualunque cosa dicano la sezione del progetto o la griglia, il modello resta quello, a meno che non sia tu a indicarne un altro, e viene passato solo l'effort, se la definizione non lo fissa già.</p>
+<p>Fa eccezione la definizione di un agente che fissa il proprio modello o il proprio effort: qualunque cosa dicano la sezione del progetto o la griglia, quei valori restano, a meno che non sia tu a indicarne altri. Viene passato solo ciò che la definizione non fissa.</p>
 <figure class="diagram">{{diagram:d7-grid}}<figcaption>La griglia: i livelli di modello controllati in ordine, quattro domande sull'effort poste in ordine e sei classi di attività, ciascuna con la sua scelta abituale.</figcaption></figure>
 <h3>Livelli di modello</h3>
 <p>Scorri la tabella dall'alto verso il basso e fermati alla prima riga adatta al compito:</p>
