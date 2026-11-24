@@ -746,8 +746,10 @@ wins:</p>
   <li>the project's <em>Model routing</em> section, when it names the kind of work or the class;</li>
   <li>the grid.</li>
 </ol>
-<p>An agent definition that fixes its own model keeps it, whatever the project's section or the grid say: unless you
-name a model for it, only an effort is passed, and only if its definition sets none.</p>
+<p>An agent definition that fixes its own model or effort keeps it, whatever the project's section or the grid say:
+unless you name one for it, the agent passes only what the definition leaves open. It reads the frontmatter of a
+project or user agent (<code>.claude/agents/&lt;type&gt;.md</code>, else <code>agents/&lt;type&gt;.md</code> in the
+configuration folder), and passes neither value to an agent it cannot check, such as a plugin's.</p>
 <p>Before each start the agent writes one line, passes <code>model</code> and <code>effort</code> on the start call,
 and begins the description with the class tag. The line is 🔀, the model, an effort bar of four cells
 (<code>▰</code> filled, <code>▱</code> empty: one for <code>low</code>, two for <code>medium</code>, three for

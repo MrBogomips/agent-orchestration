@@ -25,9 +25,14 @@ workflow. Decide before the start, pass both values explicitly, and say what you
 3. **The grid below.**
 
 **An agent definition that fixes its own model or effort keeps it.** Unless the user names one for it, whatever the
-project's defaults or the grid say, never pass a model to an agent whose definition sets one, nor an effort to an
-agent whose definition sets one. Whoever wrote the definition chose them for that agent's work; the router honours
-them too.
+project's defaults or the grid say, pass only what the definition leaves open: no `model` if its frontmatter names
+one, no `effort` if it names one. Whoever wrote the definition chose them for that agent's work, and a value on the
+call would override it; the router honours them too.
+
+The list of agent types does not show these fields, so check before the start. `general-purpose` and `Explore` fix
+neither. For a project or user agent, read the frontmatter of `.claude/agents/<type>.md`, else `agents/<type>.md` in
+the config folder (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}`). For an agent you cannot check, such as a plugin's
+(`<plugin>:<agent>`) or another built-in type, pass neither: its definition decides.
 
 ## The grid
 
@@ -116,8 +121,8 @@ the app draws this line, do not write it before an `Agent` call; still write it 
 [mr:edit-specified!] Rotate the production API key
 ```
 
-For an agent whose definition fixes the model, omit `model`, keep the tag, and pass `effort` unless the definition
-fixes that too.
+For an agent whose definition fixes the model or the effort, omit that value and keep the tag (see the order of
+precedence).
 
 **Child sessions.** When `session-hub:spawn` (or another launcher) loads this skill, apply the grid to the
 child's handoff and return the model and the effort; the launcher puts them on the launch command
