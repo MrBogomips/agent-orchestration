@@ -3,6 +3,26 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.7.0
+
+2026-11-25
+
+### Added
+
+- The handoff hook: a classic `SessionStart` hook that adds a child's handoff file to its context at the start and
+  again after `/clear` and a compaction. A handoff over 9,500 characters is cut at a line, and the child is told
+  from which line to read the rest; one that cannot be read is shown to the user (#101).
+
+### Changed
+
+- `spawn` no longer gives a child `--add-dir <handoff folder>`. Claude Code asked at every child's start whether
+  that folder, a new one for every master session, was trusted, and in Herdr `agent start` returned
+  `agent_not_ready` until the user answered in each child's pane (#101).
+- The first prompt of a child is one line: Herdr refused the multi-line one (`agent arguments cannot be encoded
+  safely for the target shell`). It tells the child that its handoff is in its context and names the file for a
+  child whose hook did not run.
+- The scope line no longer tells a child to read its handoff again after a compaction: the hook adds it.
+
 ## session-hub 0.6.0
 
 2026-11-25

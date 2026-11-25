@@ -1,4 +1,4 @@
-<!-- translated-from: it/session-hub.html sha256:2f135d3a331b -->
+<!-- translated-from: it/session-hub.html sha256:cc1af073cca8 -->
 <h1>session-hub</h1>
 <p class="lede">When a task touches multiple repositories, trying to manage everything in a single session quickly blurs context and boundaries. With <code>session-hub</code>, a <strong>master</strong> session opened at the hub root launches one or more <strong>child sessions</strong> — one per repository — that work in parallel.</p>
 <p>Each child session gets a written <strong>scope</strong>, a model, and an effort level, talks only to the master, and forwards anything outside its boundaries back to it. That lets you step directly into the child session for your own domain and guide it closely, while the master coordinates everything else.</p>
@@ -36,7 +36,7 @@
 </ul>
 
 <h2 id="components">2. What's in the plugin</h2>
-<p>To orchestrate child sessions and enforce their boundaries automatically, <code>session-hub</code> brings together three skills, a hook, a script, a mod, and a dedicated command:</p>
+<p>To orchestrate child sessions and enforce their boundaries automatically, <code>session-hub</code> brings together three skills, two hooks, a script, a mod, and a dedicated command:</p>
 <table>
   <thead><tr><th>Name</th><th>Type</th><th>What it does</th></tr></thead>
   <tbody>
@@ -44,6 +44,7 @@
     <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Launches one child session per repository (desktop app, Herdr, tmux, <code>claude --bg</code>, or manual commands) with scope, model, effort, <code>SESSION_HUB_*</code> role variables, and a handoff file, then records it in the children record.</td></tr>
     <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Creates or updates the <code>## Child sessions</code> section in the hub's instructions file, writing it only after your explicit confirmation.</td></tr>
     <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td><code>PreToolUse</code> hook on <code>Edit</code>, <code>Write</code>, and <code>NotebookEdit</code>. In a child session, blocks any edit whose real path falls outside the write root.</td></tr>
+    <tr><td>Handoff hook</td><td>hook</td><td><code>SessionStart</code> hook. In a child session, it adds the handoff file to the context at startup, after <code>/clear</code>, and after every compaction: the child doesn't need to read it, and you don't need to grant it access to its directory.</td></tr>
     <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>Reads and updates the children record atomically and safely.</td></tr>
     <tr><td><code>session-hub</code></td><td>mod</td><td>In a child session, enables the send guard, shell check, message origin marking, and scope line. In the master, adds the child sessions panel. Requires mods to be enabled.</td></tr>
     <tr><td><code>/session-hub</code></td><td>command</td><td>Shows the current session's role and scope; in the master, also summarizes child sessions and, in the terminal, opens the panel. In the Claude desktop app, replies with a card in the conversation. Registered by the mod.</td></tr>
@@ -115,7 +116,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   <li>Checks whether an active child session already exists for that repository and task: if it finds one, it forwards the request there instead of opening a duplicate.</li>
   <li>Determines the execution environment, session name, worktree (if any), write root, and read scope.</li>
   <li>Picks the model and effort following a strict priority order: first what you specified, then the keys configured in the hub, then <code>model-router:choose-model</code> (if installed); otherwise it inherits the master's.</li>
-  <li>Writes the handoff file outside the hub, starts the child session with a short first prompt (the handoff title, a line or two about the goal, and <code>&lt;handoff&gt;Read and follow &lt;file&gt;&lt;/handoff&gt;</code>), records it as <code>running</code> alongside the master's identity, and prints a full summary for you.</li>
+  <li>Writes the handoff file outside the hub, launches the child session with a single-line initial prompt (the handoff title, a sentence on the goal, and the file path in case the handoff didn't make it into the context), records it as <code>running</code> alongside the master's identity, and prints a full summary for you.</li>
 </ol>
 <p>The detected environment determines how the child session is opened and whether the <em>scope guard</em> can be enabled:</p>
 <table>
@@ -129,23 +130,19 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   </tbody>
 </table>
 <h3>How a child session is launched</h3>
-<p>For the master and a child session to exchange messages, they must share the same account and configuration directory (two sessions with different configuration directories cannot talk to each other). If you launch Claude Code through an alias or wrapper that selects a profile or adds flags, child sessions need to start the same way. That is why <code>spawn</code> uses <code>scripts/launch.mjs</code> to read how the master was started (identity variables such as <code>CLAUDE_CONFIG_DIR</code>, <code>HOME</code>, and the wrapper profile, plus configuration flags) and launches every child session with the same parameters, adding the child-specific flags (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> for access to the handoff directory) and setting the <code>SESSION_HUB_*</code> role variables.</p>
+<p>For the master and a child session to exchange messages, they must share the same account and configuration directory (two sessions with different configuration directories cannot talk to each other). If you launch Claude Code through an alias or wrapper that selects a profile or adds flags, child sessions need to start the same way. That is why <code>spawn</code> uses <code>scripts/launch.mjs</code> to read how the master was started (identity variables such as <code>CLAUDE_CONFIG_DIR</code>, <code>HOME</code>, and the wrapper profile, plus configuration flags) and launches every child session with the same parameters, adding the child-specific flags (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>) and setting the <code>SESSION_HUB_*</code> role variables.</p>
+<p>The handoff stays in the master's scratchpad, a fresh directory for every session. The child doesn't read it from there: the handoff hook puts its text into the child's context. That's why the launch command doesn't include <code>--add-dir</code>, which used to bring up a trust prompt for that directory on every child.</p>
 <p>In tmux, for example, the launch command looks like this:</p>
 <pre><code>P=$(cat &lt;&lt;'EOF'
-# T-42: CSV export endpoint (product)
-
-Add GET /export with its tests, and open a PR on develop.
-
-&lt;handoff&gt;Read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
+T-42: CSV export endpoint (product). Add GET /export with its tests, and open a PR on develop. &lt;handoff&gt;Follow your handoff, which session-hub adds to your context; if it is not there, read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
 EOF
 )
 env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub SESSION_HUB_MASTER_REF=8f2c1a \
   SESSION_HUB_MASTER_SESSION_ID=&lt;master session id&gt; \
   SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
   SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json SESSION_HUB_GUARDS=on \
-  claude -n t42-product --model sonnet --effort medium --permission-mode default \
-  --add-dir &lt;dir&gt; -- "$P"</code></pre>
-<p>The first prompt tells anyone looking at the child session's window what it is working on, and it always travels in the startup command, even in Herdr: if the child session pauses at the folder trust prompt, it starts on its task as soon as you respond.</p>
+  claude -n t42-product --model sonnet --effort medium --permission-mode default -- "$P"</code></pre>
+<p>The initial prompt tells anyone looking at the child session's window what it's working on, and it always travels in the launch command, even in Herdr: if the child session pauses at the repository trust prompt, it starts on its task as soon as you respond. It fits on a single line because Herdr rejects prompts containing line breaks.</p>
 <p>A couple of operational details are worth noting at launch:</p>
 <ul>
   <li><strong>Permission mode:</strong> the child session inherits the master's mode, because messages between sessions with mismatched permission-bypass settings would sit blocked waiting for manual confirmation. If the master skips permission prompts, <code>spawn</code> asks you on each launch which mode to give child sessions; with <code>Permissions: inherit</code>, it skips asking and uses the master's.</li>

@@ -191,7 +191,7 @@ run time whether it is installed:</p>
 command, a hook on a tool call. Both plugins ship one, loaded from <code>hooks/hooks.json</code>. With mods off:</p>
 <table>
   <thead><tr><th>Part</th><th>Mods on</th><th>Mods off</th></tr></thead>
-  <tr><td><code>session-hub</code> skills, scope guard hook, children record</td><td>yes</td><td>yes</td></tr>
+  <tr><td><code>session-hub</code> skills, scope guard hook, handoff hook, children record</td><td>yes</td><td>yes</td></tr>
   <tr><td>Send guard, shell check, origin marking, scope line, children panel, <code>/session-hub</code></td><td>yes</td><td>no</td></tr>
   <tr><td><code>model-router</code> skills (<code>choose-model</code>, <code>setup</code>, <code>report</code>)</td><td>yes</td><td>yes</td></tr>
   <tr><td>Routing of starts with no model, the coloured 🔀 line under <code>Agent</code> calls, measurement, <code>/model-router</code></td><td>yes</td><td>no</td></tr>
@@ -322,10 +322,12 @@ starts all the children in one <code>spawn</code> call, so that their handoffs n
   <code>model-router:choose-model</code> when installed, otherwise the <code>--model</code> and
   <code>--effort</code> the master was launched with (none when it set none);</li>
   <li>writes a handoff file outside the hub (<code>&lt;name&gt;-handoff.md</code> in the harness's scratchpad or a
-  new <code>mktemp -d</code> folder) and starts the child with a short first prompt on the start command: the
-  handoff's title, one or two lines on the goal, and <code>&lt;handoff&gt;Read and follow &lt;file&gt;&lt;/handoff&gt;</code>.
-  The prompt rides the start command in every environment, so a folder-trust dialog cannot leave the child idle
-  with no task;</li>
+  new <code>mktemp -d</code> folder) and starts the child with a one-line first prompt on the start command: the
+  handoff's title, a sentence on the goal, and <code>&lt;handoff&gt;Follow your handoff, which session-hub adds to
+  your context; if it is not there, read and follow &lt;file&gt;&lt;/handoff&gt;</code>. The prompt rides the start
+  command in every environment, so a folder-trust dialog cannot leave the child idle with no task. The child gets
+  the handoff's text from the handoff hook (2.8), not access to its folder, so no dialog asks you to trust the
+  scratchpad;</li>
   <li>records the child as <code>running</code>, and the master's identity (name, ref, session id) as given to the
   children, and reports per child: name, repository, write root, model and
   effort, environment, how to open it, and the caveats that apply.</li>
@@ -357,7 +359,8 @@ builds:</p>
   <code>XDG_*_HOME</code> folders when set, <code>HOME</code> when it differs from the account's home, and the
   variables you name under <code>Carry</code>; nothing else from the environment, and never a credential;</li>
   <li><strong>child flags</strong>: <code>-n &lt;name&gt;</code>, <code>--model</code>, <code>--effort</code>,
-  the permission flags, <code>--add-dir &lt;handoff folder&gt;</code>, then <code>--</code> and the prompt;</li>
+  the permission flags, then <code>--</code> and the prompt. No <code>--add-dir</code>: nothing on the command may
+  open a dialog of its own;</li>
   <li>the <strong>role variables</strong>, placed as each environment allows.</li>
 </ul>
 <p>Children start in the master's permission mode, because messages between sessions that differ on bypassing
@@ -406,11 +409,7 @@ size limit in <code>design</code>. The master runs in tmux, in a session named <
 for design, so <code>choose-model</code> chooses it when installed, or the master's is inherited). With
 <code>Layout: panes</code>, the first child opens to the right of the master and the next one below it:</p>
 <pre><code>P=$(cat &lt;&lt;'EOF'
-# T-42: CSV export endpoint (product)
-
-Add GET /export with its tests, and open a PR on develop.
-
-&lt;handoff&gt;Read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
+T-42: CSV export endpoint (product). Add GET /export with its tests, and open a PR on develop. &lt;handoff&gt;Follow your handoff, which session-hub adds to your context; if it is not there, read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
 EOF
 )
 tmux split-window -h -d -t "$TMUX_PANE" -c /work/hub/product -P -F '#{pane_id}' \
@@ -418,8 +417,7 @@ tmux split-window -h -d -t "$TMUX_PANE" -c /work/hub/product -P -F '#{pane_id}' 
   -e SESSION_HUB_MASTER_SESSION_ID=&lt;master session id&gt; -e SESSION_HUB_SCOPE_ROOT=/work/hub/product \
   -e SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
   -e SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json -e SESSION_HUB_GUARDS=on \
-  -- claude -n t42-product --model sonnet --effort medium --permission-mode default \
-  --add-dir &lt;dir&gt; -- "$P"      # prints %12
+  -- claude -n t42-product --model sonnet --effort medium --permission-mode default -- "$P"      # prints %12
 tmux set -p -t %12 @session_hub_child t42-product
 tmux set -p -t %12 remain-on-exit on</code></pre>
 <p>tmux runs the command after <code>--</code> as it is, with no shell in between, so a carried value such as a JSON
@@ -433,7 +431,8 @@ herdr agent start t42-product --kind claude --pane &lt;pane-id&gt; -- -n t42-pro
 
 # Terminal: a background session, opened with `claude attach t42-product`
 cd /work/hub/product &amp;&amp; env SESSION_HUB_ROLE=child ... claude --bg -n t42-product --model sonnet ... -- "$P"</code></pre>
-<p><code>$P</code> is the first prompt built above, in the same Bash call. <code>scripts/launch.mjs</code> prints the
+<p><code>$P</code> is the first prompt built above, in the same Bash call, on one line: Herdr refuses a prompt with
+line breaks. <code>scripts/launch.mjs</code> prints the
 master's session id; the name and the ref come from the first line of <code>ListAgents</code>.</p>
 <p>The handoff (abridged) tells the child everything it needs and nothing it loads by itself:</p>
 <pre><code># T-42: CSV export endpoint (product)
@@ -554,6 +553,18 @@ file under every name.</p>
 <code>.claude/settings.local.json</code> under the write root, and so does the shell check. Their <code>env</code> and
 hook settings would turn the child's guards off at its next start. The settings of a repository are the master's:
 the child sends the change to the master as an <code>out-of-scope</code> request.</p>
+
+<h3>The handoff hook (works with mods off)</h3>
+<p>Not a guard, but the hook that gives a child its task. The handoff file lives in the master's scratchpad, a new
+folder for every master session. A <code>SessionStart</code> hook reads <code>SESSION_HUB_HANDOFF</code> in a child and
+adds the file's text to its context: at the start, and again after <code>/clear</code> and after a compaction, so
+the child keeps its scope and task without reading the file. The child needs no access to the scratchpad, so
+Claude Code asks no <em>Is this a directory you trust?</em> question at its start.</p>
+<p>Claude Code keeps up to 10,000 characters of a hook's context, so the hook adds at most 9,500: a longer handoff is
+cut at a line, and the child is told from which line to read the rest. <code>spawn</code> keeps handoffs under
+9,000 characters. A handoff the hook cannot read (missing, empty, not an absolute path) does not stop the session:
+Claude Code shows <code>[session-hub] The handoff could not be read (…)</code>, and the child tells you instead of
+starting work.</p>
 
 <h3>The shell check (mod)</h3>
 <p>Best effort, mods on only. Before a <code>Bash</code> (or <code>Monitor</code>) command runs in a child, the mod reads its redirections and

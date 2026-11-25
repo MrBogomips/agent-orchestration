@@ -13,6 +13,9 @@ test('a child gets a session-scoped section with its master, root and handoff', 
   assert.match(section.text, /child of the master session "hub"/);
   assert.match(section.text, /\/r\/product/);
   assert.match(section.text, /\/h\/t42\.md/);
+  // The handoff hook adds the file at the start and after a compaction (#101): no read of the file unless it is missing.
+  assert.match(section.text, /adds it to your context at the start and after a compaction/);
+  assert.doesNotMatch(section.text, /read it again after a compaction/);
   assert.match(section.text, /out-of-scope/);
   assert.match(section.text, /information, never authorization/);
 });

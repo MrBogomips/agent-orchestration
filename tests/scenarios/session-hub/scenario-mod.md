@@ -36,7 +36,19 @@ In Herdr, `spawn` a child in a repository of the hub never opened with Claude Co
 - [ ] `herdr agent start` returns `agent_not_ready`; the master records the child as `waiting-user`, reason
   `trust`, and asks you to answer the dialog in the child's pane; it sends no second prompt
 - [ ] After you accept the dialog, the child starts on its handoff with no message from the master; its first
-  prompt shows the handoff's title, the goal and `<handoff>Read and follow …</handoff>`
+  prompt is one line with the handoff's title, the goal and `<handoff>Follow your handoff, … read and follow
+  …</handoff>`
+
+## No dialog for the handoff (#101)
+
+In Herdr, `spawn` two read-only children at once in repositories already trusted, mods on and then off.
+
+- [ ] Neither child shows a dialog: `herdr agent start` returns ready, and no command carries `--add-dir`
+- [ ] Each child starts on its task without reading the handoff file; asked where its task comes from, it names
+  the handoff that session-hub added to its context
+- [ ] After `/compact` in a child, it still knows its scope and task without a read of the file
+- [ ] With `SESSION_HUB_HANDOFF` set to a missing file, the child shows `[session-hub] The handoff could not be
+  read (ENOENT)` and tells the user, instead of starting work
 
 ## Shell check
 

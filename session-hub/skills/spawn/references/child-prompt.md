@@ -11,6 +11,8 @@ Content rules:
 - Don't repeat what the child loads itself: its repository's instruction file and, inside the hub, the hub's.
 - Carry over only data that exists nowhere on disk (a decision taken in this conversation, the user's words).
 - Never a secret; say where it lives.
+- Under 9,000 characters: session-hub's hook adds the whole file to the child's context only up to that size
+  (*Handoff files* in [environments.md](environments.md)).
 
 ```markdown
 # <task or slug>: <short title> (<repo>)
