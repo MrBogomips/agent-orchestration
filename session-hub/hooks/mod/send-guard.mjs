@@ -7,7 +7,9 @@
 // changes with neither (spike S21). So the master is the recipient the model meant by any of the master's name when
 // the child started, its ref, or its current name (the live session with that ref), and a message to it goes by
 // session id when the child knows it, else by the current name. A socket or bridge address (`uds:…`, `bridge:…`)
-// cannot be tied to the master, so it is refused and the model is told to use the name.
+// cannot be tied to the master, so it is refused and the model is told to use the name. When the child knows the
+// session id and that id is not live, the master has ended (a resume keeps the id): the name is not tried then, since
+// another session may hold it now, and the mod keeps the message in the outbox.
 
 const PREFIX = '[session-hub]';
 const REF_SUFFIX = /\s*\[([0-9A-Za-z_-]+)\]$/;
@@ -62,8 +64,8 @@ function masterWords(role, current) {
 /**
  * @param {{ role: ReturnType<typeof import('./role.mjs').readRole>, to?: string, agentId?: string,
  *   agents?: ReadonlyArray<{ id: string, name?: string }>, live?: ReadonlyArray<{ name?: string, ref?: string }> }} input
- * @returns {{ deliver: true, toMaster?: undefined } | { deliver: true, toMaster: true, to: string, sessionId?: string }
- *   | { deliver: false, reason: string }}
+ * @returns {{ deliver: true, toMaster?: undefined } | { deliver: true, toMaster: true, to?: string, sessionId?: string }
+ *   | { deliver: false, reason: string }} `to` is the name to try after the session id, or none
  */
 export function judgeSend({ role, to, agentId, agents, live }) {
   if (!role.guarding) return DELIVER;
@@ -84,10 +86,14 @@ export function judgeSend({ role, to, agentId, agents, live }) {
   const name = recipientName(raw);
   const current = liveMaster(role, live);
   // A ref alone never picks the session a message goes to: a stale or foreign one could pick another. The message
-  // goes by session id, or else to the master's current name, or else to its name when the child started.
+  // goes by session id, then to the master's current name (the live holder of its ref). Without the id, the name
+  // the child was given is the last resort, as before the pin.
   if (meansMaster(raw, name, role, current)) {
-    const target = { deliver: true, toMaster: true, to: current?.name ?? role.master };
-    return Object.freeze(role.masterSessionId ? { ...target, sessionId: role.masterSessionId } : target);
+    if (role.masterSessionId) {
+      const byId = { deliver: true, toMaster: true, sessionId: role.masterSessionId };
+      return Object.freeze(current ? { ...byId, to: current.name } : byId);
+    }
+    return Object.freeze({ deliver: true, toMaster: true, to: current?.name ?? role.master });
   }
   if (agentId !== undefined && raw === 'main') return DELIVER;
   if (isOwnAgent(raw, agents)) return DELIVER;

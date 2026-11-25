@@ -94,7 +94,7 @@ const PINNED_ENV: Record<string, string> = {
 const RENAMED = { result: { listing: '', sections: [{ kind: 'sessions', total: 1, rows: [{ name: 'CTX-Reviewing', ref: '0d9bc5', status: 'idle' }] }] } }
 
 // A child whose engine delivers to the names in `reachable` and to the master's session id when `idLive`.
-function pinnedChild(on: On, reachable: string[], idLive: boolean, writeFails = false) {
+function pinnedChild(on: On, reachable: string[], idLive: boolean, writeFails = false, listing: unknown = RENAMED) {
   const world = { tried: [] as string[], writes: [] as { path: string; text: string }[] }
   engine(on, PINNED_ENV, '/w/repo', false, [], {}, (e) => {
     const to = typeof e.to === 'string' ? e.to : JSON.stringify(e.to)
@@ -102,7 +102,7 @@ function pinnedChild(on: On, reachable: string[], idLive: boolean, writeFails = 
     const ok = to.includes(MASTER_SESSION) ? idLive : reachable.includes(to)
     return ok ? { isDelivered: true } : { isDelivered: false, reason: `No agent named '${to}' is reachable.` }
   })
-  on('tool.call', (_, e) => (e.tool === 'ListAgents' ? RENAMED : { result: {} }))
+  on('tool.call', (_, e) => (e.tool === 'ListAgents' ? (listing as never) : { result: {} }))
   on('session.id', () => ({ value: 'eaf079d2-bf83-49c3-aec8-8ab8e8562d76' }))
   on('fs.write', (_, e) => (writeFails ? { deny: 'EACCES' } : (world.writes.push({ path: e.path, text: e.text }), { value: undefined })))
   return world
@@ -139,6 +139,15 @@ test('a message the master cannot receive is saved in the outbox, and the child 
   expect(sent.reason).toMatch(/saved in the master's outbox \(\/c\/session-hub\/children-0123456789abcdef\.outbox\/\d{8}T\d{6}Z-eaf079d2-[0-9a-z]+\.json\)/)
   expect(world.writes.length).toBe(1)
   expect(JSON.parse(world.writes[0]?.text ?? '')).toMatchObject({ to: 'hub', text: '[T-42 product] done: PR #12', from: { sessionId: 'eaf079d2-bf83-49c3-aec8-8ab8e8562d76' } })
+})
+
+test('a master that ended is not looked for by name: another session holding its name never gets the report', async ($, on) => {
+  const other = { result: { listing: '', sections: [{ kind: 'sessions', total: 1, rows: [{ name: 'hub', ref: 'ffffff', status: 'idle' }] }] } }
+  const world = pinnedChild(on, ['hub'], false, false, other)
+  const sent = await $.session.send({ to: 'hub', text: '[T-42 product] done: secret', origin: { kind: 'model' } })
+  expect(sent.isDelivered).toBe(false)
+  expect(world.tried.includes('hub')).toBe(false)
+  expect(world.writes.length).toBe(1)
 })
 
 test('a failed save in the outbox is said, so the child keeps the message', async ($, on) => {

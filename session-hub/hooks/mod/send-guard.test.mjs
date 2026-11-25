@@ -22,7 +22,7 @@ test('with guards off, a child may send anywhere', () => {
   assert.deepEqual(judgeSend({ role, to: 'sibling' }), { deliver: true });
 });
 
-const toMaster = (to, sessionId) => (sessionId ? { deliver: true, toMaster: true, to, sessionId } : { deliver: true, toMaster: true, to });
+const toMaster = (to, sessionId) => ({ deliver: true, toMaster: true, ...(to ? { to } : {}), ...(sessionId ? { sessionId } : {}) });
 
 test('a child may message its master, by name or name and ref', () => {
   assert.deepEqual(judgeSend({ role: child, to: 'hub' }), toMaster('hub'));
@@ -114,7 +114,7 @@ test('the new name, with or without the ref, reaches the master', () => {
 
 test('a bare ref of the master reaches the master', () => {
   assert.deepEqual(judgeSend({ role: pinned, to: '0d9bc5', live: renamed }), toMaster('CTX-Reviewing', SESSION));
-  assert.deepEqual(judgeSend({ role: pinned, to: '0d9bc5' }), toMaster('hub-a8', SESSION));
+  assert.deepEqual(judgeSend({ role: pinned, to: '0d9bc5' }), toMaster(undefined, SESSION));
 });
 
 test('any name with the master ref reaches the master', () => {
@@ -128,8 +128,12 @@ test('a foreign ref, bare or with a name, stays refused', () => {
   }
 });
 
-test('with the master not live (restarted or ended), the message goes by session id, else its first name', () => {
-  assert.deepEqual(judgeSend({ role: pinned, to: 'hub-a8', live: [] }), toMaster('hub-a8', SESSION));
+test('with the master not live, a pinned child tries its session id only: another session may hold the name', () => {
+  assert.deepEqual(judgeSend({ role: pinned, to: 'hub-a8', live: [] }), toMaster(undefined, SESSION));
+  assert.deepEqual(judgeSend({ role: pinned, to: 'hub-a8', live: [{ name: 'hub-a8', ref: 'ffffff' }] }), toMaster(undefined, SESSION));
+});
+
+test('a child without the session id still falls back to the name it was given', () => {
   assert.deepEqual(judgeSend({ role: refOnly, to: 'hub-a8', live: [] }), toMaster('hub-a8'));
 });
 

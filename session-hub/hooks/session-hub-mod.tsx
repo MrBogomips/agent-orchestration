@@ -429,22 +429,27 @@ export const register: Register = (on) => {
     const verdict = judgeSend({ role, to: e.to, agentId: e.agentId, agents, live })
     if (!verdict.deliver) return { isDelivered: false, reason: verdict.reason }
     if (!verdict.toMaster) return next(e)
-    // By session id first: it reaches the master whatever its name. Then by name: the id is not live when the master
-    // restarted as another session. A message neither reaches goes to the outbox, never lost.
+    // By session id first: it reaches the master whatever its name. Then by the name the guard chose, if any (the
+    // master's current name, or without the id the name the child was given). A message neither reaches goes to the
+    // outbox, never lost; a failed route never throws past here, so nothing is sent twice.
+    const failed = (error: unknown) => ({ isDelivered: false as const, reason: reasonOf(error) })
     const failures: string[] = []
     if (verdict.sessionId) {
-      const byId = await $.session
-        .send({ to: { sessionId: verdict.sessionId }, text: e.text })
-        .catch((error: unknown) => ({ isDelivered: false as const, reason: reasonOf(error) }))
+      const byId = await $.session.send({ to: { sessionId: verdict.sessionId }, text: e.text }).catch(failed)
       if (byId.isDelivered) return byId
       failures.push(byId.reason)
     }
-    const byName = await next(verdict.to === e.to ? e : { ...e, to: verdict.to })
-    if (byName.isDelivered) return byName
-    failures.push(byName.reason)
+    if (verdict.to !== undefined) {
+      const byName = await next(verdict.to === e.to ? e : { ...e, to: verdict.to }).catch(failed)
+      if (byName.isDelivered) return byName
+      failures.push(byName.reason)
+    }
     return { isDelivered: false as const, reason: await keepUndelivered($, role, e.text, failures.join('; ')) }
   }).catch(async ($, e, next) => {
-    if (next.called) return next(e)
+    // The engine already had the message: never send it again, to the recipient as written least of all.
+    if (next.called) {
+      return { isDelivered: false as const, reason: `[session-hub] The message could not be sent: ${next.error?.message?.slice(0, 200) ?? 'unknown error'}. Tell the user.` }
+    }
     const role = await loadRole($).catch(() => undefined)
     if (role?.guarding === false) return next(e)
     return {

@@ -17,5 +17,5 @@ export function judgeSend(input: {
   live?: ReadonlyArray<{ name?: string; ref?: string }>
 }):
   | { deliver: true; toMaster?: undefined; reason?: undefined }
-  | { deliver: true; toMaster: true; to: string; sessionId?: string; reason?: undefined }
+  | { deliver: true; toMaster: true; to?: string; sessionId?: string; reason?: undefined }
   | { deliver: false; reason: string }
