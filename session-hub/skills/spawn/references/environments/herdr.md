@@ -27,8 +27,7 @@ herdr agent start <name> --kind claude --pane <pane-id> -- <carried flags> <chil
 ```
 
 - `<carried flags>` and `<child flags>` are steps 2 and 4 of *Launch command*: `-n <name>` gives the child the
-  same name in `ListAgents`, then `--model`, `--effort`, `--permission-mode`. No `--add-dir`: its trust dialog
-  would hold every child, and the handoff reaches the child through the hook.
+  same name in `ListAgents`, then `--model`, `--effort`, `--permission-mode`.
 - The first prompt is one line: `agent start` refuses one with line breaks (`invalid_agent_argument: agent
   arguments cannot be encoded safely for the target shell`).
 - Never send the first prompt with a separate `herdr agent prompt`: when a first-run dialog holds the child,
