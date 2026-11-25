@@ -8,15 +8,18 @@ exactly as written in this one Bash call. Each form prints the pane ID, such as 
 
 ```bash
 # tabs: a window per child
-tmux new-window -d -c <dir> -n <name> -P -F '#{pane_id}' <variables> -- claude <carried flags> <child flags> -- 'Read and follow <file>'
+tmux new-window -d -c <dir> -n <name> -P -F '#{pane_id}' <variables> -- claude <carried flags> <child flags> -- "$P"
 # panes: the first child to the right of the master's pane
-tmux split-window -h -d -t "$TMUX_PANE" -c <dir> -P -F '#{pane_id}' <variables> -- claude <carried flags> <child flags> -- 'Read and follow <file>'
+tmux split-window -h -d -t "$TMUX_PANE" -c <dir> -P -F '#{pane_id}' <variables> -- claude <carried flags> <child flags> -- "$P"
 # panes: child k of n (k >= 2) below the last child's pane, sized so the stack has equal heights
-tmux split-window -v -d -t <last-child-pane-id> -l "$(( 100 * (n - k + 1) / (n - k + 2) ))%" -c <dir> -P -F '#{pane_id}' <variables> -- claude <carried flags> <child flags> -- 'Read and follow <file>'
+tmux split-window -v -d -t <last-child-pane-id> -l "$(( 100 * (n - k + 1) / (n - k + 2) ))%" -c <dir> -P -F '#{pane_id}' <variables> -- claude <carried flags> <child flags> -- "$P"
 ```
 
+`"$P"` is the first prompt (*First prompt* in [environments.md](../environments.md)), built by a `P=…` heredoc in
+the same Bash call.
+
 `<variables>` is one `-e KEY=VALUE` per variable: `-e SESSION_HUB_ROLE=child -e SESSION_HUB_MASTER=<master>
--e SESSION_HUB_SCOPE_ROOT=<root> -e SESSION_HUB_HANDOFF=<file> -e SESSION_HUB_REGISTRY=<record>
+-e SESSION_HUB_MASTER_REF=<ref> -e SESSION_HUB_MASTER_SESSION_ID=<id> -e SESSION_HUB_SCOPE_ROOT=<root> -e SESSION_HUB_HANDOFF=<file> -e SESSION_HUB_REGISTRY=<record>
 -e SESSION_HUB_GUARDS=<on|off>`, and first one `-e KEY=VALUE` for every identity variable that *Launch command* in
 [environments.md](../environments.md) found (`HOME`, `CLAUDE_CONFIG_DIR`, a wrapper's profile). Write no brackets.
 After the start, `ListAgents` must list the child (*Launch command*, step 6).

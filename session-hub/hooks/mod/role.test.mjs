@@ -17,6 +17,8 @@ test('a child reads its master, root, handoff and record; guards are on by defau
   const role = readRole({
     role: ' Child ',
     master: ' hub ',
+    masterRef: ' 8f2c1a ',
+    masterSessionId: ' 0d9bc5aa-1111-2222-3333-444455556666 ',
     scopeRoot: '/r/product',
     handoff: '/h/t42.md',
     registry: '/c/children.json',
@@ -26,6 +28,8 @@ test('a child reads its master, root, handoff and record; guards are on by defau
     guarding: true,
     guardsOff: false,
     master: 'hub',
+    masterRef: '8f2c1a',
+    masterSessionId: '0d9bc5aa-1111-2222-3333-444455556666',
     scopeRoot: '/r/product',
     handoff: '/h/t42.md',
     registry: '/c/children.json',
@@ -54,6 +58,12 @@ test('a child without a master is still a child: the guard refuses with a reason
   const role = readRole({ role: 'child' });
   assert.equal(role.kind, 'child');
   assert.equal(role.master, undefined);
+});
+
+test('a child started before the master pin has neither its ref nor its session id', () => {
+  const role = readRole({ role: 'child', master: 'hub', masterRef: ' ', masterSessionId: '' });
+  assert.equal(role.masterRef, undefined);
+  assert.equal(role.masterSessionId, undefined);
 });
 
 test('the result is frozen', () => {

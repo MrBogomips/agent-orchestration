@@ -2,6 +2,8 @@ export type SessionHubMaster = {
   isMaster: boolean
   record?: string
   hub?: string
+  /** The name this master was last told it was renamed to while children run, so the notice shows once. */
+  renamedTo?: string
 }
 
 export type SessionHubPanelRow = {

@@ -150,8 +150,19 @@ test('the description puts identity, flags and permission together', () => {
     model: 'opus',
     effort: null,
     permission: { bypass: true, flags: ['--dangerously-skip-permissions'] },
+    master: { sessionId: null },
     unsure: ['MISSING (--carry) is not set in this session: not carried'],
   });
+});
+
+test('the master session id comes from CLAUDE_CODE_SESSION_ID, and is null when unset or malformed', () => {
+  const launchWith = (id) =>
+    describeLaunch({ env: { CLAUDE_CODE_SESSION_ID: id }, accountHome: '/Users/me', startPid: 9, readProcess: table({}) });
+  const id = 'c9be4707-691d-4bf6-873a-532e446108b7';
+  assert.deepEqual(launchWith(id).master, { sessionId: id });
+  assert.deepEqual(launchWith(undefined).master, { sessionId: null });
+  assert.deepEqual(launchWith('a b; rm').master, { sessionId: null });
+  assert.equal(launchWith(id).env.CLAUDE_CODE_SESSION_ID, undefined);
 });
 
 test('with no claude ancestor the description says so and still gives the identity', () => {

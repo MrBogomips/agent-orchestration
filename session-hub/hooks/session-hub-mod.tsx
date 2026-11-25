@@ -1,9 +1,11 @@
 // The session-hub mod: the engine glue around the pure modules in ./mod.
 //
-// In a child: the send guard (session.send), the best-effort shell check (tool.call on Bash and Monitor), origin
+// In a child: the send guard (session.send), which delivers a message for the master by its session id and keeps it
+// in the outbox when the master cannot be reached, the best-effort shell check (tool.call on Bash and Monitor), origin
 // marking (session.receive, prompt.submit) and the scope line (prompt.compose). In a master: the children panel
 // (drawn by ./children-pane.tsx, with the action that opens the children record), the
-// start line under a Bash call that starts children (ui.render ToolUse), and the scope line. In every session: the
+// start line under a Bash call that starts children (ui.render ToolUse), the notice of a rename while children run,
+// and the scope line. In every session: the
 // /session-hub command: on the desktop app one card in the transcript (./hub-card.tsx), the children panel and the
 // table in a terminal. A child that runs under another configuration folder than its master says so
 // (./mod/identity.mjs). In the terminal the panel and the start line use the look shared with model-router
@@ -20,7 +22,9 @@ import { hostKind, isGraphical } from './mod/host.mjs'
 import { identityMismatch, mismatchText } from './mod/identity.mjs'
 import { markContext, markText } from './mod/origin.mjs'
 import { failText, recordPlan, recordSource } from './mod/open-record.mjs'
-import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
+import { formatRow, headerRow, liveRows, liveStatuses, panelRows, parseRegistryCall, rowText } from './mod/panel.mjs'
+import { outboxNote, renameNotice, selfFromListing } from './mod/master-rename.mjs'
+import { outboxDir, outboxEntry, undeliveredText } from './mod/outbox.mjs'
 import { childStarts, isSessionStartTool, startLineSegments, startLogText, toolStarts } from './mod/start-line.mjs'
 import type { ChildStart } from './mod/start-line.mjs'
 import { readRole } from './mod/role.mjs'
@@ -130,6 +134,8 @@ async function loadRole($: $): Promise<Role> {
   return readRole({
     role: await $.env.get('SESSION_HUB_ROLE'),
     master: await $.env.get('SESSION_HUB_MASTER'),
+    masterRef: await $.env.get('SESSION_HUB_MASTER_REF'),
+    masterSessionId: await $.env.get('SESSION_HUB_MASTER_SESSION_ID'),
     scopeRoot: await $.env.get('SESSION_HUB_SCOPE_ROOT'),
     handoff: await $.env.get('SESSION_HUB_HANDOFF'),
     registry: await $.env.get('SESSION_HUB_REGISTRY'),
@@ -149,6 +155,23 @@ async function loadMismatch($: $, role: Role) {
     })
   } catch {
     return undefined
+  }
+}
+
+// Saves a message the master could not receive in the outbox next to the children record, and answers what the
+// child's model reads. Never throws: a failed save is said in the answer.
+async function keepUndelivered($: $, role: Role, text: string, reason: string): Promise<string> {
+  const master = role.master ?? 'the master'
+  const dir = outboxDir(role.registry)
+  if (!dir) return undeliveredText({ master, reason, error: 'SESSION_HUB_REGISTRY does not name the children record' })
+  try {
+    const sessionId = await $.session.id().catch(() => undefined)
+    const nonce = Math.random().toString(36).slice(2, 8)
+    const entry = outboxEntry({ dir, at: new Date().toISOString(), sessionId, nonce, master, reason, text })
+    await $.fs.write(entry.file, entry.content)
+    return undeliveredText({ master, reason, saved: entry.file })
+  } catch (error) {
+    return undeliveredText({ master, reason, error: reasonOf(error) })
   }
 }
 
@@ -256,11 +279,44 @@ async function hostOf($: $) {
   return hostKind({ surfaces, entrypoint })
 }
 
-async function readLive($: $) {
+// The ListAgents result (spike S8), or undefined when it cannot be read.
+async function readListing($: $): Promise<unknown> {
   try {
-    return liveStatuses(await $.tool.call({ tool: 'ListAgents' }))
+    return await $.tool.call({ tool: 'ListAgents' })
   } catch {
     return undefined
+  }
+}
+
+// The master's record path, found once per load: the outbox is next to it.
+let recordPathCache: { key: string; file: string } | undefined
+
+// How many messages children could not deliver wait in the outbox. A view: an error counts as none.
+async function outboxCount($: $, master: SessionHubMaster, cwd: string): Promise<number> {
+  try {
+    const key = master.record ?? master.hub ?? cwd
+    if (recordPathCache?.key !== key) {
+      const found = await recordFile($)
+      if ('none' in found) return 0
+      recordPathCache = { key, file: found.file }
+    }
+    const dir = outboxDir(recordPathCache.file)
+    if (!dir || !(await $.fs.exists(dir))) return 0
+    return (await $.fs.list(dir)).filter((entry) => entry.kind === 'file' && entry.name.endsWith('.json')).length
+  } catch {
+    return 0
+  }
+}
+
+// Tells the person, once per name, that this master was renamed while children run (#98). Never throws: a notice.
+async function noticeRename($: $, record: unknown, listing: unknown) {
+  try {
+    const notice = renameNotice({ record, current: selfFromListing(listing), sessionId: await $.session.id() })
+    if (!notice || (await read($, masterState)).renamedTo === notice.name) return
+    await update($, masterState, (now) => ({ ...now, renamedTo: notice.name }))
+    $.ui.log(notice.text)
+  } catch (error) {
+    $.ui.log(`[session-hub] rename check: ${reasonOf(error).slice(0, 200)}`, { to: 'debug' })
   }
 }
 
@@ -271,8 +327,11 @@ async function refreshPanel($: $): Promise<SessionHubPanel> {
   let next: SessionHubPanel
   try {
     const record = await readRecord($, master, cwd)
-    const rows = panelRows(record as { children?: unknown[] }, await readLive($))
-    next = { rows, updatedAt: new Date().toISOString(), note: rows.length === 0 ? 'No children in the record yet.' : undefined }
+    const listing = await readListing($)
+    const rows = panelRows(record as { children?: unknown[] }, liveStatuses(listing))
+    await noticeRename($, record, listing)
+    const notes = [rows.length === 0 ? 'No children in the record yet.' : undefined, outboxNote(await outboxCount($, master, cwd))]
+    next = { rows, updatedAt: new Date().toISOString(), note: notes.filter(Boolean).join(' ') || undefined }
   } catch (error) {
     next = { rows: [], note: `Cannot read the children record: ${error instanceof Error ? error.message : error}` }
   }
@@ -365,9 +424,25 @@ export const register: Register = (on) => {
     const role = await loadRole($)
     if (!role.guarding) return next(e)
     const agents = await $.agent.list().catch(() => [])
-    const verdict = judgeSend({ role, to: e.to, agentId: e.agentId, agents })
+    // The live list tells the master's current name from its ref; without a ref there is nothing to look up.
+    const live = role.masterRef ? liveRows(await readListing($)) : undefined
+    const verdict = judgeSend({ role, to: e.to, agentId: e.agentId, agents, live })
     if (!verdict.deliver) return { isDelivered: false, reason: verdict.reason }
-    return verdict.to ? next({ ...e, to: verdict.to }) : next(e)
+    if (!verdict.toMaster) return next(e)
+    // By session id first: it reaches the master whatever its name. Then by name: the id is not live when the master
+    // restarted as another session. A message neither reaches goes to the outbox, never lost.
+    const failures: string[] = []
+    if (verdict.sessionId) {
+      const byId = await $.session
+        .send({ to: { sessionId: verdict.sessionId }, text: e.text })
+        .catch((error: unknown) => ({ isDelivered: false as const, reason: reasonOf(error) }))
+      if (byId.isDelivered) return byId
+      failures.push(byId.reason)
+    }
+    const byName = await next(verdict.to === e.to ? e : { ...e, to: verdict.to })
+    if (byName.isDelivered) return byName
+    failures.push(byName.reason)
+    return { isDelivered: false as const, reason: await keepUndelivered($, role, e.text, failures.join('; ')) }
   }).catch(async ($, e, next) => {
     if (next.called) return next(e)
     const role = await loadRole($).catch(() => undefined)

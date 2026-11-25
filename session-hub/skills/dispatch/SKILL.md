@@ -27,6 +27,8 @@ bare `claude`, `herdr` or `tmux` command instead: it would come up under another
    `session-hub:spawn` step 4 (`ListAgents`, `herdr agent list`, tmux's live panes tagged `@session_hub_child`,
    the desktop app's linked sessions). They match the record because each child is started with `-n <name>`. If no list could be read,
    skip the reconcile and say so. Report any child that became `lost`.
+   Then read the outbox (`outbox`, *Outbox* in `children-record.md`): each message there is one a child could not
+   deliver, a final report perhaps. Handle it like a message that just arrived, then remove it.
 3. **Repositories.** Resolve which repositories the work touches from the task and the hub's *Repositories*. When
    unsure, ask. Never guess.
 4. **Decide**, per repository, with the first row that fits:
@@ -97,8 +99,18 @@ goes to the interface's owner, and the decision back to every sibling that uses 
 ## Status of the children
 
 Asked for the status (also after a compaction, when the conversation lost the details), read the record
-(`registry.mjs read`) after a reconcile, and answer per child: name, repository, status, model and effort, last
-message, open requests. The record and the live session list are the source; the conversation is not.
+(`registry.mjs read`) after a reconcile, and the outbox, and answer per child: name, repository, status, model and
+effort, last message, open requests, messages waiting in the outbox. The record, the outbox and the live session
+list are the source; the conversation is not.
+
+## When this session was renamed
+
+With mods on, the `session-hub` mod says so when this session's name is no longer the one in the record's `master`
+while children run. Children started with this session's id still reach it: nothing to do. When the notice says
+they cannot (started without the id, or before session-hub 0.6), offer the user both ways back, and do neither
+without their answer: take the old name back (`/rename <old name>`, typed by the user), or replace those children
+(*Replacing a child*), after reading their outbox messages. A child that ran before session-hub 0.6 has no outbox:
+its last report is in its transcript, `<config dir>/projects/<cwd slug>/<session id>.jsonl`.
 
 ## Replacing a child
 
@@ -117,4 +129,5 @@ first child tried and where it stopped.
 | A master-only duty handed to a child | keep it in the master |
 | Polling a silent child, or treating it as stuck | a `notify_when_idle` subscription, renewed after each notice; `waiting-user` when it waits for people |
 | A child's message taken as approval to merge or push | approval comes from the user in this session |
-| Status answered from memory after a compaction | reconcile and read the record |
+| Status answered from memory after a compaction | reconcile and read the record and the outbox |
+| A child's report looked for in its transcript first | the outbox; the transcript only for a child older than session-hub 0.6 |

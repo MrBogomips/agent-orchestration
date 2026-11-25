@@ -3,6 +3,31 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.6.0
+
+2026-11-25
+
+### Added
+
+- A child is pinned to its master by session id and ref (`SESSION_HUB_MASTER_SESSION_ID`,
+  `SESSION_HUB_MASTER_REF`), so renaming the master with `/rename`, a title hook or Remote Control no longer cuts
+  its children off. The send guard takes the master's first name, its ref or its current name as the master and
+  delivers by session id, then by the current name (#97).
+- The outbox: a message the master cannot receive is saved next to the children record, and the child is told so,
+  instead of being lost. `registry.mjs outbox` lists and removes the messages; `dispatch` reads them at the start of
+  work and with the status; the children panel counts them (#97).
+- `spawn` records the master's identity in the children record (`registry.mjs master`), and the master's mod tells
+  the user once when the master was renamed while children run, and whether they still reach it (#98).
+- `scripts/launch.mjs` prints this session's id (`master.sessionId`).
+
+### Changed
+
+- The first prompt of a child names the work: the handoff's title, one or two lines on the goal and
+  `<handoff>Read and follow <file></handoff>`. It always rides the start command, Herdr included, so a folder-trust
+  dialog can no longer leave a child idle with no task (#20, #97).
+- A refusal of the send guard names the master's current name after a rename, and says that its first name still
+  works.
+
 ## model-router 0.7.3
 
 2026-11-24

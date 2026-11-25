@@ -11,6 +11,8 @@
 //   flags       arguments of this session's `claude` that configure a session, to repeat as they are
 //   model, effort   this session's own, when its launch set them (never carried: the new session gets its own)
 //   permission  { bypass, flags }: whether this session was started bypassing permission prompts, and with what
+//   master      { sessionId }: this session's id (CLAUDE_CODE_SESSION_ID), which a child is pinned to so that it still
+//               reaches this session after a rename; null when the engine did not set it
 //   unsure      what could not be read for certain; ask the user about each line before starting anything
 //
 // It never prints the environment: only the named variables, which hold paths and profile names, never tokens.
@@ -68,6 +70,8 @@ const DROPPED = Object.freeze({
 const MAY_BE_JSON = Object.freeze(['--settings', '--mcp-config']);
 const BYPASS_FLAG = '--dangerously-skip-permissions';
 const BYPASS_MODE = 'bypassPermissions';
+// The id Claude Code gives the session's shell: a child's send guard finds its master by it, whatever its name.
+const SESSION_ID = /^[0-9A-Za-z_-]{1,128}$/;
 
 export class LaunchError extends Error {}
 
@@ -245,6 +249,7 @@ export function describeLaunch({ env = process.env, accountHome, startPid = proc
     model: read.model ?? null,
     effort: read.effort ?? null,
     permission: read.permission,
+    master: { sessionId: SESSION_ID.test(env.CLAUDE_CODE_SESSION_ID ?? '') ? env.CLAUDE_CODE_SESSION_ID : null },
     unsure: [...unsure, ...read.unsure],
   };
 }

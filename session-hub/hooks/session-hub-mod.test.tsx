@@ -28,7 +28,9 @@ type Fs = { stat?: () => { deny: string }; list?: () => { deny: string } | { val
 const rootOnly = (_: unknown, e: { path: string }) =>
   e.path === '/w/repo' ? { value: { realPath: '/w/repo', kind: 'dir' } } : { deny: 'ENOENT' }
 
-function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails = false, sent: string[] = [], fs: Fs = {}) {
+type Send = (e: { to: unknown }) => { isDelivered: true } | { isDelivered: false; reason: string }
+
+function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails = false, sent: string[] = [], fs: Fs = {}, send?: Send) {
   on('env.get', (_, e) => {
     if (envFails) throw new Error('env unavailable')
     return { value: env[e.name] }
@@ -37,7 +39,7 @@ function engine(on: On, env: Record<string, string>, cwd = '/w/repo', envFails =
   on('agent.list', () => ({ value: [] }))
   on('fs.stat', fs.stat ?? (rootOnly as never))
   on('fs.list', fs.list ?? (() => ({ value: [] })))
-  on('session.send', (_, e) => (sent.push(e.to), { isDelivered: true }))
+  on('session.send', (_, e) => (send ? send(e) : (sent.push(e.to), { isDelivered: true })))
   on('session.receive', (_, e) => ({ text: e.text }))
   on('prompt.submit', (_, e) => ({ text: e.text, context: e.context }))
   on('command.register', () => ({ value: { command: 'session-hub' } }))
@@ -79,6 +81,71 @@ test('the send guard fails closed when it cannot read the role', async ($, on) =
   const sent = await $.session.send({ to: 'hub', text: 'x', origin: { kind: 'model' } })
   expect(sent.isDelivered).toBe(false)
   expect(sent.reason).toMatch(/send guard failed/)
+})
+
+// A child pinned to its master by ref and session id (#97): `hub` [0d9bc5] renamed to `CTX-Reviewing`.
+const MASTER_SESSION = '0d9bc5aa-1111-2222-3333-444455556666'
+const PINNED_ENV: Record<string, string> = {
+  ...CHILD_ENV,
+  SESSION_HUB_MASTER_REF: '0d9bc5',
+  SESSION_HUB_MASTER_SESSION_ID: MASTER_SESSION,
+  SESSION_HUB_REGISTRY: '/c/session-hub/children-0123456789abcdef.json',
+}
+const RENAMED = { result: { listing: '', sections: [{ kind: 'sessions', total: 1, rows: [{ name: 'CTX-Reviewing', ref: '0d9bc5', status: 'idle' }] }] } }
+
+// A child whose engine delivers to the names in `reachable` and to the master's session id when `idLive`.
+function pinnedChild(on: On, reachable: string[], idLive: boolean, writeFails = false) {
+  const world = { tried: [] as string[], writes: [] as { path: string; text: string }[] }
+  engine(on, PINNED_ENV, '/w/repo', false, [], {}, (e) => {
+    const to = typeof e.to === 'string' ? e.to : JSON.stringify(e.to)
+    world.tried.push(to)
+    const ok = to.includes(MASTER_SESSION) ? idLive : reachable.includes(to)
+    return ok ? { isDelivered: true } : { isDelivered: false, reason: `No agent named '${to}' is reachable.` }
+  })
+  on('tool.call', (_, e) => (e.tool === 'ListAgents' ? RENAMED : { result: {} }))
+  on('session.id', () => ({ value: 'eaf079d2-bf83-49c3-aec8-8ab8e8562d76' }))
+  on('fs.write', (_, e) => (writeFails ? { deny: 'EACCES' } : (world.writes.push({ path: e.path, text: e.text }), { value: undefined })))
+  return world
+}
+
+test('after the master is renamed, the stale name reaches it by session id', async ($, on) => {
+  const world = pinnedChild(on, [], true)
+  expect(await $.session.send({ to: 'hub', text: '[T-42 product] done: ok', origin: { kind: 'model' } })).toEqual({ isDelivered: true })
+  expect(world.tried.length).toBe(1)
+  expect(world.tried[0]).not.toBe('hub')
+})
+
+test('the new name, or the bare ref, also reaches the master; a sibling stays refused, naming both names', async ($, on) => {
+  pinnedChild(on, [], true)
+  for (const to of ['CTX-Reviewing', 'CTX-Reviewing [0d9bc5]', '0d9bc5']) {
+    expect(await $.session.send({ to, text: 'x', origin: { kind: 'model' } })).toEqual({ isDelivered: true })
+  }
+  const refused = await $.session.send({ to: 't43-docs', text: 'x', origin: { kind: 'model' } })
+  expect(refused.isDelivered).toBe(false)
+  expect(refused.reason).toMatch(/"hub" \(now named "CTX-Reviewing"\)/)
+})
+
+test('when the session id is not live, the message goes to the master current name', async ($, on) => {
+  const world = pinnedChild(on, ['CTX-Reviewing'], false)
+  expect(await $.session.send({ to: 'hub', text: 'x', origin: { kind: 'model' } })).toEqual({ isDelivered: true })
+  expect(world.tried.at(-1)).toBe('CTX-Reviewing')
+})
+
+test('a message the master cannot receive is saved in the outbox, and the child is told', async ($, on) => {
+  const world = pinnedChild(on, [], false)
+  const sent = await $.session.send({ to: 'hub', text: '[T-42 product] done: PR #12', origin: { kind: 'model' } })
+  expect(sent.isDelivered).toBe(false)
+  expect(sent.reason).toMatch(/could not be reached/)
+  expect(sent.reason).toMatch(/saved in the master's outbox \(\/c\/session-hub\/children-0123456789abcdef\.outbox\/\d{8}T\d{6}Z-eaf079d2-[0-9a-z]+\.json\)/)
+  expect(world.writes.length).toBe(1)
+  expect(JSON.parse(world.writes[0]?.text ?? '')).toMatchObject({ to: 'hub', text: '[T-42 product] done: PR #12', from: { sessionId: 'eaf079d2-bf83-49c3-aec8-8ab8e8562d76' } })
+})
+
+test('a failed save in the outbox is said, so the child keeps the message', async ($, on) => {
+  pinnedChild(on, [], false, true)
+  const sent = await $.session.send({ to: 'hub', text: 'x', origin: { kind: 'model' } })
+  expect(sent.reason).toMatch(/could not be saved in the outbox either/)
+  expect(sent.reason).toMatch(/keep the whole message in your reply/)
 })
 
 test('a shell write outside the write root is denied; inside it runs', async ($, on) => {
@@ -401,12 +468,15 @@ const ran = (stdout: string, exitCode = 0, stderr = '') => ({ value: { exitCode,
 type Opening = {
   exists?: boolean; platform?: string; open?: { exitCode: number; stderr: string }; pathFails?: boolean
   surfaces?: string[]; entrypoint?: string; isPlaced?: boolean; record?: unknown; readFails?: string
+  listing?: unknown; outbox?: string[]; sessionId?: string
 }
 
 // A master in /hub whose record is at the default path: the registry script, the file system and the opener.
 function master(on: On, opening: Opening = {}) {
   const world = { opened: [] as (readonly string[])[], logs: [] as string[], debug: [] as string[], panes: [] as { id: string }[], reads: [] as (readonly string[])[] }
-  engine(on, opening.entrypoint ? { CLAUDE_CODE_ENTRYPOINT: opening.entrypoint } : {}, '/hub')
+  const outbox = (opening.outbox ?? []).map((name) => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false }))
+  engine(on, opening.entrypoint ? { CLAUDE_CODE_ENTRYPOINT: opening.entrypoint } : {}, '/hub', false, [], { list: () => ({ value: outbox as never[] }) })
+  on('session.id', () => ({ value: opening.sessionId ?? 'master-session' }))
   on('session.surfaces', () => ({ value: (opening.surfaces ?? ['terminal']) as never }))
   on('session.info', () => ({ value: { platform: opening.platform ?? 'macos', isHosted: false } as never }))
   on('fs.exists', () => ({ value: opening.exists ?? true }))
@@ -416,7 +486,7 @@ function master(on: On, opening: Opening = {}) {
     ;((e as { to?: string }).to === 'debug' ? world.debug : world.logs).push(line)
     return next(e)
   })
-  on('tool.call', () => ({ result: {} }))
+  on('tool.call', (_, e) => (e.tool === 'ListAgents' && opening.listing ? (opening.listing as never) : { result: {} }))
   on('process.run', (_, e) => {
     if (e.argv[0] === 'open' || e.argv[0] === 'xdg-open') {
       world.opened.push(e.argv)
@@ -431,6 +501,33 @@ function master(on: On, opening: Opening = {}) {
   })
   return world
 }
+
+// A master renamed from `hub-a8` to `CTX-Reviewing` after it started two children (#98).
+const RENAMED_RECORD = {
+  ...RECORD,
+  master: { name: 'hub-a8', ref: '0d9bc5', sessionId: MASTER_SESSION },
+  children: [...RECORD.children, { name: 't43-docs', status: 'waiting-user' }],
+}
+const SELF = { result: { listing: 'This session is CTX-Reviewing [0d9bc5] — the name other sessions use to message it.', sections: [] } }
+
+test('a master renamed while children run says so once, and that its pinned children still reach it', async ($, on) => {
+  const world = master(on, { record: RENAMED_RECORD, listing: SELF, sessionId: MASTER_SESSION })
+  await $.command.run(RUN)
+  await $.command.run(RUN)
+  const notices = world.logs.filter((line) => /renamed/.test(line))
+  expect(notices).toEqual(['[session-hub] This session was renamed from "hub-a8" to "CTX-Reviewing" while 2 children run. They still reach it: their send guard finds this session by its id, whatever its name.'])
+})
+
+test('a master renamed with children not pinned to its id gives the way back', async ($, on) => {
+  const world = master(on, { record: { ...RENAMED_RECORD, master: { name: 'hub-a8' } }, listing: SELF })
+  await $.command.run(RUN)
+  expect(world.logs.find((line) => /renamed/.test(line))).toMatch(/can no longer reach it\. Rename it back with \/rename hub-a8/)
+})
+
+test('the children panel says how many messages wait in the outbox', async ($, on) => {
+  master(on, { outbox: ['20261125T101500Z-eaf079d2-a.json', '20261125T101600Z-eaf079d2-b.json', 'notes.txt'] })
+  expect((await $.command.run(RUN)).text).toMatch(/2 messages from children wait in the outbox: read them with session-hub:dispatch\./)
+})
 
 test('/session-hub log opens the children record at the default path of the hub and answers its path', async ($, on) => {
   const world = master(on)

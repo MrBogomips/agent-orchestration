@@ -1,4 +1,4 @@
-<!-- translated-from: it/session-hub.html sha256:6e19f716fb19 -->
+<!-- translated-from: it/session-hub.html sha256:2f135d3a331b -->
 <h1>session-hub</h1>
 <p class="lede">When a task touches multiple repositories, trying to manage everything in a single session quickly blurs context and boundaries. With <code>session-hub</code>, a <strong>master</strong> session opened at the hub root launches one or more <strong>child sessions</strong> — one per repository — that work in parallel.</p>
 <p>Each child session gets a written <strong>scope</strong>, a model, and an effort level, talks only to the master, and forwards anything outside its boundaries back to it. That lets you step directly into the child session for your own domain and guide it closely, while the master coordinates everything else.</p>
@@ -115,7 +115,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   <li>Checks whether an active child session already exists for that repository and task: if it finds one, it forwards the request there instead of opening a duplicate.</li>
   <li>Determines the execution environment, session name, worktree (if any), write root, and read scope.</li>
   <li>Picks the model and effort following a strict priority order: first what you specified, then the keys configured in the hub, then <code>model-router:choose-model</code> (if installed); otherwise it inherits the master's.</li>
-  <li>Writes the handoff file outside the hub, starts the child session with the one-line prompt <code>Read and follow &lt;file&gt;</code>, records it as <code>running</code>, and prints a full summary for you.</li>
+  <li>Writes the handoff file outside the hub, starts the child session with a short first prompt (the handoff title, a line or two about the goal, and <code>&lt;handoff&gt;Read and follow &lt;file&gt;&lt;/handoff&gt;</code>), records it as <code>running</code> alongside the master's identity, and prints a full summary for you.</li>
 </ol>
 <p>The detected environment determines how the child session is opened and whether the <em>scope guard</em> can be enabled:</p>
 <table>
@@ -131,11 +131,21 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 <h3>How a child session is launched</h3>
 <p>For the master and a child session to exchange messages, they must share the same account and configuration directory (two sessions with different configuration directories cannot talk to each other). If you launch Claude Code through an alias or wrapper that selects a profile or adds flags, child sessions need to start the same way. That is why <code>spawn</code> uses <code>scripts/launch.mjs</code> to read how the master was started (identity variables such as <code>CLAUDE_CONFIG_DIR</code>, <code>HOME</code>, and the wrapper profile, plus configuration flags) and launches every child session with the same parameters, adding the child-specific flags (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> for access to the handoff directory) and setting the <code>SESSION_HUB_*</code> role variables.</p>
 <p>In tmux, for example, the launch command looks like this:</p>
-<pre><code>env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub \
+<pre><code>P=$(cat &lt;&lt;'EOF'
+# T-42: CSV export endpoint (product)
+
+Add GET /export with its tests, and open a PR on develop.
+
+&lt;handoff&gt;Read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
+EOF
+)
+env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub SESSION_HUB_MASTER_REF=8f2c1a \
+  SESSION_HUB_MASTER_SESSION_ID=&lt;master session id&gt; \
   SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
   SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json SESSION_HUB_GUARDS=on \
   claude -n t42-product --model sonnet --effort medium --permission-mode default \
-  --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'</code></pre>
+  --add-dir &lt;dir&gt; -- "$P"</code></pre>
+<p>The first prompt tells anyone looking at the child session's window what it is working on, and it always travels in the startup command, even in Herdr: if the child session pauses at the folder trust prompt, it starts on its task as soon as you respond.</p>
 <p>A couple of operational details are worth noting at launch:</p>
 <ul>
   <li><strong>Permission mode:</strong> the child session inherits the master's mode, because messages between sessions with mismatched permission-bypass settings would sit blocked waiting for manual confirmation. If the master skips permission prompts, <code>spawn</code> asks you on each launch which mode to give child sessions; with <code>Permissions: inherit</code>, it skips asking and uses the master's.</li>
@@ -192,7 +202,9 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 <p>This check is <em>best-effort</em> because it inspects only the literal command line: it cannot evaluate targets hidden inside variables, command substitution output, or globs, nor what an invoked program (a script, <code>git</code>, or a build tool) writes internally.</p>
 <h3>The send guard (mod)</h3>
 <p>To prevent unauthorized sideways coordination, a child session may send messages only to its master (by name) or to its own subagents. Any other recipient — such as a sibling session or a socket address — is blocked with a notice pointing back to the master:</p>
-<pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix; a request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
+<pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix, even if the master was renamed: the guard delivers it to the master. A request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
+<p>A session's name can change while it is running: <code>/rename</code>, a hook that sets the title after a reply, or Remote Control. The child session keeps writing to the name it received; the guard still recognizes the master by its ref or its new name and delivers the message using the master's session ID. In the master, the mod warns you once that it has been renamed while child sessions are running, and tells you whether they can still reach it.</p>
+<p>If the message still cannot get through (the master was closed, or reopened under a different name), it is not lost: the child session's mod saves it to the outbox next to the record and lets the child session know. The master reads it with <code>dispatch</code>.</p>
 <h3>The scope line</h3>
 <p>In long sessions, initial instructions can get compacted or cleared. With mods active, <code>session-hub</code> keeps the role and scope (in a child session) or the record (in the master) permanently visible in the system prompt, and resends the same text as context on the first turn after startup, after compaction, and after <code>/clear</code>.</p>
 
@@ -267,6 +279,8 @@ Guards: on (scope guard, shell check, send guard)</code></pre>
 <ul>
   <li><strong>What each entry stores:</strong> name, repository, task, scope, model, effort, state, start time, last message, and requests.</li>
   <li><strong>Possible states:</strong> <code>running</code>, <code>waiting-user</code>, <code>done</code>, <code>abandoned</code>, and <code>lost</code> (recorded as active, but no longer present in the session list).</li>
+  <li><strong>Master identity:</strong> the name, ref, and session ID the child sessions were started with; used to detect a rename.</li>
+  <li><strong>Outbox:</strong> the <code>children-&lt;hub id&gt;.outbox/</code> folder next to the record, with one file for each message a child session could not deliver. The panel counts them; <code>dispatch</code> reads them, handles them like newly arrived messages, and deletes them.</li>
 </ul>
 <p>Skills update the file exclusively through <code>scripts/registry.mjs</code>, atomically and under a lock, preventing corruption on concurrent writes. If the file does not contain valid JSON, the issue is reported without ever overwriting it; likewise, a record error never blocks new sessions from starting — <code>spawn</code> warns you and moves on.</p>
 <p>You can also inspect the record directly from the terminal:</p>

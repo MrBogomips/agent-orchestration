@@ -3,6 +3,8 @@ export type Role = Readonly<{
   guarding: boolean
   guardsOff: boolean
   master?: string
+  masterRef?: string
+  masterSessionId?: string
   scopeRoot?: string
   handoff?: string
   registry?: string
@@ -12,6 +14,8 @@ export type Role = Readonly<{
 export function readRole(values: {
   role?: string
   master?: string
+  masterRef?: string
+  masterSessionId?: string
   scopeRoot?: string
   handoff?: string
   registry?: string
