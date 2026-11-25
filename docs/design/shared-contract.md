@@ -74,15 +74,22 @@ so these names are fixed.
 | Variable | Value |
 |---|---|
 | `SESSION_HUB_ROLE` | `child` |
-| `SESSION_HUB_MASTER` | the master's session name |
+| `SESSION_HUB_MASTER` | the master's session name when the child started |
+| `SESSION_HUB_MASTER_REF` | the master's ref in `ListAgents` when the child started; optional |
+| `SESSION_HUB_MASTER_SESSION_ID` | the master's session id (`CLAUDE_CODE_SESSION_ID` in its shell); optional |
 | `SESSION_HUB_SCOPE_ROOT` | absolute path of the write root |
 | `SESSION_HUB_HANDOFF` | absolute path of the handoff file |
-| `SESSION_HUB_REGISTRY` | absolute path of the children record (read-only for a child) |
+| `SESSION_HUB_REGISTRY` | absolute path of the children record (read-only for a child; its outbox is next to it) |
 | `SESSION_HUB_GUARDS` | `on` or `off`, from the hub's `Guards` key; absent means `on` |
 
 They reach the child's classic hooks in `--bg`, tmux and Herdr panes (S4; in Herdr through `tab create` / `pane split
 --env`). The desktop app starts sessions through a tool that takes no environment and was not tested: there the
 role has to come from the handoff file, and the scope guard is inactive, which `spawn` must say in its report.
+
+A session's name can change while it runs (`/rename`, a title hook, Remote Control), and its ref changes when it
+restarts; its session id changes with neither. A child's send guard therefore takes the master as the session
+with that id when `SESSION_HUB_MASTER_SESSION_ID` is set, and the two other values tell which recipient the model
+meant by the master. A child started without the id is tied to the master's name, as before.
 
 ## Naming
 
@@ -97,6 +104,7 @@ role has to come from the handoff file, and the scope guard is inactive, which `
 | Path | Owner | Content |
 |---|---|---|
 | `<config dir>/session-hub/children-<hub id>.json` | `session-hub` (master writes) | the children record, unless the `Registry` key says otherwise |
+| `<children record without .json>.outbox/` | `session-hub` (a child's mod writes, the master reads and removes) | one file per message a child could not deliver to its master |
 | `<config dir>/model-router/events.jsonl`, `quality/` | `model-router` | the event log (routing decisions included) and the quality aggregates (`model-router-quality-loop.md`) |
 
 `<config dir>` is the active Claude Code config folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`). Never write state
