@@ -20,7 +20,7 @@ scratchpad directory if it has one, otherwise in a new `mktemp -d` directory, as
 inside the hub or a repository. The child's `SESSION_HUB_HANDOFF` names it, and session-hub's `SessionStart`
 hook adds its text to the child's context at the start and again after `/clear` or a compaction. So the child
 needs no access to the file's folder: never give it `--add-dir <handoff-dir>`, whose trust dialog would stop every
-child at every start (#101). Keep the handoff under 9,000 characters (`wc -c`): past that the hook adds the first
+child at every start. Keep the handoff under 9,000 characters (`wc -c`): past that the hook adds the first
 part and tells the child from which line to read the rest.
 
 **First prompt.** The prompt on the start command tells the person watching the child's window what it is doing,
@@ -30,7 +30,7 @@ and points to the handoff. One line, in the conversation's language, with the ti
 <title of the handoff>. <one sentence on what the child is doing> <handoff>Follow your handoff, which session-hub adds to your context; if it is not there, read and follow <file></handoff>
 ```
 
-One line, because Herdr refuses a prompt with line breaks (`agent arguments cannot be encoded safely`). The
+One line, because Herdr refuses a prompt with line breaks. The
 `<handoff>` tag keeps the instruction recognisable; the path in it is free of spaces, and it is there for a child
 whose hook did not run. Build the prompt in the same Bash call as the start, in a quoted heredoc, so that the
 shell reads no character of the title, and pass it as one argument, `"$P"`:
@@ -80,12 +80,11 @@ repository): never start one with a bare `claude` or a bare `herdr agent start`.
    holds tokens, which would end up on command lines and in pane scrollback.
 4. **Child flags**, after the carried ones: `-n <name>`, `--model <model>` and `--effort <level>` when step 9
    chose them (`low`, `medium`, `high`, `xhigh`, `max`), the permission flags from *Permission mode* in
-   [hub-config.md](hub-config.md). No `--add-dir`: the handoff reaches the child through its hook (*Handoff
-   files* above). Leave out `--model` or `--effort` only when the child inherits and the master set none. The
-   first prompt goes after `--`, so that no flag takes it as a value: `… --permission-mode <mode> -- "$P"`.
-   Nothing on the command may need an answer from the user at the start: the only dialogs a child may show are
-   its repository's first-run ones (*First run in a repository* below). A flag that opens one of its own, such as
-   `--add-dir` on a folder the user never trusted, is a mistake in the command.
+   [hub-config.md](hub-config.md). No `--add-dir` (*Handoff files* above). Leave out `--model` or `--effort`
+   only when the child inherits and the master set none. The first prompt goes after `--`, so that no flag takes
+   it as a value: `… --permission-mode <mode> -- "$P"`. Nothing on the command may need an answer from the user
+   at the start: the only dialogs a child may show are its repository's first-run ones (*First run in a
+   repository* below). A flag that opens a dialog of its own is a mistake in the command.
 5. **Role variables** (`SESSION_HUB_*`, below). Each environment's file says where they go, with the identity
    variables.
 6. **Check the identity** after the start, where `SendMessage` is the channel (Herdr, tmux, terminal):

@@ -3,6 +3,15 @@
 What changed in each release of `session-hub` and `model-router`. Each plugin has its own version; releases are
 listed newest first. The format follows Keep a Changelog, and both plugins use semantic versioning.
 
+## session-hub 0.7.1
+
+2026-11-25
+
+### Changed
+
+- `spawn`: the rule against `--add-dir` on a child's start command is stated once in the launch steps instead of
+  three times, and the references drop an issue number and a repeated Herdr error text. No change in behaviour.
+
 ## session-hub 0.7.0
 
 2026-11-25
