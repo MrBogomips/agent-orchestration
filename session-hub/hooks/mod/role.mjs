@@ -12,9 +12,11 @@ const trimmed = (value) => {
 };
 
 /**
- * @param {{ role?: string, master?: string, scopeRoot?: string, handoff?: string, registry?: string, guards?: string }} values
+ * @param {{ role?: string, master?: string, masterRef?: string, masterSessionId?: string, scopeRoot?: string,
+ *   handoff?: string, registry?: string, guards?: string }} values
  * @returns {Readonly<{ kind: 'none' | 'child' | 'invalid', guarding: boolean, guardsOff: boolean, master?: string,
- *   scopeRoot?: string, handoff?: string, registry?: string, raw?: string }>}
+ *   masterRef?: string, masterSessionId?: string, scopeRoot?: string, handoff?: string, registry?: string,
+ *   raw?: string }>}
  */
 export function readRole(values) {
   const guardsOff = normalize(values.guards) === 'off';
@@ -26,6 +28,8 @@ export function readRole(values) {
     guarding: !guardsOff,
     guardsOff,
     master: trimmed(values.master),
+    masterRef: trimmed(values.masterRef),
+    masterSessionId: trimmed(values.masterSessionId),
     scopeRoot: trimmed(values.scopeRoot),
     handoff: trimmed(values.handoff),
     registry: trimmed(values.registry),

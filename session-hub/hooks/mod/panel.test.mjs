@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { formatRow, headerRow, liveStatuses, panelRows, parseRegistryCall, rowText } from './panel.mjs';
+import { formatRow, headerRow, liveRows, liveStatuses, panelRows, parseRegistryCall, rowText } from './panel.mjs';
 
 const record = {
   version: 1,
@@ -138,4 +138,11 @@ test('parseRegistryCall ignores other commands and unresolved values', () => {
   assert.equal(parseRegistryCall('node registry.mjs path'), undefined);
   assert.equal(parseRegistryCall('node "$R" read --hub "$HUB"'), undefined);
   assert.equal(parseRegistryCall('node registry.mjs read --hub relative/hub'), undefined);
+});
+
+test('liveRows gives the name and ref of each peer session', () => {
+  const output = { result: { sections: [{ rows: [{ name: 'hub-a8', ref: '0d9bc5', status: 'idle' }, null, { ref: 'x' }] }] } };
+  assert.deepEqual(liveRows(output), [{ name: 'hub-a8', ref: '0d9bc5' }, { name: undefined, ref: 'x' }]);
+  assert.equal(liveRows({ listing: 'text only' }), undefined);
+  assert.equal(liveRows(undefined), undefined);
 });

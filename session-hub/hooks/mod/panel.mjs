@@ -26,6 +26,20 @@ export function liveStatuses(output) {
   return live;
 }
 
+/**
+ * The peer sessions of a ListAgents result as `{ name, ref }` rows; undefined when it has none to read.
+ * @returns {Array<{ name?: string, ref?: string }> | undefined}
+ */
+export function liveRows(output) {
+  const sections = (output?.result ?? output)?.sections;
+  if (!Array.isArray(sections)) return undefined;
+  return sections.flatMap((section) =>
+    (Array.isArray(section?.rows) ? section.rows : [])
+      .filter((row) => row !== null && typeof row === 'object')
+      .map((row) => ({ name: typeof row.name === 'string' ? row.name : undefined, ref: typeof row.ref === 'string' ? row.ref : undefined })),
+  );
+}
+
 function lastMessage(message) {
   if (!message || typeof message.type !== 'string') return NONE;
   const at = typeof message.at === 'string' ? message.at.slice(0, 16).replace('T', ' ') : '';

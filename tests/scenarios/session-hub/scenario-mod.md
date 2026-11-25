@@ -12,6 +12,32 @@ In the child, ask it to message `peer`, then the master.
 - [ ] The child does not look for another route to `peer`
 - [ ] The send to the master, by its name or `name [ref]`, is delivered
 
+## Renamed master (#97, #98)
+
+Start the child with `spawn` (so it gets `SESSION_HUB_MASTER_REF` and `SESSION_HUB_MASTER_SESSION_ID`), then
+rename the master with `/rename hub-renamed`.
+
+- [ ] Within 30 s, or at the master's next `/session-hub`, the master's transcript says once that it was renamed
+  from its old name while 1 child runs, and that the child still reaches it
+- [ ] Asked to send `done` to the master by its old name, the child's message is delivered, to the renamed master
+- [ ] A send to `peer` is refused and the reason names the master as `"<old name>" (now named "hub-renamed")`
+
+Quit the master (`/exit`), then ask the child to send `done` again.
+
+- [ ] The send is not delivered; the answer says it was saved in the master's outbox, with the file's path, and
+  the child does not resend it in a loop
+- [ ] `registry.mjs outbox --hub <hub>` lists the message; after a restart of the master, `/session-hub` notes 1
+  message in the outbox, and `dispatch` handles it and removes it
+
+## First prompt behind the trust dialog (#20)
+
+In Herdr, `spawn` a child in a repository of the hub never opened with Claude Code.
+
+- [ ] `herdr agent start` returns `agent_not_ready`; the master records the child as `waiting-user`, reason
+  `trust`, and asks you to answer the dialog in the child's pane; it sends no second prompt
+- [ ] After you accept the dialog, the child starts on its handoff with no message from the master; its first
+  prompt shows the handoff's title, the goal and `<handoff>Read and follow …</handoff>`
+
 ## Shell check
 
 In the child, ask it to run `echo x >> <hub>/design/docs/notes.md` with the Bash tool.

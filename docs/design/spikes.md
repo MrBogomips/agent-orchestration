@@ -153,3 +153,13 @@ from fixed demo data through a `ui.render` hook on its `CommandOutput` row.
 | ID | Date | Claude Code | Setup | Outcome |
 |---|---|---|---|---|
 | S18 | 2026-11-22 | 2.1.330 | As above. | **A `CommandOutput` hook's tree draws as a card** in the row's place, with the app's own frame; the app draws its copy, pin and time under it, and copies the row's `text`. **`Select`** is the app's dropdown with a checkmark menu, and a pick redraws the row at once. **A plain `Button`** holding a chevron is drawn as bare text and its press works; a default `Button` is a grey box, a Markdown link blue. **A `$.state` write from a `$.clock` timer redraws the card**; `onScreen` was never reported. **An `Svg` with a `viewBox` and no `width`** fills the card's width (about 840 px on that window); text inside a 440-unit drawing came out twice its size, so labels are sized for an 840-unit drawing. The four model blues read apart; a fixed dark track did not suit a light ground. **Only a Markdown `file:` link** opens a file; `Link` is not drawn as a link. A Markdown table draws as heavy grey cells; `Box` rows with an `Svg` hairline read like `/stats`. **A row placed with `$.ui.place` never shows under the app's `start_session` card**, nor does a line added under that tool's row. |
+
+## Results for session-hub 0.6.0
+
+Question: after a master is renamed (issues #97 and #98), how can a child's mod still find it and deliver to it?
+Setup: a throwaway mod loaded with `--plugin-dir` under `claude -p --model haiku`, next to ten live sessions of the
+same configuration folder.
+
+| ID | Date | Claude Code | Setup | Outcome |
+|---|---|---|---|---|
+| S21 | 2026-11-25 | 2.1.332 | At `prompt.submit`, `$.tool.call({ tool: 'ListAgents' })` written to a file; then `$.session.send({ to: { sessionId } })` to a live session's id (its `CLAUDE_CODE_SESSION_ID`) and to an unknown id, with a `session.send` hook logging `e.to` and the result. | **`ListAgents` rows carry `name`, `ref`, `type` and `status` only**: no session id for a local peer, so a child cannot find its master's id there, only its ref; the first line of `listing` is `This session is <name> [<ref>]`. A live session renamed by hand kept its ref, and the listing said `says it was <old name> until 5m ago`. **Delivery by session id works from a plugin**: the message reached the live session (framed with `from-plugin` naming the plugin); at `session.send` the engine spells the address as `uds:<that session's socket>`. An unknown id answers `isDelivered: false` with `no live session on this machine has id …`. So the master's id goes on the child's launch command, read from `CLAUDE_CODE_SESSION_ID` in the master's shell. |

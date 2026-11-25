@@ -13,6 +13,8 @@
 //   registry.mjs status    --hub <dir> [--file <path>] --name <child> --status <status> [--reason <text>]
 //   registry.mjs request   --hub <dir> [--file <path>] --name <child> --text <text> [--outcome <text>]
 //   registry.mjs reconcile --hub <dir> [--file <path>] (--live <name,name,...> | --live-none)
+//   registry.mjs master    --hub <dir> [--file <path>] --name <master> [--ref <ref>] [--session-id <id>]
+//   registry.mjs outbox    (--hub <dir> | --file <path>) [--remove <file,file,...>]   (--remove with --file needs --hub)
 //
 // Exit 0 on success, with JSON on stdout (the path for `path`); exit 1 with a `[session-hub]` message on stderr.
 // A file that cannot be read as a record, or was written by a newer format, is reported and never overwritten.
@@ -26,6 +28,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -35,6 +38,8 @@ import {
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { OUTBOX_FILE, outboxDir, readOutboxMessage } from '../hooks/mod/outbox.mjs';
 
 export const STATUSES = Object.freeze(['running', 'waiting-user', 'done', 'abandoned', 'lost']);
 const LIVE_STATUSES = Object.freeze(['running', 'waiting-user']);
@@ -85,6 +90,10 @@ function validateRecord(record, file) {
     if (child === null || typeof child !== 'object' || typeof child.name !== 'string') {
       throw shapeError('an entry has no name');
     }
+  }
+  const { master } = record;
+  if (master !== undefined && (master === null || typeof master !== 'object' || typeof master.name !== 'string')) {
+    throw shapeError('`master` has no name');
   }
   return record;
 }
@@ -326,6 +335,64 @@ export function reconcile(file, liveNames, options = {}) {
   return { record, changed };
 }
 
+const TOKEN = /^[0-9A-Za-z_-]+$/;
+
+// The master's identity when it starts children: its name, its ref in ListAgents and its session id. The master's
+// mod compares it with the master's current name to tell that it was renamed while children run (#98).
+export function setMaster(file, master, options = {}) {
+  const name = typeof master?.name === 'string' ? master.name.trim() : '';
+  if (name === '') throw new RegistryError('--name is empty');
+  for (const [key, value] of [['ref', master.ref], ['session-id', master.sessionId]]) {
+    if (value !== undefined && !TOKEN.test(value)) throw new RegistryError(`--${key} must be letters, digits, - or _: ${value}`);
+  }
+  const now = options.now ?? (() => new Date().toISOString());
+  return update(file, options, (record) => ({
+    ...record,
+    master: {
+      name,
+      ...(master.ref !== undefined ? { ref: master.ref } : {}),
+      ...(master.sessionId !== undefined ? { sessionId: master.sessionId } : {}),
+      updatedAt: now(),
+    },
+  }));
+}
+
+const listOutbox = (dir) => {
+  try {
+    return readdirSync(dir).filter((name) => OUTBOX_FILE.test(name)).sort();
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw new RegistryError(`cannot read the outbox ${dir}: ${error.message}`);
+  }
+};
+
+// The messages children could not deliver, oldest first, after removing those the master has handled (`remove`,
+// by file name: only names of outbox messages, so nothing else can be removed).
+export function readOutbox(file, remove = []) {
+  const dir = outboxDir(file);
+  if (!dir) throw new RegistryError(`the record path has no outbox: ${file}`);
+  for (const name of remove) {
+    if (!OUTBOX_FILE.test(name)) throw new RegistryError(`not the name of an outbox message: ${name}`);
+  }
+  const removed = remove.filter((name) => {
+    try {
+      rmSync(join(dir, name));
+      return true;
+    } catch (error) {
+      if (error.code === 'ENOENT') return false;
+      throw new RegistryError(`cannot remove ${join(dir, name)}: ${error.message}`);
+    }
+  });
+  const messages = listOutbox(dir).map((name) => {
+    try {
+      return readOutboxMessage(name, readFileSync(join(dir, name), 'utf8'));
+    } catch (error) {
+      return { file: name, error: `cannot read it: ${error.message}` };
+    }
+  });
+  return { dir, messages, removed };
+}
+
 // Command line
 
 // The options each command takes. Anything else is refused, so that a typo cannot change what a call does.
@@ -336,6 +403,8 @@ const COMMAND_OPTIONS = Object.freeze({
   status: ['hub', 'file', 'name', 'status', 'reason'],
   request: ['hub', 'file', 'name', 'text', 'outcome'],
   reconcile: ['hub', 'file', 'live', 'live-none'],
+  master: ['hub', 'file', 'name', 'ref', 'session-id'],
+  outbox: ['hub', 'file', 'remove'],
 });
 const COMMANDS = Object.freeze(Object.keys(COMMAND_OPTIONS));
 const FLAGS = Object.freeze(['live-none']);
@@ -401,14 +470,15 @@ function checkOutsideHub(file, hubDir) {
   return file;
 }
 
-const WRITES = Object.freeze(['upsert', 'status', 'request', 'reconcile']);
+const WRITES = Object.freeze(['upsert', 'status', 'request', 'reconcile', 'master']);
+const isWrite = (command, options) => WRITES.includes(command) || (command === 'outbox' && options.remove !== undefined);
 
 function resolveFile(command, options) {
   if (options.file) {
     if (!isAbsolute(options.file)) throw new RegistryError(`--file must be an absolute path: ${options.file}`);
     const file = resolve(options.file);
     if (options.hub) return checkOutsideHub(file, options.hub);
-    if (WRITES.includes(command)) {
+    if (isWrite(command, options)) {
       throw new RegistryError(`a write with --file needs --hub <dir> too, so that the file can be checked against the hub`);
     }
     return file;
@@ -459,6 +529,14 @@ export function runCli(argv) {
       const live = liveNames(options);
       const { changed } = reconcile(file, live, { ...hub, noneLive: options['live-none'] === true });
       return json({ file, changed });
+    }
+    case 'master': {
+      const master = { name: required(options, 'name'), ref: options.ref, sessionId: options['session-id'] };
+      return json(setMaster(file, master, hub).master);
+    }
+    case 'outbox': {
+      const remove = options.remove === undefined ? [] : options.remove.split(',').map((s) => s.trim()).filter(Boolean);
+      return json(readOutbox(file, remove));
     }
     default:
       throw new RegistryError(`unhandled command ${command}`);

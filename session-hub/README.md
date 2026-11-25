@@ -23,8 +23,8 @@ important one, the write scope, with a hook.
 | `session-hub:dispatch` | skill | Master side. Decides per repository whether the master reads, a subagent reads, or a child works; handles the children's messages and routes out-of-scope requests; keeps master-only duties. |
 | `session-hub:setup` | skill | Writes or updates the hub's *Child sessions* section, after an explicit yes. |
 | `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, to a file with more than one hard link (another of its names may be outside), or to the repository's `.claude/settings*.json`, and tells the model to send an `out-of-scope` message to the master. |
-| `scripts/launch.mjs` | script | Reads how this session was started (identity variables, configuration flags, permission mode), so that `spawn` starts children the same way. Prints named variables only, never the environment. |
-| `scripts/registry.mjs` | script | Reads and writes the children record, atomically. Used by the skills and, read only, by the mod. |
+| `scripts/launch.mjs` | script | Reads how this session was started (identity variables, configuration flags, permission mode) and its session id, so that `spawn` starts children the same way and pins them to it. Prints named variables only, never the environment. |
+| `scripts/registry.mjs` | script | Reads and writes the children record, atomically, with the master's identity; lists and clears the outbox of messages children could not deliver. Used by the skills and, read only, by the mod. |
 | `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel and the start line under each child launch. See *The mod* below. |
 | `/session-hub` | command (mod) | Shows this session's role and scope; in the master, the children and the panel; `log` opens the children record. In the Claude desktop app, the Session hub card. See [Commands](#commands). |
 
@@ -36,7 +36,9 @@ session is left alone by the hook. The variables are:
 | Variable | Value |
 |---|---|
 | `SESSION_HUB_ROLE` | `child` |
-| `SESSION_HUB_MASTER` | the master's session name |
+| `SESSION_HUB_MASTER` | the master's session name when the child started |
+| `SESSION_HUB_MASTER_REF` | the master's ref in `ListAgents` when the child started |
+| `SESSION_HUB_MASTER_SESSION_ID` | the master's session id; with the ref, it keeps the child reaching a renamed master |
 | `SESSION_HUB_SCOPE_ROOT` | absolute path of the write root (on Windows, a Windows path such as `C:/hub/repo`) |
 | `SESSION_HUB_HANDOFF` | absolute path of the handoff file |
 | `SESSION_HUB_REGISTRY` | absolute path of the children record |
@@ -49,16 +51,18 @@ Code 2.1.329 or later (`engines` in `plugin.json`). With mods off, everything ab
 
 | Function | Where | What it does |
 |---|---|---|
-| Send guard | child | A message goes only to the master, by its name (with or without ` [<ref>]`; it is delivered to the bare name), or to the session's own subagents. Any other recipient, a socket address included, is refused with a reason that points to the master. |
+| Send guard | child | A message goes only to the master, or to the session's own subagents. The master is its name when the child started (with or without ` [<ref>]`), its ref, or its current name: renaming the master (`/rename`, a title hook, Remote Control) does not cut the child off, since the message goes by the master's session id. A message the master cannot receive is saved in the outbox, next to the children record, and the child is told so. Any other recipient, a socket address included, is refused with a reason that points to the master. |
 | Shell check | child | **Best effort.** Denies a `Bash` command whose redirections or file-writing commands (`tee`, `touch`, `mkdir`, `rm`, `rmdir`, `truncate`, `unlink`, `cp`, `mv`, `ln`, `install`, `sed -i`, and `find`'s `-delete` and `-fprint` family) target a path outside the write root, and judges the command `find -exec` (and `-execdir`, `-ok`, `-okdir`) runs. The command is read as bash or zsh (the shell of the `Bash` tool on macOS): zsh's `>!` and `>>!`, `noglob`, `repeat` and `=command` are read, and so are the commands inside substitutions (`$(…)`, backticks, `<(…)`, in double quotes and in here-documents with an unquoted delimiter) and the literal line given to `eval` or `sh -c`. A hard link to a file outside the root is denied, and so is a write through a symbolic link the same command makes to a place outside. A command it cannot read is denied with the reason. `/dev` and the system temporary folders are allowed. |
 | Origin marking | child | A message from another session, the master included, carries a line: information, not authorization. A prompt typed by the person carries none. |
 | Scope line | child, master | The role and the scope in the system prompt and, after the start and after each compaction, as context on the next prompt. |
-| Children panel | master | One row per child: status in the record, live status from the session list, model and effort, last message. Refreshed every 30 s and on `/session-hub`. Drawn with `model-router`'s look: the model bold in its tier's colour, the effort as a four-cell bar (`▰▰▰▱ high`) in its level's colour, the statuses green, yellow or red (running; waiting, abandoned or not listed; lost). Under the rows, the `l` key, which opens the children record file. The panel is the terminal's: in the Claude desktop app the children are the Session hub card's Children view. |
+| Children panel | master | One row per child: status in the record, live status from the session list, model and effort, last message. Refreshed every 30 s and on `/session-hub`. Its note counts the messages waiting in the outbox. Drawn with `model-router`'s look: the model bold in its tier's colour, the effort as a four-cell bar (`▰▰▰▱ high`) in its level's colour, the statuses green, yellow or red (running; waiting, abandoned or not listed; lost). Under the rows, the `l` key, which opens the children record file. The panel is the terminal's: in the Claude desktop app the children are the Session hub card's Children view. |
+| Rename notice | master | When the master was renamed while children run, one notice in the transcript: whether the children still reach it, or how to get them back (`/rename` to the old name, or replace them). |
 | Start line | master | One line per child started, with its model and effort. Under a `Bash` call that starts children: `⎿  🔀 opus   ▰▰▰▱ high   -> t42-product`, read from the launch command (`claude` after `SESSION_HUB_ROLE=child`, also in `tmux send-keys`, or `herdr agent start`). In the Claude desktop app the line under a `Bash` row is one quiet line in words (`Started t42-product on Opus · high`), and a child started with the app's `start_session` tool gets no line: the app's own session card names it. A terminal attached to such a session gets a notice once the start has succeeded, `🔀 sonnet · medium → t-1-product-test`, read from the tool's input. A start that states neither model nor effort gets no line. |
 
 Guards fail closed: a send guard or shell check that fails refuses and says why. `SESSION_HUB_GUARDS=off` turns
-off the send guard and the shell check (and the hook); the marking and the scope line stay. The mod keeps no
-files: it reads the record and keeps the rest in the session's memory.
+off the send guard and the shell check (and the hook); the marking and the scope line stay. The mod writes one
+kind of file only: in a child, a message its master could not receive, in the outbox. It reads the record and
+keeps the rest in the session's memory.
 
 ### Commands
 

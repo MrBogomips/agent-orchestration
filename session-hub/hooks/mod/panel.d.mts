@@ -11,6 +11,8 @@ export type PanelRow = {
 
 export function liveStatuses(output: unknown): Map<string, string> | undefined
 
+export function liveRows(output: unknown): Array<{ name?: string; ref?: string }> | undefined
+
 export function panelRows(record: { children?: unknown[] } | undefined, live?: Map<string, string>): PanelRow[]
 
 export function formatRow(row: PanelRow, width: number): Segment[]

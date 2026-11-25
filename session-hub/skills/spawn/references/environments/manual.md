@@ -5,9 +5,14 @@ status `running`, then give the user, per child, one block to run in a new termi
 
 ```bash
 cd <dir>
-env <identity variables> SESSION_HUB_ROLE=child SESSION_HUB_MASTER=<master> SESSION_HUB_SCOPE_ROOT=<root> SESSION_HUB_HANDOFF=<file> SESSION_HUB_REGISTRY=<record> SESSION_HUB_GUARDS=<on|off> claude <carried flags> <child flags> -- "Read and follow <file>"
+P=$(cat <<'EOF'
+<the first prompt>
+EOF
+)
+env <identity variables> SESSION_HUB_ROLE=child SESSION_HUB_MASTER=<master> SESSION_HUB_MASTER_REF=<ref> SESSION_HUB_MASTER_SESSION_ID=<id> SESSION_HUB_SCOPE_ROOT=<root> SESSION_HUB_HANDOFF=<file> SESSION_HUB_REGISTRY=<record> SESSION_HUB_GUARDS=<on|off> claude <carried flags> <child flags> -- "$P"
 ```
 
+- `<the first prompt>` is the text of *First prompt* in [environments.md](../environments.md), written out.
 - `<identity variables>` are every `KEY=VALUE` that *Launch command* in [environments.md](../environments.md)
   found (`HOME`, `CLAUDE_CONFIG_DIR`, a wrapper's profile); they keep the account and the messaging channel to the
   master.
