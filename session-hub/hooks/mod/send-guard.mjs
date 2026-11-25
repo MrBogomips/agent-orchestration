@@ -1,11 +1,18 @@
 // The send guard: in a child, a message may go to the master only (and to the session's own subagents).
-// Pure: the mod passes `session.send`'s recipient and the session's agents from $.agent.list().
+// Pure: the mod passes `session.send`'s recipient, the session's agents from $.agent.list() and, when the child knows
+// its master's ref, the peer sessions from ListAgents.
 //
-// `to` is what the model wrote (spike S9): the master's name, or its name followed by ` [<ref>]`. A socket or bridge
-// address (`uds:…`, `bridge:…`) cannot be tied to a name, so it is refused and the model is told to use the name.
+// `to` is what the model wrote (spike S9): the master's name, or a name followed by ` [<ref>]`. A session's name can
+// change while it runs (`/rename`, a title hook, Remote Control) and its ref changes when it restarts; its session id
+// changes with neither (spike S21). So the master is the recipient the model meant by any of the master's name when
+// the child started, its ref, or its current name (the live session with that ref), and a message to it goes by
+// session id when the child knows it, else by the current name. A socket or bridge address (`uds:…`, `bridge:…`)
+// cannot be tied to the master, so it is refused and the model is told to use the name. When the child knows the
+// session id and that id is not live, the master has ended (a resume keeps the id): the name is not tried then, since
+// another session may hold it now, and the mod keeps the message in the outbox.
 
 const PREFIX = '[session-hub]';
-const REF_SUFFIX = /\s*\[[0-9A-Za-z_-]+\]$/;
+const REF_SUFFIX = /\s*\[([0-9A-Za-z_-]+)\]$/;
 
 const DELIVER = Object.freeze({ deliver: true });
 // The engine words a refused send as `Not sent: a plugin hook refused it (<reason>)`, so the reason does not repeat it.
@@ -17,6 +24,11 @@ export function recipientName(to) {
   return String(to ?? '').trim().replace(REF_SUFFIX, '').trim();
 }
 
+/** The ref in a trailing ` [ref]`, if any. */
+export function recipientRef(to) {
+  return REF_SUFFIX.exec(String(to ?? '').trim())?.[1];
+}
+
 const isAddress = (name) => /^[a-z]+:/.test(name);
 
 function isOwnAgent(to, agents) {
@@ -24,11 +36,38 @@ function isOwnAgent(to, agents) {
 }
 
 /**
- * @param {{ role: ReturnType<typeof import('./role.mjs').readRole>, to?: string, agentId?: string,
- *   agents?: ReadonlyArray<{ id: string, name?: string }> }} input
- * @returns {{ deliver: true } | { deliver: false, reason: string }}
+ * The master as the live session list shows it now: the session that holds the master's ref. Undefined when the
+ * child does not know the ref, the list was not read, or no session holds it (the master restarted or ended).
+ * @param {{ masterRef?: string }} role
+ * @param {ReadonlyArray<{ name?: string, ref?: string }> | undefined} live
+ * @returns {{ name: string, ref: string } | undefined}
  */
-export function judgeSend({ role, to, agentId, agents }) {
+export function liveMaster(role, live) {
+  if (!role.masterRef || !Array.isArray(live)) return undefined;
+  const row = live.find((entry) => entry?.ref === role.masterRef && typeof entry.name === 'string' && entry.name !== '');
+  return row ? Object.freeze({ name: row.name, ref: row.ref }) : undefined;
+}
+
+function meansMaster(raw, name, role, current) {
+  if (name === role.master) return true;
+  if (current && name === current.name) return true;
+  if (!role.masterRef) return false;
+  return raw === role.masterRef || recipientRef(raw) === role.masterRef;
+}
+
+// How the master is named in a refusal: its name when the child started, and its current one when it changed.
+function masterWords(role, current) {
+  const pinned = `"${role.master}"`;
+  return current && current.name !== role.master ? `${pinned} (now named "${current.name}")` : pinned;
+}
+
+/**
+ * @param {{ role: ReturnType<typeof import('./role.mjs').readRole>, to?: string, agentId?: string,
+ *   agents?: ReadonlyArray<{ id: string, name?: string }>, live?: ReadonlyArray<{ name?: string, ref?: string }> }} input
+ * @returns {{ deliver: true, toMaster?: undefined } | { deliver: true, toMaster: true, to?: string, sessionId?: string }
+ *   | { deliver: false, reason: string }} `to` is the name to try after the session id, or none
+ */
+export function judgeSend({ role, to, agentId, agents, live }) {
   if (!role.guarding) return DELIVER;
   if (role.kind === 'invalid') {
     return refuse(
@@ -45,21 +84,29 @@ export function judgeSend({ role, to, agentId, agents }) {
   const raw = String(to ?? '').trim();
   if (raw === '') return refuse('the message has no recipient.');
   const name = recipientName(raw);
-  // A ref picks one session among those of a name, and refs change across restarts (S7): deliver to the bare name,
-  // so that a stale or foreign ref cannot pick another session.
-  if (name === role.master) return raw === name ? DELIVER : Object.freeze({ deliver: true, to: name });
+  const current = liveMaster(role, live);
+  // A ref alone never picks the session a message goes to: a stale or foreign one could pick another. The message
+  // goes by session id, then to the master's current name (the live holder of its ref). Without the id, the name
+  // the child was given is the last resort, as before the pin.
+  if (meansMaster(raw, name, role, current)) {
+    if (role.masterSessionId) {
+      const byId = { deliver: true, toMaster: true, sessionId: role.masterSessionId };
+      return Object.freeze(current ? { ...byId, to: current.name } : byId);
+    }
+    return Object.freeze({ deliver: true, toMaster: true, to: current?.name ?? role.master });
+  }
   if (agentId !== undefined && raw === 'main') return DELIVER;
   if (isOwnAgent(raw, agents)) return DELIVER;
-  const master = `"${role.master}"`;
+  const master = masterWords(role, current);
   if (isAddress(name)) {
     return refuse(
       `this session is a child and may message only its master, ${master}, by its name. Send the message to ` +
-        `${master}, not to an address.`,
+        `"${role.master}", not to an address.`,
     );
   }
   return refuse(
-    `this session is a child and may message only its master, ${master}. Send what you need to ${master} with ` +
-      'your message prefix; a request for another session or repository is an `out-of-scope` message, and the ' +
-      'master routes it.',
+    `this session is a child and may message only its master, ${master}. Send what you need to "${role.master}" ` +
+      'with your message prefix, even if the master was renamed: the guard delivers it to the master. A request ' +
+      'for another session or repository is an `out-of-scope` message, and the master routes it.',
   );
 }

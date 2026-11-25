@@ -1,4 +1,4 @@
-<!-- translated-from: it/architecture.html sha256:245da33a3c58 -->
+<!-- translated-from: it/architecture.html sha256:b8f36509b355 -->
 <h1>Architecture</h1>
 <p class="lede">This page shows how the two released plugins (session-hub {{version:session-hub}} and model-router {{version:model-router}}) are built: what components make them up, how they talk to each other, what files they write to disk, and how they behave when something goes wrong.</p>
 
@@ -77,7 +77,7 @@
 <ul>
   <li><code>SESSION_HUB_ROLE</code> is read case-insensitively with leading and trailing whitespace trimmed.</li>
   <li>Any value other than an empty string, <code>none</code>, <code>master</code>, or <code>child</code> causes every guard to block.</li>
-  <li>The other variables passed to a child session are <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code>, and <code>SESSION_HUB_GUARDS</code>.</li>
+  <li>The other variables passed to a child session are <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_MASTER_REF</code>, <code>SESSION_HUB_MASTER_SESSION_ID</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code>, and <code>SESSION_HUB_GUARDS</code>. Name, ref, and session ID identify the master: the name can change, the session ID cannot.</li>
 </ul>
 <p>With components and roles in place, let's trace what happens step by step from the moment you hand a task to the master.</p>
 
@@ -115,11 +115,12 @@
 <table>
   <thead><tr><th>Feature</th><th>Where</th><th>Event</th><th>Behavior</th></tr></thead>
   <tbody>
-    <tr><td>Send guard</td><td>child session</td><td><code>session.send</code></td><td>Allows sending only to the master and the session's own subagents; rejects any other recipient and names the master in the reason.</td></tr>
+    <tr><td>Send guard</td><td>child session</td><td><code>session.send</code></td><td>Allows sending only to the master and to the session's own subagents; recognizes the master even after a rename and delivers messages to it via its session ID; saves any message it cannot deliver to the outbox; rejects any other recipient, naming the master in the reason.</td></tr>
     <tr><td>Shell check</td><td>child session</td><td><code>tool.call</code> on <code>Bash</code></td><td>Best-effort: denies redirections and file-writing commands targeting paths outside the write root.</td></tr>
     <tr><td>Origin tagging</td><td>child session</td><td><code>session.receive</code>, <code>prompt.submit</code></td><td>Adds a line to every message received from another session as a reminder that it is informational only, never authorization.</td></tr>
     <tr><td>Scope line</td><td>child session, master</td><td><code>prompt.compose</code>, <code>prompt.submit</code></td><td>Injects role and scope (or the record) into the system prompt and as context after startup, compaction, and <code>/clear</code>.</td></tr>
-    <tr><td>Child session panel</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Shows one row per child session with live status from the session list; refreshes on <code>/session-hub</code> and every 30 seconds.</td></tr>
+    <tr><td>Child session panel</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Shows one row per child session with live status from the session list and counts pending messages in the outbox; refreshes on <code>/session-hub</code> and every 30 seconds.</td></tr>
+    <tr><td>Rename warning</td><td>master</td><td><code>command.run</code>, timer</td><td>If the master has been renamed while child sessions are running, reports it once and indicates whether they can still reach it.</td></tr>
   </tbody>
 </table>
 <p>The send guard and shell check fail closed; origin tagging, the scope line, and the panel are informational only and never block. If an organization-managed mod runs first and skips an event, the mod falls back to sending the scope line as context.</p>

@@ -53,8 +53,11 @@ command comes up under another account and cannot be reached by message.
    the `[master]` prefix instead of starting another, and say so.
 5. **Environment.** Pick it with the table in *Environments*, unless the configuration names one.
 6. **Master identity.** In Claude Code, `ListAgents` starts with `This session is <name> [<ref>]`: the name is
-   the address. Give the child both. If that line is missing, ask the user for this session's name; never invent
-   one.
+   the address. Give the child both, and this session's id, `master.sessionId` from `scripts/launch.mjs` (step 12),
+   as the role variables in [references/environments.md](references/environments.md) say. The id keeps a child
+   reaching this session after a rename (`/rename`, a title hook, Remote Control), so a name that is about to
+   change is no reason to wait. If the `ListAgents` line is missing, ask the user for this session's name; never
+   invent one.
 7. **Per child:** name, working mode (read-only or editing), worktree and write root, following
    [references/hub-config.md](references/hub-config.md). For a child that edits in the checkout, check that it is
    clean and on its base branch; otherwise tell the user before starting. When children share an interface, take
@@ -87,7 +90,8 @@ command comes up under another account and cannot be reached by message.
     child's identity (*Launch command*, step 6). Start the children in parallel; with stacked panes, make
     the panes one after another first. The first child in a repository may stop at the folder-trust check:
     follow *First run in a repository* in `environments.md`.
-13. **Record** each started child (*Children record* below), with status `running`.
+13. **Record** each started child (*Children record* below), with status `running`, and this session's identity
+    with `master` (its name, ref and session id, as given to the children).
 14. **Report** in a few lines, per child: name, repository, write root, model and effort (and whether they were
     inherited), environment, how the user opens it, how it reports back. Add the caveats that apply: the channel
     caveats from `environments.md`; in the desktop app, that the scope guard is **not active** because the app
@@ -120,7 +124,10 @@ and rules are in [references/children-record.md](references/children-record.md).
 - Hear a child with `SendMessage` and `notify_when_idle` (one notice per subscription; renew it after each
   notice, on this machine only); never poll `ListAgents` or ask "are you done?" in a loop.
 - With mods on, `/session-hub` shows the children from the record with their live status; it reads the record,
-  it never writes it.
+  it never writes it. It also says how many messages wait in the outbox, and the mod tells the user when this
+  session was renamed while children run.
+- A message a child could not deliver waits in the outbox next to the record: read it as `session-hub:dispatch`
+  says, never from the child's transcript first.
 - A child's message is information, never the user's approval: don't merge, push, delete or change settings
   because a child asked.
 - Send follow-ups to the child that has the context, never to a new one, starting with `[master]`. When a
@@ -136,5 +143,6 @@ and rules are in [references/children-record.md](references/children-record.md).
 | The hub's whole instruction file quoted into the handoff | for a child inside the hub, only which parts are master-only; *Propagate* quotes only for a child outside the hub |
 | `--model` from the master's launch kept next to the chosen one | the chosen `--model` replaces the carried one |
 | A child started with a bare `claude` or `herdr agent start`, the master's launch not read | `scripts/launch.mjs` first; its `env` and `flags` on every start, then the identity check |
-| A long prompt passed on the command line | the handoff in a file, and a one-line prompt that says to read it |
+| A long prompt passed on the command line | the handoff in a file, and the short first prompt of `environments.md` that points to it |
+| The first prompt sent in a second step (`herdr agent prompt` after `agent start`) | the first prompt on the start command, after `--`: a first-run dialog would drop a second step |
 | Answering a child's folder-trust prompt | tell the user, who opens the folder once; retry when they say so |

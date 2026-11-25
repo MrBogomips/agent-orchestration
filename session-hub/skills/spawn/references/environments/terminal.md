@@ -1,8 +1,11 @@
 # Terminal
 
 ```bash
-cd <dir> && env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=<master> SESSION_HUB_SCOPE_ROOT=<root> SESSION_HUB_HANDOFF=<file> SESSION_HUB_REGISTRY=<record> SESSION_HUB_GUARDS=<on|off> claude --bg <carried flags> <child flags> -- "Read and follow <file>"
+cd <dir> && env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=<master> SESSION_HUB_MASTER_REF=<ref> SESSION_HUB_MASTER_SESSION_ID=<id> SESSION_HUB_SCOPE_ROOT=<root> SESSION_HUB_HANDOFF=<file> SESSION_HUB_REGISTRY=<record> SESSION_HUB_GUARDS=<on|off> claude --bg <carried flags> <child flags> -- "$P"
 ```
+
+`"$P"` is the first prompt (*First prompt* in [environments.md](../environments.md)), built by a `P=…` heredoc in
+the same Bash call.
 
 - The command prints the child's id. The user opens the child with `claude attach <name or id>` and lists
   background sessions with `claude agents`.

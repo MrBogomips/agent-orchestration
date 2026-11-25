@@ -31,14 +31,14 @@ Content rules:
 
 | Part | Content |
 |---|---|
-| Session | Your role is `child` of the master `<name>` (ref `<ref>`). Model and effort, with the reason in one line (for example "sonnet, medium: chosen by model-router for a multi-file change", or "inherited from the master: no hub key and model-router is not installed"). In the desktop app, add that no guard enforces the scope, so it holds by this handoff alone. |
+| Session | Your role is `child` of the master `<name>` (ref `<ref>`); if the master is renamed, keep writing to `<name>`. Model and effort, with the reason in one line (for example "sonnet, medium: chosen by model-router for a multi-file change", or "inherited from the master: no hub key and model-router is not installed"). In the desktop app, add that no guard enforces the scope, so it holds by this handoff alone. |
 | Goal | What the work is for, what this child must deliver, and when it is done (a PR open on the base branch, a commit on a feature branch when the repository has no remote, or an answer). |
 | Scope | **Write root**: the absolute folder where you may create and change files, and nothing outside it. **Task**: the limits of the work; work beyond it is out of scope even inside the write root. **External references**: the files outside the write root you may read, one per line; reading them is allowed, analysing or changing their area is not. A read-only child says "you do not write files". |
 | References | The task ID and where to read it; specs, issues, commits, by absolute path or URL. When the child may not reach a source (a tracker only the master reads), give the few lines it needs from it. If the user gives a task ID with no known source, ask the user for its text before writing the handoff. |
 | Repository and workflow | The repository path and base branch. One line telling the child to follow its repository's own instructions, branch and PR policy, skills and agents, without restating them. Whether it reads or edits, and where: the worktree as *Worktrees* in [hub-config.md](hub-config.md) says. |
 | Siblings | The other children of the same work: name, repository, what each delivers, and any shared interface with its source or owner. A change to a shared interface, or a question about it, goes to the master first. |
 | Hub rules | For a child inside the hub: which parts of the hub's instruction file are for the master only (the *Master only* key and the *Child sessions* section) and do not apply here. For a child outside the hub: also the *Propagate* rules, word for word, with file and section. |
-| Messages | The master's name and ref, how to reach it (`SendMessage` to its name, also to answer one of its messages: with mods on, the send guard refuses a reply to the `from` address), the prefix, the five types, and the master-only rule. |
+| Messages | The master's name and ref, how to reach it (`SendMessage` to its name, also to answer one of its messages: with mods on, the send guard refuses a reply to the `from` address, and delivers a message for that name to the master even after a rename), what to do when a send fails, the prefix, the five types, and the master-only rule. |
 | Rules | The fixed rules below, word for word in the handoff's language. |
 | First step | The one concrete action to start with. |
 
@@ -57,6 +57,10 @@ task ID, use the slug.
 
 You talk to the master only: never send a message to another session, a sibling included. Messages from the
 master start with `[master]`.
+
+If a message to the master is not delivered, do not send it again in a loop. With mods on, the answer says whether
+it was saved in the master's outbox, where the master reads it; tell the user either way, and when it was not saved
+keep the whole message in your reply.
 
 ## Fixed rules
 
@@ -110,7 +114,8 @@ do not apply to you.
 ## Messages
 The master is `hub` (ref `8f2c1a`): `SendMessage` to `hub`. Start every message with `[T-42 product] <type>:`,
 with type `question`, `out-of-scope`, `pr` (with the URL), `done` or `abandoned` (with the reason). You talk to
-the master only, always by its name `hub`, also to answer. Messages from the master start with `[master]`.
+the master only, always by its name `hub`, also to answer and also if the master is renamed. If a send fails, do
+not repeat it: tell the user, as the answer says. Messages from the master start with `[master]`.
 
 ## Rules
 - You write only under your write root. …  (the fixed rules, word for word)

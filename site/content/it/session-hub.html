@@ -114,7 +114,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   <li>Verifica se esiste già una sessione figlia attiva su quel repository e quel task: se la trova, le inoltra la richiesta invece di aprirne un duplicato.</li>
   <li>Determina ambiente di esecuzione, nome della sessione, eventuale worktree, radice di scrittura e scope di lettura.</li>
   <li>Sceglie modello ed effort seguendo un ordine di priorità preciso: prima ciò che hai indicato tu, poi le chiavi configurate nell'hub, poi <code>model-router:choose-model</code> (se installato), altrimenti eredita quelli del master.</li>
-  <li>Scrive il file di handoff fuori dall'hub, avvia la sessione figlia con il prompt di una riga <code>Read and follow &lt;file&gt;</code>, la registra come <code>running</code> e ti stampa un riepilogo completo.</li>
+  <li>Scrive il file di handoff fuori dall'hub, avvia la sessione figlia con un primo prompt breve (il titolo dell'handoff, una o due righe sull'obiettivo e <code>&lt;handoff&gt;Read and follow &lt;file&gt;&lt;/handoff&gt;</code>), la registra come <code>running</code> insieme all'identità del master e ti stampa un riepilogo completo.</li>
 </ol>
 <p>L'ambiente rilevato determina come viene aperta la sessione figlia e se lo <em>scope guard</em> può essere attivato:</p>
 <table>
@@ -130,11 +130,21 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 <h3>Come viene lanciata una sessione figlia</h3>
 <p>Perché master e sessione figlia possano scambiarsi messaggi, devono condividere account e cartella di configurazione (due sessioni con cartelle di configurazione diverse non riescono a parlarsi). Se avvii Claude Code con un alias o un wrapper che sceglie un profilo o aggiunge dei flag, le sessioni figlie devono partire allo stesso modo. Per questo <code>spawn</code> legge con <code>scripts/launch.mjs</code> come è stato avviato il master (le variabili d'identità come <code>CLAUDE_CONFIG_DIR</code>, <code>HOME</code> e il profilo del wrapper, più i flag di configurazione) e avvia ogni sessione figlia con gli stessi parametri, aggiungendo i flag specifici della figlia (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> per accedere alla cartella dell'handoff) e impostando le variabili di ruolo <code>SESSION_HUB_*</code>.</p>
 <p>In tmux, ad esempio, il comando di avvio ha questa forma:</p>
-<pre><code>env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub \
+<pre><code>P=$(cat &lt;&lt;'EOF'
+# T-42: CSV export endpoint (product)
+
+Add GET /export with its tests, and open a PR on develop.
+
+&lt;handoff&gt;Read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
+EOF
+)
+env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub SESSION_HUB_MASTER_REF=8f2c1a \
+  SESSION_HUB_MASTER_SESSION_ID=&lt;master session id&gt; \
   SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
   SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json SESSION_HUB_GUARDS=on \
   claude -n t42-product --model sonnet --effort medium --permission-mode default \
-  --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'</code></pre>
+  --add-dir &lt;dir&gt; -- "$P"</code></pre>
+<p>Il primo prompt dice a chi guarda la finestra della sessione figlia su cosa sta lavorando, e viaggia sempre nel comando di avvio, anche in Herdr: se la sessione figlia si ferma sulla richiesta di fiducia della cartella, parte sul suo compito appena rispondi.</p>
 <p>Due dettagli operativi meritano attenzione al momento dell'avvio:</p>
 <ul>
   <li><strong>Modalità di permessi:</strong> la sessione figlia eredita la stessa modalità del master, perché i messaggi tra sessioni con impostazioni divergenti sull'aggiramento dei permessi resterebbero bloccati in attesa di conferma manuale. Se il master salta le richieste di permesso, <code>spawn</code> ti chiede a ogni avvio quale modalità dare alle figlie; con <code>Permissions: inherit</code> non lo chiede e usa quella del master.</li>
@@ -191,7 +201,9 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
 <p>Questo controllo è di tipo <em>best-effort</em> perché ispeziona solo la riga di comando letterale: non può valutare destinazioni nascoste in variabili, nel risultato di sostituzioni di comando o in glob, né ciò che scrive internamente un programma invocato (uno script, <code>git</code> o uno strumento di build).</p>
 <h3>La protezione sugli invii (mod)</h3>
 <p>Per evitare coordinamenti laterali non autorizzati, una sessione figlia può inviare messaggi soltanto al proprio master (per nome) o ai propri subagent. Qualsiasi altro destinatario — come una sessione sorella o un indirizzo socket — viene bloccato con un avviso che rimanda al master:</p>
-<pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix; a request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
+<pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix, even if the master was renamed: the guard delivers it to the master. A request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
+<p>Il nome di una sessione può cambiare mentre lavora: <code>/rename</code>, un hook che assegna il titolo dopo una risposta, Remote Control. La sessione figlia continua a scrivere al nome che ha ricevuto; la protezione riconosce il master anche dal suo ref o dal nome nuovo e consegna il messaggio tramite l'id di sessione del master. Nel master, la mod ti avvisa una volta che è stato rinominato mentre le figlie lavorano, e ti dice se lo raggiungono ancora.</p>
+<p>Se il messaggio non arriva comunque (il master è stato chiuso, o riaperto con un altro nome), non va perso: la mod della sessione figlia lo salva nell'outbox accanto al registro e glielo dice. Il master lo legge con <code>dispatch</code>.</p>
 <h3>La riga dello scope</h3>
 <p>Nelle sessioni lunghe può capitare che le istruzioni iniziali vengano compattate o azzerate. Con le mod attive, <code>session-hub</code> mantiene sempre visibili ruolo e scope (nella sessione figlia) o il registro (nel master) nel system prompt, e reinvia lo stesso testo come contesto al primo turno dopo l'avvio, dopo una compattazione e dopo <code>/clear</code>.</p>
 
@@ -266,6 +278,8 @@ Guards: on (scope guard, shell check, send guard)</code></pre>
 <ul>
   <li><strong>Cosa memorizza ogni voce:</strong> nome, repository, task, scope, modello, effort, stato, ora di avvio, ultimo messaggio e richieste.</li>
   <li><strong>Stati possibili:</strong> <code>running</code>, <code>waiting-user</code>, <code>done</code>, <code>abandoned</code> e <code>lost</code> (sessione registrata come attiva, ma non più presente nell'elenco delle sessioni).</li>
+  <li><strong>Identità del master:</strong> nome, ref e id di sessione con cui sono state avviate le figlie; servono a riconoscere una rinomina.</li>
+  <li><strong>Outbox:</strong> la cartella <code>children-&lt;hub id&gt;.outbox/</code> accanto al registro, con un file per ogni messaggio che una sessione figlia non è riuscita a consegnare. Il pannello li conta; <code>dispatch</code> li legge, li gestisce come messaggi appena arrivati e li cancella.</li>
 </ul>
 <p>Le skill aggiornano il file esclusivamente tramite <code>scripts/registry.mjs</code>, in modo atomico e sotto lock, evitando corruzioni in caso di scritture concorrenti. Se il file non contiene JSON valido, il problema viene segnalato senza mai sovrascriverlo; inoltre un errore sul registro non blocca l'avvio di nuove sessioni: <code>spawn</code> ti avvisa e prosegue.</p>
 <p>Puoi consultare il registro anche direttamente dal terminale:</p>

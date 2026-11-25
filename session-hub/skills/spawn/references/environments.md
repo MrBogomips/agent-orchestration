@@ -17,9 +17,36 @@ Read this file, then only the file of the environment chosen in step 5:
 **Handoff files.** Herdr, tmux, the terminal and the manual case pass the handoff as a file, because a long
 prompt on a command line breaks quoting and, on macOS, the terminal's line limit. Write it in the harness's
 scratchpad directory if it has one, otherwise in a new `mktemp -d` directory, as `<name>-handoff.md`. Never
-inside the hub or a repository. The prompt on the command line is then one line, `Read and follow <file>` (in
-the conversation's language), without quotes or apostrophes, with a path free of spaces. Give the child read
-access to the file's folder with `--add-dir <handoff-dir>`.
+inside the hub or a repository. Give the child read access to the file's folder with `--add-dir <handoff-dir>`.
+
+**First prompt.** The prompt on the start command tells the person watching the child's window what it is doing,
+and points to the handoff. In the conversation's language, with the title and the *Goal* of the handoff:
+
+```
+# <title of the handoff>
+
+<one or two lines on what the child is doing>
+
+<handoff>Read and follow <file></handoff>
+```
+
+The `<handoff>` tag keeps the instruction recognisable; the path in it is free of spaces. Build the prompt in the
+same Bash call as the start, in a quoted heredoc, so that the shell reads no character of the title, and pass it
+as one argument, `"$P"`:
+
+```bash
+P=$(cat <<'EOF'
+# T-42: CSV export endpoint (product)
+
+Add GET /export with its tests, and open a PR on develop.
+
+<handoff>Read and follow /tmp/scratch/t42-product-handoff.md</handoff>
+EOF
+)
+```
+
+The prompt always goes on the start command, after `--`, never in a second step: Claude Code runs it once the
+first-run prompts (folder trust, the bypass warning) are answered, so a child is never left idle with no task.
 
 ## Launch command
 
@@ -39,7 +66,7 @@ repository): never start one with a bare `claude` or a bare `herdr agent start`.
    ```
 
    It walks up to this session's `claude` process and prints JSON: `env`, `flags`, `model`, `effort`,
-   `permission` (`bypass`, `flags`) and `unsure`. Each line of `unsure` is something it could not read for certain
+   `permission` (`bypass`, `flags`), `master` (`sessionId`, for the role variables) and `unsure`. Each line of `unsure` is something it could not read for certain
    (a value with spaces, a flag it does not know, no `claude` process found): ask the user about it before
    starting anything. If the script fails, ask the user for the command that started this session; never guess.
 2. **Flags to carry** are `flags`, as they are: those that configure the session (`--settings`, `--mcp-config`,
@@ -58,8 +85,7 @@ repository): never start one with a bare `claude` or a bare `herdr agent start`.
    chose them (`low`, `medium`, `high`, `xhigh`, `max`), the permission flags from *Permission mode* in
    [hub-config.md](hub-config.md), `--add-dir <handoff-dir>`.
    Leave out `--model` or `--effort` only when the child inherits and the master set none. `--add-dir` takes
-   every argument after it, so a prompt on the same command line goes after `--`:
-   `… --add-dir <handoff-dir> -- "Read and follow <file>"`.
+   every argument after it, so the first prompt goes after `--`: `… --add-dir <handoff-dir> -- "$P"`.
 5. **Role variables** (`SESSION_HUB_*`, below). Each environment's file says where they go, with the identity
    variables.
 6. **Check the identity** after the start, where `SendMessage` is the channel (Herdr, tmux, terminal):
@@ -73,11 +99,19 @@ repository): never start one with a bare `claude` or a bare `herdr agent start`.
 | Variable | Value |
 |---|---|
 | `SESSION_HUB_ROLE` | `child` |
-| `SESSION_HUB_MASTER` | the master's session name |
+| `SESSION_HUB_MASTER` | the master's session name: `<name>` in `This session is <name> [<ref>]` from `ListAgents` |
+| `SESSION_HUB_MASTER_REF` | the master's ref: `<ref>` in the same line |
+| `SESSION_HUB_MASTER_SESSION_ID` | `master.sessionId` as `scripts/launch.mjs` prints it; left out when it is `null` |
 | `SESSION_HUB_SCOPE_ROOT` | the write root, absolute; it must exist when the child starts |
 | `SESSION_HUB_HANDOFF` | the handoff file, absolute |
 | `SESSION_HUB_REGISTRY` | the children record, absolute (the child only reads it) |
 | `SESSION_HUB_GUARDS` | `on`, or `off` when the hub's *Guards* key says so |
+
+The master's name can change while its children run: `/rename`, a title hook that renames the session after a
+reply, Remote Control. With mods on, the child's send guard finds the master by its session id and its ref, so the
+child keeps reaching it under the name it was given, and the master's own mod notices the rename. Without the
+session id (`null`, or a child started before session-hub 0.6), a rename cuts the child off until the master
+takes its old name back: say so in the report.
 
 The names are fixed by the plugins' shared contract. The values must be free of spaces and quotes: names,
 paths and the handoff file are chosen so. If the hub path itself has a space, quote each value as the shell
@@ -105,8 +139,10 @@ them, by keys or otherwise.
   accepts the trust prompt, then you retry; or start the child in Herdr or tmux, where the prompt shows in the
   child's own window.
 - **Herdr, tmux, manual:** the trust prompt shows in the child's window. Tell the user which window to answer it
-  in. In Herdr, `agent start` returns `agent_not_ready`: send the handoff prompt once the agent is ready. In tmux
-  and the manual case the handoff prompt is already in the command and runs after the user's answer.
+  in. The first prompt is already in the start command and runs after the user's answer. In Herdr, `agent start`
+  returns `agent_not_ready` while the dialog is open: that is expected, not a failure. Record the child as
+  `waiting-user` with the reason `trust`, and set it back to `running` when `herdr agent get <name>` shows it
+  working or its first message arrives.
 
 ## Messaging caveats
 

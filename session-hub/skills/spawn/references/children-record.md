@@ -10,6 +10,8 @@ node "$R" reconcile --hub /abs/hub --live <name,name,...>      # live names from
 node "$R" upsert --hub /abs/hub --entry '<json>'               # one entry, merged by name
 node "$R" status --hub /abs/hub --name <child> --status <s> [--reason <why>]
 node "$R" request --hub /abs/hub --name <child> --text <t> --outcome <o>
+node "$R" master --hub /abs/hub --name <master> --ref <ref> --session-id <id>   # this session, at each start
+node "$R" outbox --hub /abs/hub [--remove <file,file,...>]                     # messages children could not deliver
 node "$R" read --hub /abs/hub
 ```
 
@@ -48,6 +50,10 @@ node "$R" request --hub /abs/hub --name <child> --text "<request>" --outcome "<w
 - Writes take a lock next to the file. The script waits up to 5 seconds for it, then fails without writing;
   a lock older than 30 seconds, or whose writer has ended, is stale and taken over. Retry once, then treat it as
   an error.
+- `master` keeps the master's identity as given to the children: `name`, `ref`, `sessionId`, `updatedAt`. The
+  `session-hub` mod compares it with the master's current name to tell that it was renamed while children run.
+  Write it at every start of children, with the values put on their launch commands; leave out `--session-id`
+  when `scripts/launch.mjs` printed `null`.
 - An entry: `name`, `repo`, `task`, `scope` (`writeRoot`, `external`), `model`, `effort`, `status`, `reason` (set
   with `status --reason`, dropped by the next status without one), `started`, `lastMessage` (`type`, `at`, `text`),
   `requests`. Status is one of `running`, `waiting-user`, `done`,
@@ -56,3 +62,17 @@ node "$R" request --hub /abs/hub --name <child> --text "<request>" --outcome "<w
   where the file is, and carry on: the record is never a reason not to start a child or to stop the work. Never
   delete or overwrite the file to get past the error.
 - A project that also wants notes in its own tracker keeps that rule; the record does not replace it.
+
+## Outbox
+
+When a child's message to the master is not delivered (the master ended, restarted under another name, or cannot
+be reached), the child's `session-hub` mod saves it in the outbox, a folder next to the record: the record
+`children-<hub id>.json` has `children-<hub id>.outbox/`, one JSON file per message (`at`, `from.sessionId`, `to`,
+`reason`, `text`). It is the only part a child writes, and only through its mod.
+
+- `outbox` lists the messages, oldest first, as `{ dir, messages, removed }`; each message has its `file` name. A
+  file that cannot be read is listed with an `error`.
+- Handle each message as if it had just arrived (`session-hub:dispatch`, *Messages from children*), then remove
+  it with `--remove <file>`: by name only, and only the files you handled, so that a message that arrived in the
+  meantime stays. `--remove` with `--file` needs `--hub`, like every write.
+- The outbox holds what the children wrote, which may be project content: remove each message once handled.

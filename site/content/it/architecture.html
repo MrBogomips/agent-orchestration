@@ -76,7 +76,7 @@
 <ul>
   <li><code>SESSION_HUB_ROLE</code> viene letta ignorando maiuscole, minuscole e spazi iniziali o finali.</li>
   <li>Qualsiasi valore diverso da stringa vuota, <code>none</code>, <code>master</code> o <code>child</code> fa scattare il blocco su tutte le guardie.</li>
-  <li>Le altre variabili propagate alla sessione figlia sono <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code> e <code>SESSION_HUB_GUARDS</code>.</li>
+  <li>Le altre variabili propagate alla sessione figlia sono <code>SESSION_HUB_MASTER</code>, <code>SESSION_HUB_MASTER_REF</code>, <code>SESSION_HUB_MASTER_SESSION_ID</code>, <code>SESSION_HUB_SCOPE_ROOT</code>, <code>SESSION_HUB_HANDOFF</code>, <code>SESSION_HUB_REGISTRY</code> e <code>SESSION_HUB_GUARDS</code>. Nome, ref e id di sessione identificano il master: il nome può cambiare, l'id di sessione no.</li>
 </ul>
 <p>Con componenti e ruoli al loro posto, seguiamo passo dopo passo cosa succede dal momento in cui affidi un lavoro al master.</p>
 
@@ -114,11 +114,12 @@
 <table>
   <thead><tr><th>Funzione</th><th>Dove</th><th>Evento</th><th>Comportamento</th></tr></thead>
   <tbody>
-    <tr><td>Guardia di invio</td><td>sessione figlia</td><td><code>session.send</code></td><td>Consente l'invio solo al master e ai subagent della sessione stessa; rifiuta qualsiasi altro destinatario indicando il master nella motivazione.</td></tr>
+    <tr><td>Guardia di invio</td><td>sessione figlia</td><td><code>session.send</code></td><td>Consente l'invio solo al master e ai subagent della sessione stessa; riconosce il master anche dopo una rinomina e gli consegna i messaggi tramite il suo id di sessione; salva nell'outbox un messaggio che non riesce a consegnare; rifiuta qualsiasi altro destinatario indicando il master nella motivazione.</td></tr>
     <tr><td>Controllo sulla shell</td><td>sessione figlia</td><td><code>tool.call</code> su <code>Bash</code></td><td>Best-effort: nega le redirezioni e i comandi che scrivono file con destinazione fuori dalla radice di scrittura.</td></tr>
     <tr><td>Marcatura dell'origine</td><td>sessione figlia</td><td><code>session.receive</code>, <code>prompt.submit</code></td><td>Aggiunge una riga a ogni messaggio ricevuto da un'altra sessione per ricordare che ha valore informativo, mai di autorizzazione.</td></tr>
     <tr><td>Riga di scope</td><td>sessione figlia, master</td><td><code>prompt.compose</code>, <code>prompt.submit</code></td><td>Inserisce ruolo e scope (o il registro) nel prompt di sistema e come contesto dopo l'avvio, la compattazione e <code>/clear</code>.</td></tr>
-    <tr><td>Pannello delle sessioni figlie</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Mostra una riga per sessione figlia con lo stato in tempo reale dall'elenco delle sessioni; si aggiorna con <code>/session-hub</code> e ogni 30 secondi.</td></tr>
+    <tr><td>Pannello delle sessioni figlie</td><td>master</td><td><code>ui.render</code>, <code>command.run</code></td><td>Mostra una riga per sessione figlia con lo stato in tempo reale dall'elenco delle sessioni e conta i messaggi in attesa nell'outbox; si aggiorna con <code>/session-hub</code> e ogni 30 secondi.</td></tr>
+    <tr><td>Avviso di rinomina</td><td>master</td><td><code>command.run</code>, timer</td><td>Se il master è stato rinominato mentre le figlie lavorano, lo dice una volta e indica se lo raggiungono ancora.</td></tr>
   </tbody>
 </table>
 <p>La guardia di invio e il controllo sulla shell nel dubbio bloccano; la marcatura dell'origine, la riga di scope e il pannello si limitano a informare e non bloccano mai. Se una mod gestita dall'organizzazione gira per prima e salta un evento, la mod ripiega inviando la riga di scope come contesto.</p>

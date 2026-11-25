@@ -224,7 +224,9 @@ children. Every other session is left alone. No role is inferred from the conver
 <table>
   <thead><tr><th style="width:36%">Variable (set by <code>spawn</code>)</th><th>Value</th></tr></thead>
   <tr><td><code>SESSION_HUB_ROLE</code></td><td><code>child</code></td></tr>
-  <tr><td><code>SESSION_HUB_MASTER</code></td><td>the master's session name</td></tr>
+  <tr><td><code>SESSION_HUB_MASTER</code></td><td>the master's session name when the child started</td></tr>
+  <tr><td><code>SESSION_HUB_MASTER_REF</code></td><td>the master's ref in <code>ListAgents</code> when the child started</td></tr>
+  <tr><td><code>SESSION_HUB_MASTER_SESSION_ID</code></td><td>the master's session id, which keeps the child reaching it after a rename</td></tr>
   <tr><td><code>SESSION_HUB_SCOPE_ROOT</code></td><td>absolute path of the write root; it must exist when the child starts</td></tr>
   <tr><td><code>SESSION_HUB_HANDOFF</code></td><td>absolute path of the handoff file</td></tr>
   <tr><td><code>SESSION_HUB_REGISTRY</code></td><td>absolute path of the children record (a child only reads it)</td></tr>
@@ -320,8 +322,12 @@ starts all the children in one <code>spawn</code> call, so that their handoffs n
   <code>model-router:choose-model</code> when installed, otherwise the <code>--model</code> and
   <code>--effort</code> the master was launched with (none when it set none);</li>
   <li>writes a handoff file outside the hub (<code>&lt;name&gt;-handoff.md</code> in the harness's scratchpad or a
-  new <code>mktemp -d</code> folder) and starts the child with a one-line prompt, <code>Read and follow &lt;file&gt;</code>;</li>
-  <li>records the child as <code>running</code>, and reports per child: name, repository, write root, model and
+  new <code>mktemp -d</code> folder) and starts the child with a short first prompt on the start command: the
+  handoff's title, one or two lines on the goal, and <code>&lt;handoff&gt;Read and follow &lt;file&gt;&lt;/handoff&gt;</code>.
+  The prompt rides the start command in every environment, so a folder-trust dialog cannot leave the child idle
+  with no task;</li>
+  <li>records the child as <code>running</code>, and the master's identity (name, ref, session id) as given to the
+  children, and reports per child: name, repository, write root, model and
   effort, environment, how to open it, and the caveats that apply.</li>
 </ol>
 
@@ -378,7 +384,8 @@ edit, unless the repository sets <code>worktree.bgIsolation</code> to <code>"non
 letter, at most 24 characters, with <code>-2</code>, <code>-3</code>… when taken. With <code>Layout: ask</code> (the
 default), <code>spawn</code> asks for tabs or panes and whether to save the answer as the hub's default; with more
 than four children in a stack of panes, the rest open as tabs. In Herdr, a child stopped at a trust prompt makes
-<code>herdr agent start</code> return <code>agent_not_ready</code>. In the desktop app, archiving a child session can
+<code>herdr agent start</code> return <code>agent_not_ready</code>: expected, since the first prompt is on the start
+command and runs once you answer the prompt; the child is recorded as <code>waiting-user</code> meanwhile. In the desktop app, archiving a child session can
 lose its uncommitted changes.</p>
 
 <h2 id="example">2.5 Worked example: one task, two repositories</h2>
@@ -398,12 +405,21 @@ size limit in <code>design</code>. The master runs in tmux, in a session named <
 <code>sonnet</code> at <code>medium</code> and <code>t42-design</code> on <code>opus</code> (no <em>Effort</em> key
 for design, so <code>choose-model</code> chooses it when installed, or the master's is inherited). With
 <code>Layout: panes</code>, the first child opens to the right of the master and the next one below it:</p>
-<pre><code>tmux split-window -h -d -t "$TMUX_PANE" -c /work/hub/product -P -F '#{pane_id}' \
-  -e SESSION_HUB_ROLE=child -e SESSION_HUB_MASTER=hub -e SESSION_HUB_SCOPE_ROOT=/work/hub/product \
+<pre><code>P=$(cat &lt;&lt;'EOF'
+# T-42: CSV export endpoint (product)
+
+Add GET /export with its tests, and open a PR on develop.
+
+&lt;handoff&gt;Read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
+EOF
+)
+tmux split-window -h -d -t "$TMUX_PANE" -c /work/hub/product -P -F '#{pane_id}' \
+  -e SESSION_HUB_ROLE=child -e SESSION_HUB_MASTER=hub -e SESSION_HUB_MASTER_REF=8f2c1a \
+  -e SESSION_HUB_MASTER_SESSION_ID=&lt;master session id&gt; -e SESSION_HUB_SCOPE_ROOT=/work/hub/product \
   -e SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
   -e SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json -e SESSION_HUB_GUARDS=on \
   -- claude -n t42-product --model sonnet --effort medium --permission-mode default \
-  --add-dir &lt;dir&gt; -- 'Read and follow &lt;dir&gt;/t42-product-handoff.md'      # prints %12
+  --add-dir &lt;dir&gt; -- "$P"      # prints %12
 tmux set -p -t %12 @session_hub_child t42-product
 tmux set -p -t %12 remain-on-exit on</code></pre>
 <p>tmux runs the command after <code>--</code> as it is, with no shell in between, so a carried value such as a JSON
@@ -413,12 +429,12 @@ for the master's later checks; the pane title is not used, because Claude Code r
 <pre><code># Herdr: the variables go on the pane, then the agent starts in it
 herdr pane split --current --direction right --cwd /work/hub/product --no-focus \
   --env SESSION_HUB_ROLE=child --env SESSION_HUB_MASTER=hub ...
-herdr agent start t42-product --kind claude --pane &lt;pane-id&gt; -- -n t42-product --model sonnet ...
-herdr agent prompt t42-product "Read and follow &lt;dir&gt;/t42-product-handoff.md"
+herdr agent start t42-product --kind claude --pane &lt;pane-id&gt; -- -n t42-product --model sonnet ... -- "$P"
 
 # Terminal: a background session, opened with `claude attach t42-product`
-cd /work/hub/product &amp;&amp; env SESSION_HUB_ROLE=child ... claude --bg -n t42-product --model sonnet ... \
-  -- "Read and follow &lt;dir&gt;/t42-product-handoff.md"</code></pre>
+cd /work/hub/product &amp;&amp; env SESSION_HUB_ROLE=child ... claude --bg -n t42-product --model sonnet ... -- "$P"</code></pre>
+<p><code>$P</code> is the first prompt built above, in the same Bash call. <code>scripts/launch.mjs</code> prints the
+master's session id; the name and the ref come from the first line of <code>ListAgents</code>.</p>
 <p>The handoff (abridged) tells the child everything it needs and nothing it loads by itself:</p>
 <pre><code># T-42: CSV export endpoint (product)
 
@@ -561,11 +577,23 @@ or <code>sh -c</code> that is not literal, nor what another program (a script, <
 writes.</p>
 
 <h3>The send guard (mod)</h3>
-<p>Mods on only. A child's message goes to its master, by name (with or without <code>[&lt;ref&gt;]</code>; it is
-delivered to the bare name), or to the child's own subagents. Any other recipient, a sibling or a socket address, is
-refused. Claude Code reports <code>Not sent: a plugin hook refused it (…)</code> with this reason:</p>
-<pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix; a request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
+<p>Mods on only. A child's message goes to its master, or to the child's own subagents. The master is the name it
+had when the child started (with or without <code>[&lt;ref&gt;]</code>), its ref, or its current name. Any other
+recipient, a sibling or a socket address, is refused. Claude Code reports
+<code>Not sent: a plugin hook refused it (…)</code> with this reason:</p>
+<pre><code>[session-hub] This session is a child and may message only its master, "hub". Send what you need to "hub" with your message prefix, even if the master was renamed: the guard delivers it to the master. A request for another session or repository is an `out-of-scope` message, and the master routes it.</code></pre>
 <p>A child replies to the master by its name: a reply to the <code>from</code> address of a message is refused.</p>
+<p><strong>A renamed master.</strong> A session's name changes while it runs: <code>/rename</code>, a hook that sets a
+title after a reply, Remote Control. The child keeps writing to the name it was given; the guard sends the message
+by the master's session id, else to its current name. The master's mod tells you once, in the master, that it was
+renamed while children run, and whether they still reach it. A child started without the session id (before 0.6)
+is tied to the name: the notice then says to take the old name back with <code>/rename</code>, or to replace the
+child.</p>
+<p><strong>The outbox.</strong> A message that neither route delivers (the master ended, or restarted under another
+name) is not lost: the child's mod saves it in the outbox, a folder next to the children record
+(<code>children-&lt;hub id&gt;.outbox/</code>), and the child is told so. The children panel counts the messages
+waiting there; <code>dispatch</code> reads them at the start of work and with the status, handles each one as if it
+had just arrived, then removes it.</p>
 
 <h2 id="origin">2.9 Origin marking and the scope line</h2>
 <p><strong>Origin marking</strong> (child, mods on). A message from another session, the master included, reaches the
@@ -1205,8 +1233,14 @@ trimmed).</p>
   command. A path inside the folder that is a link to another place is blocked by design.</dd>
 
   <dt>A child stopped at a trust prompt, or <code>claude --bg</code> says <code>Workspace not trusted</code>.</dt>
-  <dd>Trust is per repository and is not inherited from the hub. Open the repository once with <code>claude</code>
-  and accept the prompt, or answer it in the child's window; then let the master retry.</dd>
+  <dd>Trust is per repository and is not inherited from the hub. Answer the prompt in the child's window: the child
+  then starts on its task, since its first prompt is on the start command. For <code>claude --bg</code>, open the
+  repository once with <code>claude</code> and accept the prompt, then let the master retry.</dd>
+
+  <dt>I renamed the master and a child says it cannot reach it.</dt>
+  <dd>Children started by session-hub 0.6 or later reach a renamed master by its session id. An older child is tied to
+  the master's name: rename the master back (<code>/rename &lt;old name&gt;</code>), or replace the child. What a
+  0.6 child could not deliver waits in the outbox; ask the master for the status of the children to read it.</dd>
 
   <dt>I resumed a child and the guards are gone.</dt>
   <dd>The role comes from the launch environment. Resume with the same <code>SESSION_HUB_*</code> variables in front
@@ -1285,7 +1319,9 @@ trimmed).</p>
 <h3>Variables</h3>
 <table>
   <tr><td style="width:46%"><code>SESSION_HUB_ROLE</code></td><td><code>child</code></td></tr>
-  <tr><td><code>SESSION_HUB_MASTER</code></td><td>master's session name</td></tr>
+  <tr><td><code>SESSION_HUB_MASTER</code></td><td>master's session name at the start</td></tr>
+  <tr><td><code>SESSION_HUB_MASTER_REF</code></td><td>master's ref at the start</td></tr>
+  <tr><td><code>SESSION_HUB_MASTER_SESSION_ID</code></td><td>master's session id</td></tr>
   <tr><td><code>SESSION_HUB_SCOPE_ROOT</code></td><td>write root, absolute</td></tr>
   <tr><td><code>SESSION_HUB_HANDOFF</code></td><td>handoff file, absolute</td></tr>
   <tr><td><code>SESSION_HUB_REGISTRY</code></td><td>children record, absolute</td></tr>
