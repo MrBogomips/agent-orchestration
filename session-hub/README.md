@@ -23,6 +23,7 @@ important one, the write scope, with a hook.
 | `session-hub:dispatch` | skill | Master side. Decides per repository whether the master reads, a subagent reads, or a child works; handles the children's messages and routes out-of-scope requests; keeps master-only duties. |
 | `session-hub:setup` | skill | Writes or updates the hub's *Child sessions* section, after an explicit yes. |
 | `session-hub-scope-guard` | hook (PreToolUse on `Edit`, `Write`, `NotebookEdit`) | In a child, blocks a write whose real path is outside the write root, to a file with more than one hard link (another of its names may be outside), or to the repository's `.claude/settings*.json`, and tells the model to send an `out-of-scope` message to the master. |
+| Handoff hook | hook (SessionStart on start, `/clear` and compaction) | In a child, adds its handoff file to the model's context, so the child needs no access to the handoff's folder and no trust dialog at its start; it adds it again after a compaction. |
 | `scripts/launch.mjs` | script | Reads how this session was started (identity variables, configuration flags, permission mode) and its session id, so that `spawn` starts children the same way and pins them to it. Prints named variables only, never the environment. |
 | `scripts/registry.mjs` | script | Reads and writes the children record, atomically, with the master's identity; lists and clears the outbox of messages children could not deliver. Used by the skills and, read only, by the mod. |
 | `session-hub` | mod (needs mods on) | In a child: the send guard, the shell check, origin marking and the scope line. In the master: the children panel and the start line under each child launch. See *The mod* below. |
@@ -31,7 +32,7 @@ important one, the write scope, with a hook.
 ### Roles
 
 A session is a child only when its launch command sets `SESSION_HUB_ROLE=child`; `spawn` does that. Every other
-session is left alone by the hook. The variables are:
+session is left alone by the hooks. The variables are:
 
 | Variable | Value |
 |---|---|
@@ -40,7 +41,7 @@ session is left alone by the hook. The variables are:
 | `SESSION_HUB_MASTER_REF` | the master's ref in `ListAgents` when the child started |
 | `SESSION_HUB_MASTER_SESSION_ID` | the master's session id; with the ref, it keeps the child reaching a renamed master |
 | `SESSION_HUB_SCOPE_ROOT` | absolute path of the write root (on Windows, a Windows path such as `C:/hub/repo`) |
-| `SESSION_HUB_HANDOFF` | absolute path of the handoff file |
+| `SESSION_HUB_HANDOFF` | absolute path of the handoff file, which the handoff hook adds to the child's context |
 | `SESSION_HUB_REGISTRY` | absolute path of the children record |
 | `SESSION_HUB_GUARDS` | `on` or `off`; absent means `on` |
 
@@ -151,6 +152,9 @@ writers lose no entry. A child started again under the name of one that ended ge
   read without regard to case or surrounding spaces; an unknown value blocks every write unless
   `SESSION_HUB_GUARDS` is `off`.
 - Model and effort on the desktop app's start tool are unverified.
+- **A handoff over 9,500 characters is added in part.** Claude Code keeps up to 10,000 characters of a hook's
+  context, so the handoff hook cuts a longer file at a line and tells the child from which line to read the rest;
+  that read may ask for permission. `spawn` keeps handoffs under 9,000 characters.
 - **The send guard needs mods on.** With mods off, a sibling can still be messaged; the master-only rule is
   then prose. A child replies to the master by its name: a reply to the `from` address of a message is refused.
 - **A child resumed without its variables is no longer a child.** The role comes from the launch environment;

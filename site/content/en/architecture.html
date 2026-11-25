@@ -1,4 +1,4 @@
-<!-- translated-from: it/architecture.html sha256:b8f36509b355 -->
+<!-- translated-from: it/architecture.html sha256:e3ae7d9edc50 -->
 <h1>Architecture</h1>
 <p class="lede">This page shows how the two released plugins (session-hub {{version:session-hub}} and model-router {{version:model-router}}) are built: what components make them up, how they talk to each other, what files they write to disk, and how they behave when something goes wrong.</p>
 
@@ -89,7 +89,7 @@
   <li>It checks that no live duplicate already exists, then resolves the environment, name, optional worktree, write root, and scope.</li>
   <li>It resolves model and effort from your request or the hub keys; if neither is set, it consults <code>model-router:choose-model</code> (if installed); if that isn't available either, it inherits the master's model and effort.</li>
   <li>It writes the handoff outside the hub (to a file, or inline for the desktop app).</li>
-  <li>It launches the child session with the propagated flags, child-specific flags, and <code>SESSION_HUB_*</code> variables; Claude Code starts in the repository and reads the handoff.</li>
+  <li>Launches the child session with the propagated flags, child-specific flags, and <code>SESSION_HUB_*</code> variables; Claude Code starts in the repository, and the handoff hook puts the handoff text into the child's context.</li>
   <li>It records the child session as <code>running</code> and shows you a summary per child: repository, write root, model and effort, environment, and any warnings.</li>
   <li>From that point on, every <code>Edit</code>, <code>Write</code>, and <code>NotebookEdit</code> call in the child session runs through the scope guard.</li>
 </ol>

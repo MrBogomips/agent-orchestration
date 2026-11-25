@@ -35,7 +35,7 @@
 </ul>
 
 <h2 id="components">2. Di cosa è composto il plugin</h2>
-<p>Per orchestrare le sessioni figlie e presidiare i loro confini in automatico, <code>session-hub</code> mette insieme tre skill, un hook, uno script, una mod e un comando dedicato:</p>
+<p>Per orchestrare le sessioni figlie e presidiare i loro confini in automatico, <code>session-hub</code> mette insieme tre skill, due hook, uno script, una mod e un comando dedicato:</p>
 <table>
   <thead><tr><th>Nome</th><th>Tipo</th><th>Cosa fa</th></tr></thead>
   <tbody>
@@ -43,6 +43,7 @@
     <tr><td><code>session-hub:spawn</code></td><td>skill</td><td>Avvia una sessione figlia per repository (app desktop, Herdr, tmux, <code>claude --bg</code> o comandi manuali) con scope, modello, effort, variabili di ruolo <code>SESSION_HUB_*</code> e file di handoff, poi la registra nel registro delle sessioni figlie.</td></tr>
     <tr><td><code>session-hub:setup</code></td><td>skill</td><td>Crea o aggiorna la sezione <code>## Child sessions</code> nel file di istruzioni dell'hub, scrivendola solo dopo una tua conferma esplicita.</td></tr>
     <tr><td><code>session-hub-scope-guard</code></td><td>hook</td><td>Hook <code>PreToolUse</code> su <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code>. In una sessione figlia blocca qualsiasi modifica il cui percorso reale esce dalla radice di scrittura.</td></tr>
+    <tr><td>Hook dell'handoff</td><td>hook</td><td>Hook <code>SessionStart</code>. In una sessione figlia aggiunge il file di handoff al contesto all'avvio, dopo <code>/clear</code> e dopo ogni compattazione: la figlia non deve leggerlo e non serve concederle l'accesso alla sua cartella.</td></tr>
     <tr><td><code>scripts/registry.mjs</code></td><td>script</td><td>Legge e aggiorna il registro delle sessioni figlie in modo atomico e sicuro.</td></tr>
     <tr><td><code>session-hub</code></td><td>mod</td><td>Nella sessione figlia attiva la protezione sugli invii, il controllo sulla shell, la marcatura dell'origine dei messaggi e la riga dello scope. Nel master aggiunge il pannello delle sessioni figlie. Richiede le mod attive.</td></tr>
     <tr><td><code>/session-hub</code></td><td>comando</td><td>Mostra ruolo e scope della sessione corrente; nel master riepiloga anche le sessioni figlie e, nel terminale, apre il pannello. Nell'app desktop di Claude risponde con una card nella conversazione. Registrato dalla mod.</td></tr>
@@ -114,7 +115,7 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   <li>Verifica se esiste già una sessione figlia attiva su quel repository e quel task: se la trova, le inoltra la richiesta invece di aprirne un duplicato.</li>
   <li>Determina ambiente di esecuzione, nome della sessione, eventuale worktree, radice di scrittura e scope di lettura.</li>
   <li>Sceglie modello ed effort seguendo un ordine di priorità preciso: prima ciò che hai indicato tu, poi le chiavi configurate nell'hub, poi <code>model-router:choose-model</code> (se installato), altrimenti eredita quelli del master.</li>
-  <li>Scrive il file di handoff fuori dall'hub, avvia la sessione figlia con un primo prompt breve (il titolo dell'handoff, una o due righe sull'obiettivo e <code>&lt;handoff&gt;Read and follow &lt;file&gt;&lt;/handoff&gt;</code>), la registra come <code>running</code> insieme all'identità del master e ti stampa un riepilogo completo.</li>
+  <li>Scrive il file di handoff fuori dall'hub, avvia la sessione figlia con un primo prompt di una sola riga (il titolo dell'handoff, una frase sull'obiettivo e il percorso del file, per il caso in cui l'handoff non sia arrivato nel contesto), la registra come <code>running</code> insieme all'identità del master e ti stampa un riepilogo completo.</li>
 </ol>
 <p>L'ambiente rilevato determina come viene aperta la sessione figlia e se lo <em>scope guard</em> può essere attivato:</p>
 <table>
@@ -128,23 +129,19 @@ Settings for the session-hub plugin. The invocation says which repositories a pi
   </tbody>
 </table>
 <h3>Come viene lanciata una sessione figlia</h3>
-<p>Perché master e sessione figlia possano scambiarsi messaggi, devono condividere account e cartella di configurazione (due sessioni con cartelle di configurazione diverse non riescono a parlarsi). Se avvii Claude Code con un alias o un wrapper che sceglie un profilo o aggiunge dei flag, le sessioni figlie devono partire allo stesso modo. Per questo <code>spawn</code> legge con <code>scripts/launch.mjs</code> come è stato avviato il master (le variabili d'identità come <code>CLAUDE_CONFIG_DIR</code>, <code>HOME</code> e il profilo del wrapper, più i flag di configurazione) e avvia ogni sessione figlia con gli stessi parametri, aggiungendo i flag specifici della figlia (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>, <code>--add-dir</code> per accedere alla cartella dell'handoff) e impostando le variabili di ruolo <code>SESSION_HUB_*</code>.</p>
+<p>Perché master e sessione figlia possano scambiarsi messaggi, devono condividere account e cartella di configurazione (due sessioni con cartelle di configurazione diverse non riescono a parlarsi). Se avvii Claude Code con un alias o un wrapper che sceglie un profilo o aggiunge dei flag, le sessioni figlie devono partire allo stesso modo. Per questo <code>spawn</code> legge con <code>scripts/launch.mjs</code> come è stato avviato il master (le variabili d'identità come <code>CLAUDE_CONFIG_DIR</code>, <code>HOME</code> e il profilo del wrapper, più i flag di configurazione) e avvia ogni sessione figlia con gli stessi parametri, aggiungendo i flag specifici della figlia (<code>-n</code>, <code>--model</code>, <code>--effort</code>, <code>--permission-mode</code>) e impostando le variabili di ruolo <code>SESSION_HUB_*</code>.</p>
+<p>L'handoff resta nello scratchpad del master, una cartella nuova a ogni sessione. La figlia non lo legge da lì: è l'hook dell'handoff a metterne il testo nel suo contesto. Per questo il comando di avvio non contiene <code>--add-dir</code>, che a ogni figlia faceva comparire una richiesta di fiducia per quella cartella.</p>
 <p>In tmux, ad esempio, il comando di avvio ha questa forma:</p>
 <pre><code>P=$(cat &lt;&lt;'EOF'
-# T-42: CSV export endpoint (product)
-
-Add GET /export with its tests, and open a PR on develop.
-
-&lt;handoff&gt;Read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
+T-42: CSV export endpoint (product). Add GET /export with its tests, and open a PR on develop. &lt;handoff&gt;Follow your handoff, which session-hub adds to your context; if it is not there, read and follow &lt;dir&gt;/t42-product-handoff.md&lt;/handoff&gt;
 EOF
 )
 env SESSION_HUB_ROLE=child SESSION_HUB_MASTER=hub SESSION_HUB_MASTER_REF=8f2c1a \
   SESSION_HUB_MASTER_SESSION_ID=&lt;master session id&gt; \
   SESSION_HUB_SCOPE_ROOT=/work/hub/product SESSION_HUB_HANDOFF=&lt;dir&gt;/t42-product-handoff.md \
   SESSION_HUB_REGISTRY=&lt;config dir&gt;/session-hub/children-&lt;hub id&gt;.json SESSION_HUB_GUARDS=on \
-  claude -n t42-product --model sonnet --effort medium --permission-mode default \
-  --add-dir &lt;dir&gt; -- "$P"</code></pre>
-<p>Il primo prompt dice a chi guarda la finestra della sessione figlia su cosa sta lavorando, e viaggia sempre nel comando di avvio, anche in Herdr: se la sessione figlia si ferma sulla richiesta di fiducia della cartella, parte sul suo compito appena rispondi.</p>
+  claude -n t42-product --model sonnet --effort medium --permission-mode default -- "$P"</code></pre>
+<p>Il primo prompt dice a chi guarda la finestra della sessione figlia su cosa sta lavorando, e viaggia sempre nel comando di avvio, anche in Herdr: se la sessione figlia si ferma sulla richiesta di fiducia del repository, parte sul suo compito appena rispondi. Sta su una sola riga perché Herdr rifiuta un prompt che va a capo.</p>
 <p>Due dettagli operativi meritano attenzione al momento dell'avvio:</p>
 <ul>
   <li><strong>Modalità di permessi:</strong> la sessione figlia eredita la stessa modalità del master, perché i messaggi tra sessioni con impostazioni divergenti sull'aggiramento dei permessi resterebbero bloccati in attesa di conferma manuale. Se il master salta le richieste di permesso, <code>spawn</code> ti chiede a ogni avvio quale modalità dare alle figlie; con <code>Permissions: inherit</code> non lo chiede e usa quella del master.</li>

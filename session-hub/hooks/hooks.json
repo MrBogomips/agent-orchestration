@@ -1,6 +1,18 @@
 {
-  "description": "session-hub-scope-guard: in a child session, blocks file writes outside the scope root",
+  "description": "session-hub-scope-guard: in a child session, blocks file writes outside the scope root; session-hub handoff: adds the child's handoff to its context at the start and after a compaction",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MSYS2_ENV_CONV_EXCL=\"SESSION_HUB_${MSYS2_ENV_CONV_EXCL:+;$MSYS2_ENV_CONV_EXCL}\" node \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "^(Edit|Write|NotebookEdit)$",

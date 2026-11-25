@@ -143,6 +143,7 @@ and rules are in [references/children-record.md](references/children-record.md).
 | The hub's whole instruction file quoted into the handoff | for a child inside the hub, only which parts are master-only; *Propagate* quotes only for a child outside the hub |
 | `--model` from the master's launch kept next to the chosen one | the chosen `--model` replaces the carried one |
 | A child started with a bare `claude` or `herdr agent start`, the master's launch not read | `scripts/launch.mjs` first; its `env` and `flags` on every start, then the identity check |
-| A long prompt passed on the command line | the handoff in a file, and the short first prompt of `environments.md` that points to it |
+| A long prompt passed on the command line | the handoff in a file, and the one-line first prompt of `environments.md` that points to it |
+| `--add-dir <handoff-dir>` on the start command | nothing: the handoff hook adds the file to the child's context, and the folder's trust dialog would hold every child |
 | The first prompt sent in a second step (`herdr agent prompt` after `agent start`) | the first prompt on the start command, after `--`: a first-run dialog would drop a second step |
 | Answering a child's folder-trust prompt | tell the user, who opens the folder once; retry when they say so |

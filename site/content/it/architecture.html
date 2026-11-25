@@ -88,7 +88,7 @@
   <li>Verifica che non esista già un duplicato attivo, poi determina ambiente, nome, eventuale worktree, radice di scrittura e scope.</li>
   <li>Ricava modello ed effort da quanto hai chiesto o dalle chiavi dell'hub; se mancano, interpella <code>model-router:choose-model</code> (se installata); in mancanza anche di questa, eredita modello ed effort del master.</li>
   <li>Scrive l'handoff fuori dall'hub (su file, oppure inline per l'app desktop).</li>
-  <li>Avvia la sessione figlia con i flag propagati, i flag specifici della figlia e le variabili <code>SESSION_HUB_*</code>; Claude Code parte nel repository e legge l'handoff.</li>
+  <li>Avvia la sessione figlia con i flag propagati, i flag specifici della figlia e le variabili <code>SESSION_HUB_*</code>; Claude Code parte nel repository e l'hook dell'handoff ne mette il testo nel contesto della figlia.</li>
   <li>Registra la sessione figlia come <code>running</code> e ti mostra il resoconto per ciascuna: repository, radice di scrittura, modello ed effort, ambiente ed eventuali avvertenze.</li>
   <li>Da quel momento in poi, ogni chiamata <code>Edit</code>, <code>Write</code> e <code>NotebookEdit</code> della sessione figlia passa per lo scope guard.</li>
 </ol>

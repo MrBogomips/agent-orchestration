@@ -80,6 +80,7 @@ flowchart LR
     shsetup["skill<br/>session-hub:setup"]
     registry["script<br/>scripts/registry.mjs"]
     guard["hook<br/>session-hub-scope-guard<br/>(hooks.json + scope-guard.mjs)"]
+    handoffhook["hook<br/>handoff (SessionStart)<br/>(hooks.json + handoff.mjs)"]
     shmod["mod<br/>session-hub<br/>(hooks.json + session-hub-mod.tsx)"]
   end
   subgraph MR["model-router"]
@@ -104,6 +105,7 @@ flowchart LR
   dispatch -->|decides a child is needed| spawn
   dispatch -->|reconcile, read, upsert, status, request| registry
   spawn -->|reconcile, upsert| registry
+  spawn -.->|handoff file, SESSION_HUB_HANDOFF| handoffhook
   registry --> record
   shmod -->|reads through registry.mjs read| registry
   spawn -.->|if installed| choose
@@ -139,6 +141,7 @@ flowchart LR
 | `session-hub:spawn` | skill | Starts one child per repository in the detected environment, with a scope, a model, an effort level, the `SESSION_HUB_*` variables and a handoff file. Records each child. |
 | `session-hub:setup` | skill | Writes or updates the `## Child sessions` section of the hub's instruction file (`AGENTS.md`, else `CLAUDE.md`), only after the user's explicit yes. |
 | `session-hub-scope-guard` | hook | `PreToolUse` hook on `Edit`, `Write` and `NotebookEdit`, defined in `hooks/hooks.json` and implemented in `hooks/scope-guard.mjs`. In a child, blocks a write outside the write root. |
+| Handoff hook | hook | `SessionStart` hook (`startup`, `clear`, `compact`), defined in `hooks/hooks.json` and implemented in `hooks/handoff.mjs`. In a child, adds the handoff file to the model's context, up to 9,500 characters. See [The handoff hook](#the-handoff-hook). |
 | `scripts/launch.mjs` | script | Reads how the session was started: identity variables, carried flags, model, effort and whether it bypasses permission prompts. Used by `spawn` and `setup`; prints named variables only. |
 | `scripts/registry.mjs` | script | The only writer of the children record: reads, merges and writes it atomically under a lock taken over atomically when stale. Refuses options a command does not take, and any path that lands inside the hub. |
 | `session-hub` | mod | Loaded from the same `hooks/hooks.json` (`modules`), glue in `hooks/session-hub-mod.tsx`, pure logic in `hooks/mod/*.mjs`. In a child: send guard, shell check, origin marking, scope line. In the master: the children panel. Needs mods on. |
@@ -218,8 +221,10 @@ JSON, what a child's command is built from. This holds for every session a maste
 2. **Identity variables**: `CLAUDE_CONFIG_DIR`, `SHALLOW_PROFILE` and the `XDG_*_HOME` folders when set, `HOME`
    when it differs from the account's home, and the variables the hub's *Carry* key names. Nothing else from the
    environment is copied, and a name that looks like a credential is refused.
-3. **Child flags**: `-n <name>`, `--model <model>`, `--effort <level>`, the permission flags,
-   `--add-dir <handoff folder>`, then `--` and the one-line prompt `Read and follow <handoff file>`.
+3. **Child flags**: `-n <name>`, `--model <model>`, `--effort <level>`, the permission flags, then `--` and the
+   one-line first prompt: the handoff's title, a sentence on the goal and `<handoff>Follow your handoff, which
+   session-hub adds to your context; if it is not there, read and follow <handoff file></handoff>`. No
+   `--add-dir`: nothing on the command may open a dialog of its own.
 4. **Role variables**, placed as each environment allows.
 
 What the script could not read for certain (a value with spaces in the process list, a flag it does not know) it
@@ -317,9 +322,10 @@ Details that shape the flow:
   (`git -C <repo> worktree add …`), and becomes the write root. That is the only thing the master does in a
   repository.
 - **Handoff.** In Herdr, tmux, the terminal and the manual case it is a file, written in the harness's
-  scratchpad folder or a new `mktemp -d` folder as `<name>-handoff.md`, never inside the hub or a repository; the
-  child gets read access to its folder through `--add-dir`. In the desktop app it is passed inline to the start
-  tool: there is no file and no `--add-dir`.
+  scratchpad folder or a new `mktemp -d` folder as `<name>-handoff.md`, never inside the hub or a repository. The
+  child gets the file's text from the handoff hook, not access to its folder (see
+  [The handoff hook](#the-handoff-hook)). In the desktop app it is passed inline to the start tool: there is no
+  file.
 - **Names.** Built from the hub's *Session name* pattern (default `<task>-<repo>`), lowercased, limited to
   `a-z0-9_-`, starting with a letter, at most 24 characters, with `-2`, `-3`… when taken.
 - **First run in a repository.** Folder trust is not inherited by a repository nested in a trusted hub. The
@@ -413,6 +419,25 @@ wins:
 The result goes on the launch command as `--model` and `--effort`, replacing any value carried from the master's
 launch, and into the handoff's *Session* part with its reason. In the desktop app, whether the start tool takes a
 model and an effort is unverified; without them the child runs on the app's defaults, and the report says so.
+
+## The handoff hook
+
+A child's handoff lives in the master's scratchpad, a new folder for every master session. The child does not read
+it from there: `hooks/handoff.mjs`, a `SessionStart` hook in `hooks/hooks.json` with the matcher
+`startup|clear|compact`, reads `SESSION_HUB_HANDOFF` and returns the file's text as `additionalContext`. The child
+therefore needs no `--add-dir` on that folder, whose trust dialog stopped every child at every start up to 0.6
+(#101), and it has the handoff again after `/clear` and after a compaction. On `resume` the hook adds nothing: the
+transcript has it.
+
+- It acts only when `SESSION_HUB_ROLE` is `child` (trimmed, any case), with the guards on or off.
+- Claude Code keeps up to 10,000 characters of a hook's context and turns a longer one into a preview and a file.
+  The hook adds at most 9,500 characters, the file's path included; a longer handoff is cut at a line, and the
+  context says from which line to read the rest.
+- It never blocks. A handoff it cannot read (unset, not absolute, missing, empty) is named in the context, with
+  the instruction to tell the user, and shown to the user as a system message; the hook exits 0 in every case.
+  The first prompt still names the file, for a child whose hook did not run.
+- It is a classic hook, so it works with mods off, and an organization's mod that skips the mods'
+  `classic.SessionStart` handlers does not skip it (`spikes.md`, S22).
 
 ## The scope guard
 

@@ -1,6 +1,6 @@
 {
   "name": "session-hub",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Coordinates a master session in a hub of repositories and the child sessions it starts: scope, master-only messages with a send guard, routing of out-of-scope requests, a record and a panel of the children",
   "author": {
     "name": "MrBogomips",
